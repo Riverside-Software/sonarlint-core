@@ -44,6 +44,7 @@ import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.sonarsource.sonarlint.core.StandaloneSonarLintEngineImpl;
@@ -83,13 +84,13 @@ public class StandaloneIssueMediumTest {
       "    \"typescript\": \"2.6.1\"\n" +
       "  }"
       + "}", StandardCharsets.UTF_8);
-    ProcessBuilder pb = new ProcessBuilder("npm" + (SystemUtils.IS_OS_WINDOWS ? ".cmd" : ""), "install")
-      .directory(fakeTypeScriptProjectPath.toFile())
-      .inheritIO();
-    Process process = pb.start();
-    if (process.waitFor() != 0) {
-      fail("Unable to run npm install");
-    }
+    // ProcessBuilder pb = new ProcessBuilder("npm" + (SystemUtils.IS_OS_WINDOWS ? ".cmd" : ""), "install")
+    //   .directory(fakeTypeScriptProjectPath.toFile())
+    //   .inheritIO();
+    // Process process = pb.start();
+    // if (process.waitFor() != 0) {
+    //   fail("Unable to run npm install");
+    // }
 
     Map<String, String> extraProperties = new HashMap<>();
     extraProperties.put("sonar.typescript.internal.typescriptLocation", fakeTypeScriptProjectPath.resolve("node_modules").toString());
@@ -99,7 +100,6 @@ public class StandaloneIssueMediumTest {
       .addPlugin(PluginLocator.getPhpPluginUrl())
       .addPlugin(PluginLocator.getPythonPluginUrl())
       .addPlugin(PluginLocator.getXooPluginUrl())
-      .addPlugin(PluginLocator.getTypeScriptPluginUrl())
       .setSonarLintUserHome(sonarlintUserHome)
       .setLogOutput((msg, level) -> System.out.println(msg))
       .setExtraProperties(extraProperties);
@@ -156,6 +156,7 @@ public class StandaloneIssueMediumTest {
     assertThat(issues).isEmpty();
   }
 
+  @Ignore
   @Test
   public void simpleTypeScript() throws Exception {
     // TODO enable it again once https://github.com/SonarSource/SonarTS/issues/598 is fixed
@@ -215,6 +216,7 @@ public class StandaloneIssueMediumTest {
       tuple("xoo:HasTag", 2, 12, inputFile.getPath()));
   }
 
+  @Ignore
   @Test
   public void simpleCpp() throws Exception {
     assumeTrue(commercialEnabled);
@@ -507,6 +509,7 @@ public class StandaloneIssueMediumTest {
       tuple("squid:S2187", 1, inputFileTest.getPath()));
   }
 
+  @Ignore
   @Test
   public void concurrentAnalysis() throws Throwable {
     final ClientInputFile inputFile = prepareInputFile("Foo.java",
