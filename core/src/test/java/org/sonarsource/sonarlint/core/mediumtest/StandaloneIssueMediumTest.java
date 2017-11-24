@@ -38,6 +38,7 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.sonarsource.sonarlint.core.StandaloneSonarLintEngineImpl;
@@ -69,7 +70,6 @@ public class StandaloneIssueMediumTest {
       .addPlugin(PluginLocator.getJavaPluginUrl())
       .addPlugin(PluginLocator.getPhpPluginUrl())
       .addPlugin(PluginLocator.getPythonPluginUrl())
-      .addPlugin(PluginLocator.getCppPluginUrl())
       .addPlugin(PluginLocator.getXooPluginUrl())
       .setSonarLintUserHome(sonarlintUserHome)
       .setLogOutput((msg, level) -> System.out.println(msg))
@@ -142,6 +142,7 @@ public class StandaloneIssueMediumTest {
       tuple("xoo:HasTag", 2, 12, inputFile.getPath()));
   }
 
+  @Ignore
   @Test
   public void simpleCpp() throws Exception {
     ClientInputFile inputFile = prepareInputFile("foo.cpp", "void fun() {\n "

@@ -33,7 +33,7 @@ import org.sonarsource.sonarlint.core.plugin.cache.PluginCache;
 
 public class PluginCacheLoader {
 
-  private static final ImmutableSet<String> PLUGIN_WHITELIST = ImmutableSet.of("xoo", "java", "javascript", "php", "python", "cobol", "abap", "plsql", "swift", "rpg", "cpp",
+  private static final ImmutableSet<String> PLUGIN_WHITELIST = ImmutableSet.of("openedge", "xoo", "java", "javascript", "php", "python", "cobol", "abap", "plsql", "swift", "rpg", "cpp",
     "pli");
   private static final String IMPLEMENTED_SQ_API = "6.7";
 
