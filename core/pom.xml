@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>3.6-SNAPSHOT</version>
+    <version>3.6-RSSW</version>
   </parent>
   <artifactId>sonarlint-core</artifactId>
   <packaging>bundle</packaging>
@@ -363,24 +363,6 @@
                   <groupId>org.sonarsource.python</groupId>
                   <artifactId>sonar-python-plugin</artifactId>
                   <version>1.8.0.1496</version>
-                  <type>jar</type>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.sonarsource.cpp</groupId>
-                  <artifactId>sonar-cfamily-plugin</artifactId>
-                  <version>5.0.0.9359</version>
-                  <type>jar</type>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>com.sonarsource.license</groupId>
-                  <artifactId>sonar-license-plugin</artifactId>
-                  <version>3.3.0.1341</version>
-                  <type>jar</type>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.sonarsource.typescript</groupId>
-                  <artifactId>sonar-typescript-plugin</artifactId>
-                  <version>1.5.0.2122</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>
