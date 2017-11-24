@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>4.4-SNAPSHOT</version>
+    <version>4.4-RSSW</version>
   </parent>
 
   <artifactId>sonarlint-daemon</artifactId>
@@ -146,7 +146,7 @@
                   <type>jar</type>
                   <overWrite>false</overWrite>
                   <outputDirectory>${project.build.directory}/plugins</outputDirectory>
-                </artifactItem>                
+                </artifactItem>
               </artifactItems>
             </configuration>
           </execution>
