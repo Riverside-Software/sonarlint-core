@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>4.1-SNAPSHOT</version>
+    <version>4.1-RSSW</version>
   </parent>
   <artifactId>sonarlint-core</artifactId>
   <packaging>bundle</packaging>
@@ -410,12 +410,6 @@
                   <groupId>org.sonarsource.python</groupId>
                   <artifactId>sonar-python-plugin</artifactId>
                   <version>1.9.1.2080</version>
-                  <type>jar</type>
-                </artifactItem>
-                <artifactItem>
-                  <groupId>org.sonarsource.typescript</groupId>
-                  <artifactId>sonar-typescript-plugin</artifactId>
-                  <version>1.5.0.2122</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>
