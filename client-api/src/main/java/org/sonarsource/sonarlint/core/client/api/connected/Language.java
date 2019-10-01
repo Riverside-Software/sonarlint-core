@@ -45,6 +45,7 @@ public enum Language {
   TS("ts", "typescript"),
   HTML("web", "web"),
   XML("xml", "xml"),
+  OPENEDGE("oe", "openedge"),
   // For ITs
   XOO("xoo", "xoo");
 
