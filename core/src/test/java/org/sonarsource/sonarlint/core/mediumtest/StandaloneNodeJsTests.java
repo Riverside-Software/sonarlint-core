@@ -71,13 +71,13 @@ class StandaloneNodeJsTests {
       "    \"typescript\": \"2.6.1\"\n" +
       "  }"
       + "}", StandardCharsets.UTF_8);
-    ProcessBuilder pb = new ProcessBuilder("npm" + (SystemUtils.IS_OS_WINDOWS ? ".cmd" : ""), "install")
-      .directory(fakeTypeScriptProjectPath.toFile())
-      .inheritIO();
-    Process process = pb.start();
-    if (process.waitFor() != 0) {
-      fail("Unable to run npm install");
-    }
+    // ProcessBuilder pb = new ProcessBuilder("npm" + (SystemUtils.IS_OS_WINDOWS ? ".cmd" : ""), "install")
+    //   .directory(fakeTypeScriptProjectPath.toFile())
+    //   .inheritIO();
+    // Process process = pb.start();
+    // if (process.waitFor() != 0) {
+    //   fail("Unable to run npm install");
+    // }
 
   }
 
