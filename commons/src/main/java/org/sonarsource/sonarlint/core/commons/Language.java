@@ -43,6 +43,8 @@ public enum Language {
   JAVA("java", "java", "Java", new String[] {".java", ".jav"}, "sonar.java.file.suffixes"),
   JS("js", Constants.JAVASCRIPT_PLUGIN_KEY, "JavaScript", new String[] {".js", ".jsx", ".vue"}, "sonar.javascript.file.suffixes"),
   KOTLIN("kotlin", "kotlin", "Kotlin", new String[] {".kt"}, "sonar.kotlin.file.suffixes"),
+  OPENEDGE("oe", "openedge", "OpenEdge", new String[] {".p", ".w", ".i", ".cls"}, "sonar.oe.file.suffixes"),
+  OPENEDGE_DB("oedb", "openedge", "OpenEdge DB", new String[] {".df"}, "sonar.oedb.file.suffixes"),
   PHP("php", "php", "PHP", new String[] {"php", "php3", "php4", "php5", "phtml", "inc"}, "sonar.php.file.suffixes"),
   PLI("pli", "pli", "PL/I", new String[] {".pli"}, "sonar.pli.file.suffixes"),
   PLSQL("plsql", "plsql", "PL/SQL", new String[] {".sql", ".pks", ".pkb"}, "sonar.plsql.file.suffixes"),
