@@ -33,6 +33,7 @@ import org.apache.commons.lang.StringUtils;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import org.sonarsource.api.sonarlint.SonarLintSide;
@@ -210,6 +211,7 @@ public class ConnectedIssueMediumTest {
     assertThrows(SonarLintException.class, () -> sonarlint.getActiveRuleDetails("not_found", JAVA_MODULE_KEY), "Invalid active rule key: not_found");
   }
 
+  @Ignore
   @Test
   public void simpleJavaScriptUnbinded() throws Exception {
 
