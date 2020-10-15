@@ -1,16 +1,22 @@
-#!groovy
+pipeline {
+  agent { label 'Linux-Office' }
+  options {
+    buildDiscarder(logRotator(daysToKeepStr:'10'))
+    timeout(time: 15, unit: 'MINUTES')
+    skipDefaultCheckout()
+    disableConcurrentBuilds()
+  }
 
-stage 'Build sonarlint-core'
-node ('master') {
-  checkout([
-    $class: 'GitSCM',
-    branches: scm.branches,
-    extensions: scm.extensions + [[$class: 'CleanCheckout']],
-    userRemoteConfigs: scm.userRemoteConfigs
-  ])
-  withEnv(["PATH+MAVEN=${tool name: 'Maven 3', type: 'hudson.tasks.Maven$MavenInstallation'}/bin"]) {
-    sh "mvn -DskipDistWindows -DskipNoArch clean org.jacoco:jacoco-maven-plugin:prepare-agent install"
+  stages {
+    stage ('Build sonarlint-core') {
+      steps {
+        checkout([$class: 'GitSCM', branches: scm.branches, extensions: scm.extensions + [[$class: 'CleanCheckout']], userRemoteConfigs: scm.userRemoteConfigs])
+        script {
+          withEnv(["MVN_HOME=${tool name: 'Maven 3', type: 'hudson.tasks.Maven$MavenInstallation'}", "JAVA_HOME=${tool name: 'Corretto 11', type: 'jdk'}"]) {
+            sh "$MVN_HOME/bin/mvn -DskipDistWindows -DskipNoArch clean org.jacoco:jacoco-maven-plugin:prepare-agent install"
+          }
+        }
+      }
+    }
   }
 }
-
-
