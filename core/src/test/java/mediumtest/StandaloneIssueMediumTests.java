@@ -245,7 +245,7 @@ class StandaloneIssueMediumTests {
       tuple("typescript:S1764", 2, "foo.ts"));
 
   }
-  @Test
+
   void simpleJavaScriptInYamlFile() throws Exception {
     String content = "Resources:\n" +
             "  LambdaFunction:\n" +
