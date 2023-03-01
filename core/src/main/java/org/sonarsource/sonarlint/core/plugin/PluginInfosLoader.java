@@ -96,6 +96,11 @@ public class PluginInfosLoader {
 
   private void checkIfSkippedAndPopulateReason(PluginInfo info) {
     String pluginKey = info.getKey();
+    if ("kotlin".equalsIgnoreCase(pluginKey) || "xml".equalsIgnoreCase(pluginKey) || "tsql".equalsIgnoreCase(pluginKey)) {
+      LOG.debug("Plugin '{}' is excluded from SonarLint in PDSOE 11.7 due to the required JRE version", info.getName());
+      info.setSkipReason(new SkipReason.UnsatisfiedRuntimeRequirement(RuntimeRequirement.JRE, "1.8", "11"));
+      return;
+    }
     Set<Language> languages = Language.getLanguagesByPluginKey(pluginKey);
     if (!languages.isEmpty() && globalConfiguration.getEnabledLanguages().stream().noneMatch(languages::contains)) {
       if (languages.size() > 1) {
