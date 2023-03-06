@@ -139,7 +139,7 @@ public class PluginInstancesLoader {
       for (Map.Entry<String, String> mainClassEntry : def.getMainClassesByPluginKey().entrySet()) {
         String pluginKey = mainClassEntry.getKey();
         String mainClass = mainClassEntry.getValue();
-        if ("kotlin".equalsIgnoreCase(pluginKey) || "xml".equalsIgnoreCase(pluginKey) || "tsql".equalsIgnoreCase(pluginKey)) {
+        if ("kotlin".equalsIgnoreCase(pluginKey) || "xml".equalsIgnoreCase(pluginKey) || "tsql".equalsIgnoreCase(pluginKey) || "rpg".equalsIgnoreCase(pluginKey)) {
           LOG.debug("Plugin '{}' is excluded from SonarLint in PDSOE 11.7", pluginKey);
           continue;
         }
