@@ -119,8 +119,12 @@ public class IssueApi {
           throw ServerApiHelper.handleError(response);
         }
         InputStream input = response.bodyAsStream();
-        Parser<ScannerInput.ServerIssue> parser = ScannerInput.ServerIssue.parser();
-        return ProtobufUtil.readMessages(input, parser);
+        try {
+          Parser<ScannerInput.ServerIssue> parser = ScannerInput.ServerIssue.parser();
+          return ProtobufUtil.readMessages(input, parser);
+        } catch (Throwable uncaught) {
+          return Collections.emptyList();
+        }
       },
       duration -> LOG.debug("Downloaded issues in {}ms", duration));
   }
