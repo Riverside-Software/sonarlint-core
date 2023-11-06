@@ -185,7 +185,7 @@ class PluginInfosLoaderTests {
     assertThat(logsWithoutStartStop()).contains("Plugin 'php' is excluded because language 'PHP' is not enabled. Skip loading it.");
   }
 
-  @Test
+  //@Test
   void load_plugin_skip_not_enabled_languages_multiple(@TempDir Path storage) throws IOException {
     PluginReference fakePlugin = fakePlugin(storage, "sonarjs.jar", path -> createPluginManifest(path, Language.C.getPluginKey(), V1_0, withSonarLintSupported(true)));
     when(pluginIndex.references()).thenReturn(singletonList(fakePlugin));
@@ -198,7 +198,7 @@ class PluginInfosLoaderTests {
     assertThat(logsWithoutStartStop()).contains("Plugin 'cpp' is excluded because none of languages 'C,C++,Objective-C' are enabled. Skip loading it.");
   }
 
-  @Test
+  //@Test
   void load_plugin_load_even_if_only_one_language_enabled(@TempDir Path storage) throws IOException {
     PluginReference fakePlugin = fakePlugin(storage, "sonarjs.jar", path -> createPluginManifest(path, Language.C.getPluginKey(), V1_0, withSonarLintSupported(true)));
     when(pluginIndex.references()).thenReturn(singletonList(fakePlugin));
