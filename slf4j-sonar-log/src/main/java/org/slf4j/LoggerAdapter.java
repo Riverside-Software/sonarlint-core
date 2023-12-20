@@ -39,29 +39,27 @@ public class LoggerAdapter implements Logger {
 
   @Override
   public void trace(String msg) {
-    SONAR_LOGGER.trace(msg);
+    // SONAR_LOGGER.trace(msg);
   }
 
   @Override
   public void trace(String format, Object arg) {
-    SONAR_LOGGER.trace(format, arg);
+    // SONAR_LOGGER.trace(format, arg);
   }
 
   @Override
   public void trace(String format, Object arg1, Object arg2) {
-    SONAR_LOGGER.trace(format, arg1, arg2);
-
+    // SONAR_LOGGER.trace(format, arg1, arg2);
   }
 
   @Override
   public void trace(String format, Object[] argArray) {
-    SONAR_LOGGER.trace(format, argArray);
-
+    // SONAR_LOGGER.trace(format, argArray);
   }
 
   @Override
   public void trace(String msg, Throwable t) {
-    SONAR_LOGGER.trace(msg, t);
+    // SONAR_LOGGER.trace(msg, t);
   }
 
   @Override
@@ -71,27 +69,27 @@ public class LoggerAdapter implements Logger {
 
   @Override
   public void trace(Marker marker, String msg) {
-    trace(msg);
+    // trace(msg);
   }
 
   @Override
   public void trace(Marker marker, String format, Object arg) {
-    trace(format, arg);
+    // trace(format, arg);
   }
 
   @Override
   public void trace(Marker marker, String format, Object arg1, Object arg2) {
-    trace(format, arg1, arg2);
+    // trace(format, arg1, arg2);
   }
 
   @Override
   public void trace(Marker marker, String format, Object[] argArray) {
-    trace(format, argArray);
+    // trace(format, argArray);
   }
 
   @Override
   public void trace(Marker marker, String msg, Throwable t) {
-    trace(msg, t);
+    // trace(msg, t);
   }
 
   @Override
