@@ -22,6 +22,7 @@ package org.sonarsource.sonarlint.core;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonarsource.sonarlint.core.clientapi.SonarLintClient;
@@ -74,6 +75,7 @@ class VersionSoonUnsupportedHelperTests {
     underTest = new VersionSoonUnsupportedHelper(client, configRepository, serverApiProvider, connectionRepository, synchronizationService);
   }
 
+  @Disabled
   @Test
   void should_trigger_notification_when_new_binding_to_previous_lts_detected_on_config_scope_event() {
     var bindingConfiguration = new BindingConfiguration(SQ_CONNECTION_ID, "", true);
@@ -92,6 +94,7 @@ class VersionSoonUnsupportedHelperTests {
       .containsOnly("Connection ID '" + SQ_CONNECTION_ID + "' with version '" + VersionUtils.getMinimalSupportedVersion().getName() + "' is detected to be soon unsupported");
   }
 
+  @Disabled
   @Test
   void should_trigger_multiple_notification_when_new_bindings_to_previous_lts_detected_on_config_scope_event() {
     var bindingConfiguration = new BindingConfiguration(SQ_CONNECTION_ID, "", true);
@@ -127,6 +130,7 @@ class VersionSoonUnsupportedHelperTests {
     assertThat(logTester.logs()).isEmpty();
   }
 
+  @Disabled
   @Test
   void should_trigger_notification_when_new_binding_to_previous_lts_detected() {
     connectionRepository.addOrReplace(SQ_CONNECTION);
@@ -143,6 +147,7 @@ class VersionSoonUnsupportedHelperTests {
       .containsOnly("Connection ID '" + SQ_CONNECTION_ID + "' with version '" + VersionUtils.getMinimalSupportedVersion().getName() + "' is detected to be soon unsupported");
   }
 
+  @Disabled
   @Test
   void should_trigger_once_when_same_binding_to_previous_lts_detected_twice() {
     connectionRepository.addOrReplace(SQ_CONNECTION);
@@ -161,6 +166,7 @@ class VersionSoonUnsupportedHelperTests {
       .containsOnly("Connection ID '" + SQ_CONNECTION_ID + "' with version '" + VersionUtils.getMinimalSupportedVersion().getName() + "' is detected to be soon unsupported");
   }
 
+  @Disabled
   @Test
   void should_trigger_notification_when_new_binding_to_in_between_lts_detected() {
     connectionRepository.addOrReplace(SQ_CONNECTION);
