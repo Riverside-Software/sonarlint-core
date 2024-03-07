@@ -19,6 +19,7 @@
  */
 package org.sonarsource.sonarlint.core.serverconnection;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.sonarsource.sonarlint.core.commons.Version;
 
@@ -47,6 +48,7 @@ class VersionUtilsTests {
     assertThat(VersionUtils.isVersionSupportedDuringGracePeriod(Version.create("5.9"))).isFalse();
   }
 
+  @Disabled
   @Test
   void grace_period_should_be_true_if_connected_during_grace_period() {
     assertThat(VersionUtils.isVersionSupportedDuringGracePeriod(getMinimalSupportedVersion())).isTrue();

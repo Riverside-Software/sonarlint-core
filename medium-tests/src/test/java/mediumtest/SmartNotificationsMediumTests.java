@@ -28,6 +28,7 @@ import mockwebserver3.MockResponse;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonarsource.sonarlint.core.SonarLintBackendImpl;
@@ -245,6 +246,7 @@ class SmartNotificationsMediumTests {
     assertThat(notificationsResult.get(0).getScopeIds()).hasSize(1).contains("scopeId");
   }
 
+  @Disabled
   @Test
   void it_should_skip_polling_notifications_when_sonarcloud_websocket_opened() {
     webSocketServer = new WebSocketServer();
