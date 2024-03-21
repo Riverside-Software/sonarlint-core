@@ -35,6 +35,8 @@ public enum Language {
   JCL("JCL"),
   JS("JavaScript"),
   KOTLIN("Kotlin"),
+  OPENEDGE("OpenEdge"),
+  OPENEDGE_DB("OpenEdgeDB"),
   PHP("PHP"),
   PLI("PL/I"),
   PLSQL("PL/SQL"),
@@ -97,6 +99,10 @@ public enum Language {
         return JS;
       case KOTLIN:
         return KOTLIN;
+      case OPENEDGE:
+        return OPENEDGE;
+      case OPENEDGE_DB:
+        return OPENEDGE_DB;
       case PHP:
         return PHP;
       case PLI:

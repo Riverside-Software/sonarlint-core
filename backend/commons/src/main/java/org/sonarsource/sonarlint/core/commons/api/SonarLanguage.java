@@ -32,7 +32,7 @@ import java.util.stream.Stream;
 public enum SonarLanguage {
 
   ABAP("abap", "abap", new String[]{".abap", ".ab4", ".flow", ".asprog"}, "sonar.abap.file.suffixes"),
-  APEX("apex", "sonarapex", new String[]{".cls", ".trigger"}, "sonar.apex.file.suffixes"),
+  APEX("apex", "sonarapex", new String[]{".trigger"}, "sonar.apex.file.suffixes"),
   C("c", "cpp", new String[]{".c", ".h"}, "sonar.c.file.suffixes"),
   CPP("cpp", "cpp", new String[]{".cc", ".cpp", ".cxx", ".c++", ".hh", ".hpp", ".hxx", ".h++", ".ipp"}, "sonar.cpp.file.suffixes"),
   CS("cs", "csharp", new String[]{".cs"}, "sonar.cs.file.suffixes"),
@@ -45,6 +45,8 @@ public enum SonarLanguage {
   JCL("jcl", "jcl", new String[]{".jcl"}, "sonar.jcl.file.suffixes"),
   JS("js", Constants.JAVASCRIPT_PLUGIN_KEY, new String[]{".js", ".jsx", ".vue"}, "sonar.javascript.file.suffixes"),
   KOTLIN("kotlin", "kotlin", new String[]{".kt", ".kts"}, "sonar.kotlin.file.suffixes"),
+  OPENEDGE("oe", "openedge", new String[]{".p", ".w", ".cls" }, "sonar.oe.file.suffixes"),
+  OPENEDGE_DB("oedb", "openedge", new String[]{".df"}, Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE),
   PHP("php", "php", new String[]{"php", "php3", "php4", "php5", "phtml", "inc"}, "sonar.php.file.suffixes"),
   PLI("pli", "pli", new String[]{".pli"}, "sonar.pli.file.suffixes"),
   PLSQL("plsql", "plsql", new String[]{".sql", ".pks", ".pkb"}, "sonar.plsql.file.suffixes"),
