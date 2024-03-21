@@ -41,6 +41,8 @@ public enum Language {
   KOTLIN,
   KUBERNETES,
   OBJC,
+  OPENEDGE,
+  OPENEDGE_DB,
   PHP,
   PLI,
   PLSQL,
