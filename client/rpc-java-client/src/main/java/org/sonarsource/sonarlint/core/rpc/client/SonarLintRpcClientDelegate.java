@@ -30,6 +30,7 @@ import java.util.concurrent.CancellationException;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.RawIssueDto;
@@ -40,10 +41,12 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreat
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.ConnectionSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.event.DidReceiveServerHotspotEvent;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.HotspotDetailsDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaisedHotspotDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.GetProxyPasswordAuthenticationResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.ProxyDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.X509CertificateDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueDetailsDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowSoonUnsupportedMessageParams;
@@ -172,14 +175,25 @@ public interface SonarLintRpcClientDelegate {
 
   void didChangeAnalysisReadiness(Set<String> configurationScopeIds, boolean areReadyForAnalysis);
 
+  /**
+   * @deprecated since 10.2, please implement raiseIssues and raiseHotspots instead.
+   * See {@link org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService#analyzeFilesAndTrack(AnalyzeFilesAndTrackParams)}
+   */
+  @Deprecated(since = "10.2")
   default void didRaiseIssue(String configurationScopeId, UUID analysisId, RawIssueDto rawIssue) {
+  }
+
+  default void raiseIssues(String configurationScopeId, Map<URI, List<RaisedIssueDto>> issuesByFileUri, boolean isIntermediatePublication, @Nullable UUID analysisId) {
+  }
+
+  default void raiseHotspots(String configurationScopeId, Map<URI, List<RaisedHotspotDto>> issuesByFileUri, boolean isIntermediatePublication, @Nullable UUID analysisId) {
   }
 
   default void didSkipLoadingPlugin(String configurationScopeId, Language language, DidSkipLoadingPluginParams.SkipReason reason, String minVersion,
     @Nullable String currentVersion) {
   }
 
-  default void didDetectSecret() {
+  default void didDetectSecret(String configurationScopeId) {
   }
 
   default void promoteExtraEnabledLanguagesInConnectedMode(String configurationScopeId, Set<Language> languagesToPromote) {

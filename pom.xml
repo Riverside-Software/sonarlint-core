@@ -4,12 +4,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>71.0.0.1314</version>
+    <version>73.0.0.1710</version>
     <relativePath/>
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.1.99004</version>
+  <version>10.2.99004</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -24,6 +24,7 @@
   </issueManagement>
 
   <modules>
+    <module>buildSrc/maven-shade-ext-bnd-transformer</module>
     <module>backend/analysis-engine</module>
     <module>backend/cli</module>
     <module>backend/commons</module>
@@ -37,8 +38,10 @@
     <module>backend/server-connection</module>
     <module>backend/slf4j-sonar-log</module>
     <module>backend/telemetry</module>
+    <module>client/java-client-dependencies</module>
     <module>client/java-client-legacy</module>
     <module>client/java-client-utils</module>
+    <module>client/java-client-osgi</module>
     <module>client/rpc-java-client</module>
     <module>medium-tests</module>
     <module>report-aggregate</module>
@@ -65,6 +68,15 @@
     <slf4j.version>1.7.36</slf4j.version>
     <logback.version>1.2.13</logback.version>
     <version.surefire.plugin>3.1.2</version.surefire.plugin>
+    <jgit.version>6.9.0.202403050737-r</jgit.version>
+
+    <!-- Not only used as a plug-in but also as a dependency for 'maven-shade-ext-bnd-transformer' -->
+    <version.shade.plugin>3.4.1</version.shade.plugin>
+
+    <!-- Exclude Maven Shade plug-in dependency as the test is done via the Maven build itself ... -->
+    <sonar.coverage.exclusions>buildSrc/maven-shade-ext-bnd-transformer/**</sonar.coverage.exclusions>
+    <!-- Exclude from the duplication detection deprecated DTOs that were replaced by new types. They should be removed in 10.3 -->
+    <sonar.cpd.exclusions>rpc-protocol/src/main/java/org/sonarsource/sonarlint/core/rpc/protocol/client/analysis/*Dto.java</sonar.cpd.exclusions>
   </properties>
 
   <dependencyManagement>
@@ -116,7 +128,7 @@
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>
-        <version>2.11.0</version>
+        <version>2.16.1</version>
       </dependency>
       <dependency>
         <groupId>commons-codec</groupId>
@@ -126,7 +138,7 @@
       <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-compress</artifactId>
-        <version>1.24.0</version>
+        <version>1.26.1</version>
       </dependency>
       <dependency>
         <groupId>com.google.code.gson</groupId>
@@ -203,7 +215,7 @@
       <dependency>
         <groupId>com.github.tomakehurst</groupId>
         <artifactId>wiremock-jre8</artifactId>
-        <version>2.35.0</version>
+        <version>2.35.2</version>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>
@@ -226,11 +238,6 @@
   <build>
     <pluginManagement>
       <plugins>
-        <plugin>
-          <groupId>org.apache.felix</groupId>
-          <artifactId>maven-bundle-plugin</artifactId>
-          <version>5.1.8</version>
-        </plugin>
         <plugin>
           <groupId>biz.aQute.bnd</groupId>
           <artifactId>bnd-maven-plugin</artifactId>
@@ -273,7 +280,7 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-shade-plugin</artifactId>
-          <version>3.4.1</version>
+          <version>${version.shade.plugin}</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>

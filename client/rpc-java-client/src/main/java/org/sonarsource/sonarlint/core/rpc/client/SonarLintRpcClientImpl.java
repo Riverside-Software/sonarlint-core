@@ -19,10 +19,13 @@
  */
 package org.sonarsource.sonarlint.core.rpc.client;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import org.eclipse.lsp4j.jsonrpc.CancelChecker;
@@ -53,6 +56,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.ListFilesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.ListFilesResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaiseHotspotsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.ShowHotspotParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.CheckServerTrustedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.CheckServerTrustedResponse;
@@ -61,7 +65,9 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.http.GetProxyPasswordA
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.SelectProxiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.SelectProxiesResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.info.GetClientLiveInfoResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaiseIssuesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.ShowIssueParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogLevel;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowMessageParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowSoonUnsupportedMessageParams;
@@ -87,10 +93,10 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryCli
 public class SonarLintRpcClientImpl implements SonarLintRpcClient {
 
   private final SonarLintRpcClientDelegate delegate;
-  private final ExecutorService requestsExecutor;
-  private final ExecutorService requestAndNotificationsSequentialExecutor;
+  private final Executor requestsExecutor;
+  private final Executor requestAndNotificationsSequentialExecutor;
 
-  public SonarLintRpcClientImpl(SonarLintRpcClientDelegate delegate, ExecutorService requestsExecutor, ExecutorService requestAndNotificationsSequentialExecutor) {
+  public SonarLintRpcClientImpl(SonarLintRpcClientDelegate delegate, Executor requestsExecutor, Executor requestAndNotificationsSequentialExecutor) {
     this.delegate = delegate;
     this.requestsExecutor = requestsExecutor;
     this.requestAndNotificationsSequentialExecutor = requestAndNotificationsSequentialExecutor;
@@ -134,7 +140,27 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
   }
 
   protected void notify(Runnable code) {
-    requestAndNotificationsSequentialExecutor.submit(code);
+    requestAndNotificationsSequentialExecutor.execute(() -> {
+      try {
+        code.run();
+      } catch (Throwable throwable) {
+        logClientSideError("Error when handling a notification", throwable);
+      }
+    });
+  }
+
+  /**
+   * Client errors don't need to go over RPC, and can instead directly go through the delegate.
+   */
+  void logClientSideError(String message, Throwable throwable) {
+    delegate.log(new LogParams(LogLevel.ERROR, message, null, stackTraceToString(throwable), Instant.now()));
+  }
+
+  private static String stackTraceToString(Throwable t) {
+    var stringWriter = new StringWriter();
+    var printWriter = new PrintWriter(stringWriter);
+    t.printStackTrace(printWriter);
+    return stringWriter.toString();
   }
 
   @Override
@@ -328,13 +354,23 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
   }
 
   @Override
+  public void raiseIssues(RaiseIssuesParams params) {
+    notify(() -> delegate.raiseIssues(params.getConfigurationScopeId(), params.getIssuesByFileUri(), params.isIntermediatePublication(), params.getAnalysisId()));
+  }
+
+  @Override
+  public void raiseHotspots(RaiseHotspotsParams params) {
+    notify(() -> delegate.raiseHotspots(params.getConfigurationScopeId(), params.getIssuesByFileUri(), params.isIntermediatePublication(), params.getAnalysisId()));
+  }
+
+  @Override
   public void didSkipLoadingPlugin(DidSkipLoadingPluginParams params) {
     notify(() -> delegate.didSkipLoadingPlugin(params.getConfigurationScopeId(), params.getLanguage(), params.getReason(), params.getMinVersion(), params.getCurrentVersion()));
   }
 
   @Override
   public void didDetectSecret(DidDetectSecretParams params) {
-    notify(delegate::didDetectSecret);
+    notify(() -> delegate.didDetectSecret(params.getConfigurationScopeId()));
   }
 
   @Override

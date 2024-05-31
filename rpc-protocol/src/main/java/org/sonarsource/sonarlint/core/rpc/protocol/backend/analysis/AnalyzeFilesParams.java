@@ -24,6 +24,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * @deprecated
+ * Use {@link AnalyzeFilesAndTrackParams} to trigger an analysis with tracking on the core side.
+ */
+@Deprecated(since = "10.2")
 public class AnalyzeFilesParams {
   private final String configurationScopeId;
   // this is a random id provided by the client that will be used to correlate the raw issues notified back to the client

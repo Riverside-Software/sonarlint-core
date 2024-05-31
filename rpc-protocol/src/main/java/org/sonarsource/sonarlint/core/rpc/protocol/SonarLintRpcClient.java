@@ -24,12 +24,14 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidDetectSecretParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaiseIssuesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.plugin.DidSkipLoadingPluginParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.ClientConstantInfoDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.OpenUrlInBrowserParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidChangeAnalysisReadinessParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidRaiseIssueParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaiseHotspotsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams;
@@ -227,12 +229,35 @@ public interface SonarLintRpcClient {
   void didChangeAnalysisReadiness(DidChangeAnalysisReadinessParams params);
 
   /**
+   * @deprecated Implement {@link #raiseIssues} instead.
+   * <br/>
    * Called as soon as one of the analyzer discovered an issue.
    * A "raw" issue is an issue as it is raised by the analyzer, without any effort to match it to a previously raised issue (this happens at a later stage).
    * This is to let clients track the issue with previous local issues, and potentially show them to users via streaming
    */
+  @Deprecated(since = "10.2")
   @JsonNotification
   default void didRaiseIssue(DidRaiseIssueParams params) {
+  }
+
+  /**
+   * Called when some issues should be published to the users.
+   * The parameters contain a Map of issues by file URI. This list doesn't include Security Hotspots.
+   * Clients are expected to update the issues list in the UI.
+   * This method might be called in the context of issue streaming, so it might be called frequently.
+   */
+  @JsonNotification
+  default void raiseIssues(RaiseIssuesParams params) {
+  }
+
+  /**
+   * Called when Security Hotspots should be published to the users.
+   * The parameters contain a Map of Security Hotspots by file URI.
+   * Clients are expected to update the Security Hotspots list in the UI.
+   * This method might be called in the context of issue streaming, so it might be called frequently.
+   */
+  @JsonNotification
+  default void raiseHotspots(RaiseHotspotsParams params) {
   }
 
   /**

@@ -41,16 +41,24 @@ public class SonarLintServerCli implements Callable<Integer> {
     // Redirect all logs to stderr for now, would be better to go to a file later
     System.setOut(System.err);
 
-    try (var rpcLauncher = new BackendJsonRpcLauncher(inputStream, originalStdOut)) {
+    try {
+      var rpcLauncher = new BackendJsonRpcLauncher(inputStream, originalStdOut);
+      var rpcServer = rpcLauncher.getServer();
       inputStream.onExit().thenRun(() -> {
-        System.err.println("Input stream has closed, exiting...");
-        rpcLauncher.getJavaImpl().shutdown();
+        if (!rpcServer.isReaderShutdown()){
+          System.err.println("Input stream has closed, exiting...");
+          rpcServer.shutdown();
+        }
       });
-      rpcLauncher.getLauncherFuture().get();
+      rpcServer.getClientListener().get();
     } catch (CancellationException shutdown) {
       System.err.println("Server is shutting down...");
+    } catch (InterruptedException e) {
+      e.printStackTrace();
+      Thread.currentThread().interrupt();
+      return -1;
     } catch (Exception e) {
-      e.printStackTrace(System.err);
+      e.printStackTrace();
       return -1;
     }
 

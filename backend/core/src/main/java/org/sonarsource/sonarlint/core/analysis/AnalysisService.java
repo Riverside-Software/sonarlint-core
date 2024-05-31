@@ -79,10 +79,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.ActiveRuleDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetGlobalConfigurationResponse;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetRuleDetailsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.NodeJsDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.ImpactDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidChangeAnalysisReadinessParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidDetectSecretParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidRaiseIssueParams;
@@ -96,6 +94,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
 import org.sonarsource.sonarlint.core.rule.extractor.SonarLintRuleDefinition;
+import org.sonarsource.sonarlint.core.rules.RuleDetailsAdapter;
 import org.sonarsource.sonarlint.core.rules.RulesService;
 import org.sonarsource.sonarlint.core.serverapi.hotspot.HotspotApi;
 import org.sonarsource.sonarlint.core.serverapi.rules.ServerActiveRule;
@@ -542,33 +541,50 @@ public class AnalysisService {
   }
 
   public CompletableFuture<AnalysisResults> analyze(SonarLintCancelMonitor cancelMonitor, String configurationScopeId, UUID analysisId, List<URI> filePathsToAnalyze,
-    Map<String, String> extraProperties, long startTime) {
+    Map<String, String> extraProperties, long startTime, boolean enableTracking, boolean shouldFetchServerIssues) {
     var analysisEngine = engineCache.getOrCreateAnalysisEngine(configurationScopeId);
     var analysisConfig = getAnalysisConfigForEngine(configurationScopeId, filePathsToAnalyze, extraProperties);
+    LOG.info("Triggering analysis with configuration: {}", analysisConfig);
     if (!analysisConfig.inputFiles().iterator().hasNext()) {
       LOG.error("No file to analyze");
       return CompletableFuture.completedFuture(new AnalysisResults());
     }
-    var ruleDetailsCache = new ConcurrentHashMap<String, GetRuleDetailsResponse>();
+    var ruleDetailsCache = new ConcurrentHashMap<String, RuleDetailsForAnalysis>();
 
     cancelMonitor.checkCanceled();
-    var reportedRuleKeys = new HashSet<String>();
+    var raisedIssues = new ArrayList<RawIssue>();
     var analyzeCommand = new AnalyzeCommand(configurationScopeId, analysisConfig,
-      issue -> streamIssue(configurationScopeId, analysisId, issue, ruleDetailsCache, reportedRuleKeys), SonarLintLogger.getTargetForCopy());
+      issue -> streamIssue(configurationScopeId, analysisId, issue, ruleDetailsCache, raisedIssues), SonarLintLogger.getTargetForCopy());
     return analysisEngine.post(analyzeCommand, ProgressMonitor.wrapping(cancelMonitor))
       .whenComplete((results, error) -> {
         long endTime = System.currentTimeMillis();
         if (error == null) {
           var languagePerFile = results.languagePerFile().entrySet().stream().collect(HashMap<URI, SonarLanguage>::new,
             (map, entry) -> map.put(entry.getKey().uri(), entry.getValue()), HashMap::putAll);
-          eventPublisher.publishEvent(new AnalysisFinishedEvent(configurationScopeId, endTime - startTime,
-            languagePerFile, results.failedAnalysisFiles().isEmpty(), reportedRuleKeys));
+          var analysisDuration = endTime - startTime;
+          logSummary(raisedIssues, analysisDuration);
+          eventPublisher.publishEvent(new AnalysisFinishedEvent(analysisId, configurationScopeId, analysisDuration,
+            languagePerFile, results.failedAnalysisFiles().isEmpty(), raisedIssues, enableTracking, shouldFetchServerIssues));
+          results.setRawIssues(raisedIssues.stream().map(issue -> toDto(issue.getIssue(), issue.getActiveRule())).collect(toList()));
         }
       });
   }
 
-  private void streamIssue(String configScopeId, UUID analysisId, Issue issue, ConcurrentHashMap<String, GetRuleDetailsResponse> ruleDetailsCache,
-    HashSet<String> reportedRuleKeys) {
+  private static void logSummary(ArrayList<RawIssue> rawIssues, long analysisDuration) {
+    // ignore project-level issues for now
+    var fileRawIssues = rawIssues.stream().filter(issue -> issue.getTextRange() != null).collect(toList());
+    var issuesCount = fileRawIssues.stream().filter(issue -> issue.getRuleType() != RuleType.SECURITY_HOTSPOT).count();
+    var hotspotsCount = fileRawIssues.stream().filter(issue -> issue.getRuleType() == RuleType.SECURITY_HOTSPOT).count();
+    LOG.info("Analysis detected {} and {} in {}ms", pluralize(issuesCount, "issue"), pluralize(hotspotsCount, "Security Hotspot"), analysisDuration);
+  }
+
+  private static String pluralize(long count, String word) {
+    var pluralizedWord = count == 1 ? word : (word + 's');
+    return count + " " + pluralizedWord;
+  }
+
+  private void streamIssue(String configScopeId, UUID analysisId, Issue issue, ConcurrentHashMap<String, RuleDetailsForAnalysis> ruleDetailsCache,
+    List<RawIssue> rawIssues) {
     var ruleKey = issue.getRuleKey();
     var activeRule = ruleDetailsCache.computeIfAbsent(ruleKey, k -> {
       try {
@@ -578,7 +594,7 @@ public class AnalysisService {
       }
     });
     if (activeRule != null) {
-      reportedRuleKeys.add(ruleKey);
+      rawIssues.add(new RawIssue(issue, activeRule));
       client.didRaiseIssue(new DidRaiseIssueParams(configScopeId, analysisId, toDto(issue, activeRule)));
       if (ruleKey.contains("secrets")) {
         client.didDetectSecret(new DidDetectSecretParams(configScopeId));
@@ -586,11 +602,12 @@ public class AnalysisService {
     }
   }
 
-  static RawIssueDto toDto(Issue issue, GetRuleDetailsResponse activeRule) {
+  static RawIssueDto toDto(Issue issue, RuleDetailsForAnalysis activeRule) {
     var range = issue.getTextRange();
     var textRange = range != null ? adapt(range) : null;
     var impacts = new EnumMap<SoftwareQuality, ImpactSeverity>(SoftwareQuality.class);
-    impacts.putAll(activeRule.getDefaultImpacts().stream().collect(toMap(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)));
+    impacts.putAll(activeRule.getImpacts().entrySet().stream()
+      .collect(toMap(e -> RuleDetailsAdapter.adapt(e.getKey()), e -> RuleDetailsAdapter.adapt(e.getValue()))));
     impacts
       .putAll(
         issue.getOverriddenImpacts().entrySet().stream().map(entry -> Map.entry(SoftwareQuality.valueOf(entry.getKey().name()), ImpactSeverity.valueOf(entry.getValue().name())))
@@ -604,13 +621,13 @@ public class AnalysisService {
         var locationInputFile = location.getInputFile();
         var locationFileUri = locationInputFile == null ? null : locationInputFile.uri();
         return new RawIssueLocationDto(locationTextRangeDto, location.getMessage(), locationFileUri);
-      }).collect(Collectors.toList());
+      }).collect(toList());
       return new RawIssueFlowDto(locations);
-    }).collect(Collectors.toList());
+    }).collect(toList());
     return new RawIssueDto(
-      activeRule.getSeverity(),
-      activeRule.getType(),
-      activeRule.getCleanCodeAttribute(),
+      RuleDetailsAdapter.adapt(activeRule.getSeverity()),
+      RuleDetailsAdapter.adapt(activeRule.getType()),
+      RuleDetailsAdapter.adapt(activeRule.getCleanCodeAttribute()),
       impacts,
       issue.getRuleKey(),
       requireNonNull(issue.getMessage()),
@@ -626,7 +643,7 @@ public class AnalysisService {
         .collect(toList()),
       textRange,
       issue.getRuleDescriptionContextKey().orElse(null),
-      activeRule.getVulnerabilityProbability());
+      RuleDetailsAdapter.adapt(activeRule.getVulnerabilityProbability()));
   }
 
   private static TextRangeDto adapt(TextRange textRange) {

@@ -21,6 +21,8 @@ package org.sonarsource.sonarlint.core.rpc.protocol.client.analysis;
 
 import java.util.UUID;
 
+
+@Deprecated(since = "10.2")
 public class DidRaiseIssueParams {
   private final String configurationScopeId;
   // the ID that was provided when the analysis was triggered

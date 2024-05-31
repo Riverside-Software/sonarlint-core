@@ -183,7 +183,7 @@ class AnalysisMediumTests {
     var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    verify(client).didSkipLoadingPlugin(CONFIG_SCOPE_ID, Language.JAVA, DidSkipLoadingPluginParams.SkipReason.UNSATISFIED_JRE, "11", "10");
+    verify(client, timeout(200)).didSkipLoadingPlugin(CONFIG_SCOPE_ID, Language.JAVA, DidSkipLoadingPluginParams.SkipReason.UNSATISFIED_JRE, "11", "10");
   }
 
   @Test
@@ -203,7 +203,28 @@ class AnalysisMediumTests {
     var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    verify(client).didDetectSecret();
+    verify(client).didDetectSecret(CONFIG_SCOPE_ID);
+  }
+
+  @Test
+  void analysis_response_should_contain_raw_issues(@TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "secret.py",
+      "KEY = \"AKIAIGKECZXA7AEIJLMQ\"");
+    var fileUri = filePath.toUri();
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
+      .build(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    assertThat(result.getRawIssues()).hasSize(1);
+    assertThat(result.getRawIssues().get(0).getRuleKey()).isEqualTo("secrets:S6290");
   }
 
   @Test

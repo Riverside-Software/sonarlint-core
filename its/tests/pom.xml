@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-its</artifactId>
-    <version>10.1.99004</version>
+    <version>10.2.99004</version>
   </parent>
   <artifactId>sonarlint-core-its-tests</artifactId>
   <name>SonarLint Core - ITs - Tests</name>
@@ -133,7 +133,7 @@
     <dependency>
       <groupId>org.eclipse.jetty</groupId>
       <artifactId>jetty-server</artifactId>
-      <version>9.4.17.v20190418</version>
+      <version>11.0.20</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -155,7 +155,6 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-compress</artifactId>
-      <version>1.24.0</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

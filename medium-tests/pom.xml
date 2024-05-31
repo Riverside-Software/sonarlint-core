@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.1.99004</version>
+    <version>10.2.99004</version>
   </parent>
   <artifactId>sonarlint-medium-tests</artifactId>
   <name>SonarLint Core - Medium Tests</name>
@@ -78,13 +78,18 @@
     <dependency>
       <groupId>org.apache.tomcat.embed</groupId>
       <artifactId>tomcat-embed-websocket</artifactId>
-      <version>10.1.12</version>
+      <version>10.1.24</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.codehaus.plexus</groupId>
       <artifactId>plexus-archiver</artifactId>
       <version>4.8.0</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
