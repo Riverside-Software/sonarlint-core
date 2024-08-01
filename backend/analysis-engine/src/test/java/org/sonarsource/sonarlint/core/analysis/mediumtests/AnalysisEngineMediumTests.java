@@ -76,7 +76,7 @@ class AnalysisEngineMediumTests {
       .setClientPid(1234L)
       .setWorkDir(workDir)
       .build();
-    var result = new PluginsLoader().load(new PluginsLoader.Configuration(Set.of(findPythonJarPath()), enabledLanguages, false, Optional.empty()));
+    var result = new PluginsLoader().load(new PluginsLoader.Configuration(Set.of(findPythonJarPath()), enabledLanguages, false, Optional.empty()), Set.of());
     this.analysisEngine = new AnalysisEngine(analysisGlobalConfig, result.getLoadedPlugins(), logTester.getLogOutput());
     engineStopped = false;
   }
@@ -101,9 +101,11 @@ class AnalysisEngineMediumTests {
       .build();
     List<Issue> issues = new ArrayList<>();
     analysisEngine.post(new AnalyzeCommand(null, analysisConfig, issues::add, null), progressMonitor).get();
+    assertThat(issues).hasSize(1);
     assertThat(issues)
-      .extracting("ruleKey", "message", "inputFile", "flows", "quickFixes", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
-      .containsOnly(tuple("python:S139", "Move this trailing comment on the previous empty line.", inputFile, List.of(), List.of(), 2, 9, 2, 27));
+      .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
+      .containsOnly(tuple("python:S139", "Move this trailing comment on the previous empty line.", inputFile, List.of(), 2, 9, 2, 27));
+    assertThat(issues.get(0).quickFixes()).hasSize(1);
   }
 
   @Test
@@ -120,9 +122,11 @@ class AnalysisEngineMediumTests {
     List<Issue> issues = new ArrayList<>();
     analysisEngine.post(new RegisterModuleCommand(new ClientModuleInfo("moduleKey", aModuleFileSystem())), progressMonitor).get();
     analysisEngine.post(new AnalyzeCommand("moduleKey", analysisConfig, issues::add, null), progressMonitor).get();
+    assertThat(issues).hasSize(1);
     assertThat(issues)
-      .extracting("ruleKey", "message", "inputFile", "flows", "quickFixes", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
-      .containsOnly(tuple("python:S139", "Move this trailing comment on the previous empty line.", inputFile, List.of(), List.of(), 2, 9, 2, 27));
+      .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
+      .containsOnly(tuple("python:S139", "Move this trailing comment on the previous empty line.", inputFile, List.of(), 2, 9, 2, 27));
+    assertThat(issues.get(0).quickFixes()).hasSize(1);
   }
 
   @Test

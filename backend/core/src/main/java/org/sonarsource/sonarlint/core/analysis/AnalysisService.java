@@ -43,6 +43,7 @@ import javax.inject.Named;
 import javax.inject.Singleton;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
+import org.sonarsource.sonarlint.core.analysis.api.ActiveRule;
 import org.sonarsource.sonarlint.core.analysis.api.AnalysisConfiguration;
 import org.sonarsource.sonarlint.core.analysis.api.AnalysisResults;
 import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
@@ -72,6 +73,7 @@ import org.sonarsource.sonarlint.core.fs.FileSystemUpdatedEvent;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
 import org.sonarsource.sonarlint.core.nodejs.InstalledNodeJs;
 import org.sonarsource.sonarlint.core.plugin.PluginsService;
+import org.sonarsource.sonarlint.core.progress.RpcProgressMonitor;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.rules.RulesRepository;
@@ -96,7 +98,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
 import org.sonarsource.sonarlint.core.rule.extractor.SonarLintRuleDefinition;
 import org.sonarsource.sonarlint.core.rules.RuleDetailsAdapter;
 import org.sonarsource.sonarlint.core.rules.RulesService;
-import org.sonarsource.sonarlint.core.serverapi.hotspot.HotspotApi;
 import org.sonarsource.sonarlint.core.serverapi.rules.ServerActiveRule;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.sync.AnalyzerConfigurationSynchronized;
@@ -114,6 +115,7 @@ import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang3.StringUtils.trimToNull;
 import static org.sonarsource.sonarlint.core.analysis.container.analysis.filesystem.LanguageDetection.sanitizeExtension;
+import static org.sonarsource.sonarlint.core.commons.util.StringUtils.pluralize;
 
 @Named
 @Singleton
@@ -141,8 +143,9 @@ public class AnalysisService {
 
   public AnalysisService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, LanguageSupportRepository languageSupportRepository,
     StorageService storageService, PluginsService pluginsService, RulesService rulesService, RulesRepository rulesRepository,
-    ConnectionConfigurationRepository connectionConfigurationRepository, InitializeParams initializeParams, NodeJsService nodeJsService, AnalysisEngineCache engineCache,
-    ClientFileSystemService fileSystemService, FileExclusionService fileExclusionService, ApplicationEventPublisher eventPublisher) {
+    ConnectionConfigurationRepository connectionConfigurationRepository, InitializeParams initializeParams, NodeJsService nodeJsService,
+    AnalysisEngineCache engineCache, ClientFileSystemService fileSystemService, FileExclusionService fileExclusionService,
+    ApplicationEventPublisher eventPublisher) {
     this.client = client;
     this.configurationRepository = configurationRepository;
     this.languageSupportRepository = languageSupportRepository;
@@ -238,7 +241,7 @@ public class AnalysisService {
       .putAllExtraProperties(analysisConfig.getAnalysisProperties())
       .putAllExtraProperties(extraProperties)
       .addActiveRules(analysisConfig.getActiveRules().stream().map(r -> {
-        var ar = new org.sonarsource.sonarlint.core.analysis.api.ActiveRule(r.getRuleKey(), r.getLanguageKey());
+        var ar = new ActiveRule(r.getRuleKey(), r.getLanguageKey());
         ar.setParams(r.getParams());
         ar.setTemplateRuleKey(r.getTemplateRuleKey());
         return ar;
@@ -328,20 +331,17 @@ public class AnalysisService {
   }
 
   private boolean shouldIncludeRuleForAnalysis(String connectionId, SonarLintRuleDefinition ruleDefinition) {
-    return !ruleDefinition.getType().equals(RuleType.SECURITY_HOTSPOT) ||
-      (hotspotEnabled && permitsHotspotTracking(connectionId));
+    return !ruleDefinition.getType().equals(RuleType.SECURITY_HOTSPOT) || (hotspotEnabled && isHotspotTrackingPossible(connectionId));
   }
 
-  public boolean permitsHotspotTracking(String connectionId) {
+  public boolean isHotspotTrackingPossible(String connectionId) {
     var connection = connectionConfigurationRepository.getConnectionById(connectionId);
     if (connection == null) {
       // Connection is gone
       return false;
     }
     // when storage is not present, consider hotspots should not be detected
-    return storageService.connection(connectionId).serverInfo().read()
-      .map(serverInfo -> HotspotApi.permitsTracking(connection.getKind() == ConnectionKind.SONARCLOUD, serverInfo::getVersion))
-      .orElse(false);
+    return storageService.connection(connectionId).serverInfo().read().isPresent();
   }
 
   public boolean supportsSecretAnalysis(String connectionId) {
@@ -553,9 +553,11 @@ public class AnalysisService {
 
     cancelMonitor.checkCanceled();
     var raisedIssues = new ArrayList<RawIssue>();
+    eventPublisher.publishEvent(new AnalysisStartedEvent(configurationScopeId, analysisId, analysisConfig.inputFiles(), enableTracking));
     var analyzeCommand = new AnalyzeCommand(configurationScopeId, analysisConfig,
-      issue -> streamIssue(configurationScopeId, analysisId, issue, ruleDetailsCache, raisedIssues), SonarLintLogger.getTargetForCopy());
-    return analysisEngine.post(analyzeCommand, ProgressMonitor.wrapping(cancelMonitor))
+      issue -> streamIssue(configurationScopeId, analysisId, issue, ruleDetailsCache, raisedIssues, enableTracking), SonarLintLogger.getTargetForCopy());
+    var rpcProgressMonitor = new RpcProgressMonitor(client, cancelMonitor, configurationScopeId, analysisId);
+    return analysisEngine.post(analyzeCommand, rpcProgressMonitor)
       .whenComplete((results, error) -> {
         long endTime = System.currentTimeMillis();
         if (error == null) {
@@ -566,6 +568,8 @@ public class AnalysisService {
           eventPublisher.publishEvent(new AnalysisFinishedEvent(analysisId, configurationScopeId, analysisDuration,
             languagePerFile, results.failedAnalysisFiles().isEmpty(), raisedIssues, enableTracking, shouldFetchServerIssues));
           results.setRawIssues(raisedIssues.stream().map(issue -> toDto(issue.getIssue(), issue.getActiveRule())).collect(toList()));
+        } else {
+          LOG.error("Error during analysis", error);
         }
       });
   }
@@ -573,18 +577,13 @@ public class AnalysisService {
   private static void logSummary(ArrayList<RawIssue> rawIssues, long analysisDuration) {
     // ignore project-level issues for now
     var fileRawIssues = rawIssues.stream().filter(issue -> issue.getTextRange() != null).collect(toList());
-    var issuesCount = fileRawIssues.stream().filter(issue -> issue.getRuleType() != RuleType.SECURITY_HOTSPOT).count();
-    var hotspotsCount = fileRawIssues.stream().filter(issue -> issue.getRuleType() == RuleType.SECURITY_HOTSPOT).count();
+    var issuesCount = fileRawIssues.stream().filter(not(RawIssue::isSecurityHotspot)).count();
+    var hotspotsCount = fileRawIssues.stream().filter(RawIssue::isSecurityHotspot).count();
     LOG.info("Analysis detected {} and {} in {}ms", pluralize(issuesCount, "issue"), pluralize(hotspotsCount, "Security Hotspot"), analysisDuration);
   }
 
-  private static String pluralize(long count, String word) {
-    var pluralizedWord = count == 1 ? word : (word + 's');
-    return count + " " + pluralizedWord;
-  }
-
-  private void streamIssue(String configScopeId, UUID analysisId, Issue issue, ConcurrentHashMap<String, RuleDetailsForAnalysis> ruleDetailsCache,
-    List<RawIssue> rawIssues) {
+  private void streamIssue(String configScopeId, UUID analysisId, Issue issue, ConcurrentHashMap<String, RuleDetailsForAnalysis> ruleDetailsCache, List<RawIssue> rawIssues,
+    boolean enableTracking) {
     var ruleKey = issue.getRuleKey();
     var activeRule = ruleDetailsCache.computeIfAbsent(ruleKey, k -> {
       try {
@@ -594,10 +593,14 @@ public class AnalysisService {
       }
     });
     if (activeRule != null) {
-      rawIssues.add(new RawIssue(issue, activeRule));
+      var rawIssue = new RawIssue(issue, activeRule);
+      rawIssues.add(rawIssue);
       client.didRaiseIssue(new DidRaiseIssueParams(configScopeId, analysisId, toDto(issue, activeRule)));
       if (ruleKey.contains("secrets")) {
         client.didDetectSecret(new DidDetectSecretParams(configScopeId));
+      }
+      if (enableTracking) {
+        eventPublisher.publishEvent(new RawIssueDetectedEvent(configScopeId, analysisId, rawIssue));
       }
     }
   }

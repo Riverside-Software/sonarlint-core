@@ -17,9 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 package org.sonarsource.sonarlint.core.tracking;
 
+import java.time.Instant;
 import java.util.UUID;
 import org.sonarsource.sonarlint.core.analysis.RawIssue;
 
@@ -32,9 +32,9 @@ public class IssueMapper {
     // utils
   }
 
-  public static TrackedIssue toTrackedIssue(RawIssue issue) {
-    return new TrackedIssue(UUID.randomUUID(), issue.getMessage(), null, false, issue.getSeverity(),
-      issue.getRuleType(), issue.getRuleKey(), true, getTextRangeWithHash(issue.getTextRange(),
+  public static TrackedIssue toTrackedIssue(RawIssue issue, Instant introductionDate) {
+    return new TrackedIssue(UUID.randomUUID(), issue.getMessage(), introductionDate, false, issue.getSeverity(),
+      issue.getRuleType(), issue.getRuleKey(), getTextRangeWithHash(issue.getTextRange(),
       issue.getClientInputFile()), getLineWithHash(issue.getTextRange(),
       issue.getClientInputFile()), null, issue.getImpacts(), issue.getFlows(), issue.getQuickFixes(),
       issue.getVulnerabilityProbability(), null,  issue.getRuleDescriptionContextKey(), issue.getCleanCodeAttribute(), issue.getFileUri());

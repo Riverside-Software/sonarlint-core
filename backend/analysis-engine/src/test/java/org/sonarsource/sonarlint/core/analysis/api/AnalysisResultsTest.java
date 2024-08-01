@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Implementation
+ * SonarLint Core - Analysis Engine
  * Copyright (C) 2016-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,22 +17,15 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.issue.matching;
+package org.sonarsource.sonarlint.core.analysis.api;
 
-import java.util.Optional;
+import org.junit.jupiter.api.Test;
 
-public interface MatchingAttributesMapper<G> {
+import static org.assertj.core.api.Assertions.assertThat;
 
-
-  String getRuleKey(G issue);
-
-  Optional<Integer> getLine(G issue);
-
-  Optional<String> getTextRangeHash(G issue);
-
-  Optional<String> getLineHash(G issue);
-
-  String getMessage(G issue);
-
-  Optional<String> getServerIssueKey(G issue);
+class AnalysisResultsTest {
+  @Test
+  void raw_issues_returns_empty_list_without_calling_setter() {
+    assertThat(new AnalysisResults().getRawIssues()).isEmpty();
+  }
 }

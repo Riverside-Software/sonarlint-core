@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.2.99008</version>
+    <version>10.3.99000</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-java-client-dependencies</artifactId>
@@ -21,11 +21,6 @@
       <groupId>org.eclipse.lsp4j</groupId>
       <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
       <version>${lsp4j.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-      <version>${protobuf.version}</version>
     </dependency>
   </dependencies>
 
@@ -71,7 +66,6 @@
             <includes>
               <include>com.google.code.gson:gson</include>
               <include>org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc</include>
-              <include>com.google.protobuf:protobuf-java</include>
             </includes>
           </artifactSet>
 
@@ -102,14 +96,6 @@
                 <exclude>NOTICE*</exclude>
                 <exclude>*.proto</exclude>
               </excludes>
-            </filter>
-
-            <!-- Shade protobuf so we don't have to ship an additional bundle -->
-            <filter>
-              <artifact>com.google.protobuf:protobuf-java</artifact>
-              <includes>
-                <include>**</include>
-              </includes>
             </filter>
           </filters>
         </configuration>

@@ -17,7 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.issue.matching;
+package org.sonarsource.sonarlint.core.tracking.matching;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -290,10 +290,10 @@ public class IssueMatcher<LEFT, RIGHT> {
     @Override
     public boolean equals(Object o) {
       var that = (ServerIssueSearchKey) o;
-      return !isBlank(serverIssueKey) && !isBlank(that.serverIssueKey) && serverIssueKey.equals(that.serverIssueKey);
+      return that != null && !isBlank(serverIssueKey) && !isBlank(that.serverIssueKey) && serverIssueKey.equals(that.serverIssueKey);
     }
 
-    private static boolean isBlank(String s) {
+    private static boolean isBlank(@Nullable String s) {
       return s == null || s.isEmpty();
     }
 

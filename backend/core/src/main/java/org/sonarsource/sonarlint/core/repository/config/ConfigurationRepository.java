@@ -68,8 +68,10 @@ public class ConfigurationRepository {
     var configScopeIdsToUnbind =
       bindingPerConfigScopeId.entrySet().stream().filter(e -> connectionId.equals(e.getValue().getConnectionId())).map(Map.Entry::getKey).collect(toSet());
     configScopeIdsToUnbind.forEach(configScopeId -> {
-      var removedBindingConfiguration = bindingPerConfigScopeId.remove(configScopeId);
+      var removedBindingConfiguration = bindingPerConfigScopeId.get(configScopeId);
       if (removedBindingConfiguration != null) {
+        var noBinding = BindingConfiguration.noBinding(removedBindingConfiguration.isBindingSuggestionDisabled());
+        updateBinding(configScopeId, noBinding);
         removedBindingByConfigScope.put(configScopeId, removedBindingConfiguration);
       }
     });
@@ -160,7 +162,7 @@ public class ConfigurationRepository {
       .collect(Collectors.toList());
   }
 
-  public Collection<ConfigurationScope> getAllBindbableUnboundScopes() {
+  public Collection<ConfigurationScope> getAllBindableUnboundScopes() {
     return configScopePerId.entrySet()
       .stream()
       .filter(e -> e.getValue().isBindable())

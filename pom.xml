@@ -4,12 +4,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>73.0.0.1710</version>
+    <version>74.0.0.1768</version>
     <relativePath/>
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.2.99008</version>
+  <version>10.3.99000</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -53,7 +53,7 @@
     <maven.compiler.release>11</maven.compiler.release>
     <sonar-plugin-api.version>10.1.0.809</sonar-plugin-api.version>
     <sonar-markdown.version>9.4.0.54424</sonar-markdown.version>
-    <sonar-scanner-protocol.version>7.9</sonar-scanner-protocol.version>
+    <sonar-scanner-protocol.version>9.9.0.65466</sonar-scanner-protocol.version>
     <protobuf.version>3.25.1</protobuf.version>
     <gitRepositoryName>sonarlint-core</gitRepositoryName>
     <okhttp.version>5.0.0-alpha.10</okhttp.version>
@@ -71,7 +71,7 @@
     <jgit.version>6.9.0.202403050737-r</jgit.version>
 
     <!-- Not only used as a plug-in but also as a dependency for 'maven-shade-ext-bnd-transformer' -->
-    <version.shade.plugin>3.4.1</version.shade.plugin>
+    <version.shade.plugin>3.6.0</version.shade.plugin>
 
     <!-- Exclude Maven Shade plug-in dependency as the test is done via the Maven build itself ... -->
     <sonar.coverage.exclusions>buildSrc/maven-shade-ext-bnd-transformer/**</sonar.coverage.exclusions>
@@ -125,6 +125,7 @@
         <artifactId>commons-lang3</artifactId>
         <version>3.12.0</version>
       </dependency>
+      <!-- This dependency is imported by the SLLS, ping them when it is modified -->
       <dependency>
         <groupId>commons-io</groupId>
         <artifactId>commons-io</artifactId>

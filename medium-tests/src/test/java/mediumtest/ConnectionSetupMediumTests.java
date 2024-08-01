@@ -31,15 +31,16 @@ import mediumtest.fixtures.ServerFixture;
 import mediumtest.fixtures.SonarLintTestRpcServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.HelpGenerateUserTokenParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.HelpGenerateUserTokenResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.check.CheckSmartNotificationsSupportedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarCloudConnectionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarQubeConnectionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.validate.ValidateConnectionParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 
+import static mediumtest.fixtures.ServerFixture.newSonarCloudServer;
 import static mediumtest.fixtures.ServerFixture.newSonarQubeServer;
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
@@ -58,42 +59,38 @@ class ConnectionSetupMediumTests {
   }
 
   @Test
-  void it_should_open_the_security_url_for_sonarcloud() throws MalformedURLException {
+  void it_should_open_the_sonarlint_auth_url_for_sonarcloud() throws IOException, InterruptedException {
     var fakeClient = newFakeClient().build();
-    backend = newBackend().build(fakeClient);
+    ServerFixture.Server scServer = newSonarCloudServer()
+      .start();
 
-    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams("https://sonarcloud.io", true));
+    backend = newBackend().withEmbeddedServer().withClientName("ClientName").withSonarCloudConnection("connectionId").build(fakeClient);
+
+    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(scServer.baseUrl()));
+
+    verify(fakeClient, timeout(3000)).openUrlInBrowser(new URL(scServer.url("/sonarlint/auth?ideName=ClientName&port=" + backend.getEmbeddedServerPort())));
+
+    var request = HttpRequest.newBuilder()
+      .uri(URI.create("http://localhost:" + backend.getEmbeddedServerPort() + "/sonarlint/api/token"))
+      .header("Content-Type", "application/json; charset=utf-8")
+      .header("Origin", scServer.baseUrl())
+      .POST(HttpRequest.BodyPublishers.ofString("{\"token\": \"value\"}")).build();
+    var response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).isEqualTo(200);
 
     assertThat(futureResponse)
       .succeedsWithin(Duration.ofSeconds(3))
       .extracting(HelpGenerateUserTokenResponse::getToken)
-      .isNull();
-    verify(fakeClient, timeout(5000)).openUrlInBrowser(new URL("https://sonarcloud.io/account/security"));
-  }
-
-  @Test
-  void it_should_open_the_security_url_for_sonarqube_older_than_9_7() throws MalformedURLException {
-    var fakeClient = newFakeClient().build();
-    backend = newBackend().build(fakeClient);
-    server = newSonarQubeServer("9.6").start();
-
-    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), false));
-
-    assertThat(futureResponse)
-      .succeedsWithin(Duration.ofSeconds(3))
-      .extracting(HelpGenerateUserTokenResponse::getToken)
-      .isNull();
-
-    verify(fakeClient, timeout(5000)).openUrlInBrowser(new URL(server.url("account/security")));
+      .isEqualTo("value");
   }
 
   @Test
   void it_should_open_the_sonarlint_auth_url_for_sonarqube_9_7_plus() throws IOException, InterruptedException {
     var fakeClient = newFakeClient().build();
-    server = newSonarQubeServer("9.7").start();
+    server = newSonarQubeServer("9.9").start();
     backend = newBackend().withEmbeddedServer().withClientName("ClientName").withSonarQubeConnection("connectionId", server).build(fakeClient);
 
-    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), false));
+    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl()));
 
     verify(fakeClient, timeout(3000)).openUrlInBrowser(new URL(server.url("/sonarlint/auth?ideName=ClientName&port=" + backend.getEmbeddedServerPort())));
 
@@ -114,10 +111,10 @@ class ConnectionSetupMediumTests {
   @Test
   void it_should_reject_tokens_from_missing_origin() throws IOException, InterruptedException {
     var fakeClient = newFakeClient().build();
-    server = newSonarQubeServer("9.7").start();
+    server = newSonarQubeServer("9.9").start();
     backend = newBackend().withEmbeddedServer().withClientName("ClientName").withSonarQubeConnection("connectionId", server).build(fakeClient);
 
-    backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), false));
+    backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl()));
 
     verify(fakeClient, timeout(3000)).openUrlInBrowser(new URL(server.url("/sonarlint/auth?ideName=ClientName&port=" + backend.getEmbeddedServerPort())));
 
@@ -132,10 +129,10 @@ class ConnectionSetupMediumTests {
   @Test
   void it_should_reject_tokens_from_unexpected_origin() throws IOException, InterruptedException {
     var fakeClient = newFakeClient().build();
-    server = newSonarQubeServer("9.7").start();
+    server = newSonarQubeServer("9.9").start();
     backend = newBackend().withEmbeddedServer().withClientName("ClientName").withSonarQubeConnection("connectionId", server).build(fakeClient);
 
-    backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), false));
+    backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl()));
 
     verify(fakeClient, timeout(3000)).openUrlInBrowser(new URL(server.url("/sonarlint/auth?ideName=ClientName&port=" + backend.getEmbeddedServerPort())));
 
@@ -152,9 +149,9 @@ class ConnectionSetupMediumTests {
   void it_should_open_the_sonarlint_auth_url_without_port_for_sonarqube_9_7_plus_when_server_is_not_started() throws MalformedURLException {
     var fakeClient = newFakeClient().build();
     backend = newBackend().withClientName("ClientName").build(fakeClient);
-    server = newSonarQubeServer("9.7").start();
+    server = newSonarQubeServer("9.9").start();
 
-    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), false));
+    var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl()));
 
     assertThat(futureResponse)
       .succeedsWithin(Duration.ofSeconds(3))

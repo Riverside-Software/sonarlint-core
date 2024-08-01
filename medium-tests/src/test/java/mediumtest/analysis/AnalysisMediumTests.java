@@ -25,6 +25,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import mediumtest.fixtures.SonarLintTestRpcServer;
 import mediumtest.fixtures.TestPlugin;
 import org.junit.jupiter.api.AfterEach;
@@ -34,12 +35,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.sonar.api.utils.System2;
+import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.ConfigurationScopeDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddConfigurationScopesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.RawIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.plugin.DidSkipLoadingPluginParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ProgressEndNotification;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ReportProgressParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.StartProgressParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.CleanCodeAttribute;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity;
@@ -52,8 +59,10 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.refEq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -91,6 +100,52 @@ class AnalysisMediumTests {
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     verify(client, never()).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), any());
+  }
+
+  @Test
+  void should_not_raise_issues_for_previously_analysed_files_if_they_were_not_submitted_for_analysis(@TempDir Path baseDir) {
+    var fileFooPath = createFile(baseDir, "Foo.java",
+      "public class Foo {\n"
+        + "  public void foo() {\n"
+        + "    int x;\n"
+        + "    System.out.println(\"Foo\");\n"
+        + "  }\n"
+        + "}");
+    var fileBarPath = createFile(baseDir, "Bar.java",
+      "public class Bar {\n"
+        + "  public void foo() {\n"
+        + "    int x;\n"
+        + "    System.out.println(\"Foo\");\n"
+        + "  }\n"
+        + "}");
+    var fileFooUri = fileFooPath.toUri();
+    var fileBarUri = fileBarPath.toUri();
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(
+        new ClientFileDto(fileFooUri, baseDir.relativize(fileFooPath), CONFIG_SCOPE_ID, false, null, fileFooPath, null, null),
+        new ClientFileDto(fileBarUri, baseDir.relativize(fileBarPath), CONFIG_SCOPE_ID, false, null, fileBarPath, null, null)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
+      .withDisabledPluginsForAnalysis(SonarLanguage.JAVA.getPluginKey())
+      .build(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileFooUri), Map.of(), true, System.currentTimeMillis())).join();
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    var issues = client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID);
+    assertThat(issues).containsOnlyKeys(fileFooUri);
+
+    client.cleanRaisedIssues();
+
+    result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileBarUri), Map.of(), true, System.currentTimeMillis())).join();
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    issues = client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID);
+    assertThat(issues).containsOnlyKeys(fileBarUri);
   }
 
   @Test
@@ -204,6 +259,30 @@ class AnalysisMediumTests {
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     verify(client).didDetectSecret(CONFIG_SCOPE_ID);
+  }
+
+  @Test
+  void it_should_notify_client_on_analysis_progress(@TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "secret.py",
+      "KEY = \"AKIAIGKECZXA7AEIJLMQ\"");
+    var fileUri = filePath.toUri();
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
+      .build(client);
+    var analysisId = UUID.randomUUID();
+
+    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+
+    verify(client).startProgress(refEq(new StartProgressParams(analysisId.toString(), CONFIG_SCOPE_ID, "Analyzing 1 file", null, true, false)));
+    var reportProgressCaptor = ArgumentCaptor.forClass(ReportProgressParams.class);
+    verify(client).reportProgress(reportProgressCaptor.capture());
+    assertThat(reportProgressCaptor.getValue())
+      .usingRecursiveComparison()
+      .isEqualTo(new ReportProgressParams(analysisId.toString(), new ProgressEndNotification()));
   }
 
   @Test
@@ -478,6 +557,79 @@ class AnalysisMediumTests {
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
     verify(client, times(0)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
+  }
+
+  @Test
+  void it_should_skip_analysis_and_keep_rules_if_disabled_language_for_analysis(@TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var fileUri = filePath.toUri();
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
+      .build(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    assertThat(result.getRawIssues()).isEmpty();
+    verify(client, never()).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), any());
+
+    var allRules = backend.getRulesService().listAllStandaloneRulesDefinitions().join();
+    assertThat(allRules.getRulesByKey().keySet())
+      .isNotEmpty()
+      .allMatch(key -> key.startsWith("xml:"));
+    var ruleDetails = backend.getRulesService().getEffectiveRuleDetails(new GetEffectiveRuleDetailsParams(CONFIG_SCOPE_ID, "xml:S103", null)).join();
+    assertThat(ruleDetails.details().getName()).isEqualTo("Lines should not be too long");
+  }
+
+  @Test
+  void it_should_skip_analysis_only_for_disabled_language(@TempDir Path baseDir) {
+    var xmlFilePath = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var xmlFileUri = xmlFilePath.toUri();
+    var javaFilePath = createFile(baseDir, "Main.java",
+      "public class Main {}");
+    var javaFileUri = javaFilePath.toUri();
+
+    var xmlClientFile = new ClientFileDto(xmlFileUri, baseDir.relativize(xmlFilePath), CONFIG_SCOPE_ID, false, null, xmlFilePath, null, null);
+    var javaClientFile = new ClientFileDto(javaFileUri, baseDir.relativize(javaFilePath), CONFIG_SCOPE_ID, false, null, javaFilePath, null, null);
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(xmlClientFile, javaClientFile))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
+      .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
+      .build(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(xmlFileUri, javaFileUri), Map.of(), false, System.currentTimeMillis())).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    assertThat(result.getRawIssues())
+      .hasSize(2)
+      .allMatch(rawIssueDto -> rawIssueDto.getRuleKey().startsWith("java:"));
   }
 
   private static Path createFile(Path folderPath, String fileName, String content) {

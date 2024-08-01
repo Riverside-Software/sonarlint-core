@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.2.99008</version>
+    <version>10.3.99000</version>
   </parent>
   <artifactId>sonarlint-rule-extractor-cli</artifactId>
   <name>SonarLint Core - Rule Extractor - CLI</name>
@@ -114,7 +114,7 @@
                 <artifactItem>
                   <groupId>org.sonarsource.javascript</groupId>
                   <artifactId>sonar-javascript-plugin</artifactId>
-                  <version>9.12.1.20358</version>
+                  <version>9.13.0.20537</version>
                   <type>jar</type>
                 </artifactItem>
                 <artifactItem>

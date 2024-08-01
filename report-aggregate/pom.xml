@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.2.99008</version>
+    <version>10.3.99000</version>
   </parent>
   <artifactId>sonarlint-report-aggregate</artifactId>
   <name>SonarLint Coverage Reports Aggregator</name>
@@ -106,8 +106,13 @@
       <artifactId>sonarlint-java-client-legacy</artifactId>
       <version>${project.version}</version>
     </dependency>
+    <dependency>
+      <groupId>${project.groupId}</groupId>
+      <artifactId>sonarlint-slf4j-sonar-log</artifactId>
+      <version>${project.version}</version>
+    </dependency>
   </dependencies>
-  
+
   <build>
     <plugins>
       <plugin>
