@@ -96,14 +96,14 @@ class StandaloneTests {
     try {
       // The global-extension-plugin reuses the cobol plugin key to be whitelisted
       var languages = Set.of(COBOL);
-      var featureFlags = new FeatureFlagsDto(true, true, true, false, true, true, false, true, false);
+      var featureFlags = new FeatureFlagsDto(true, true, true, false, true, true, false, true, false, false);
       System.out.println("Before backend initialize");
       backend.initialize(
         new InitializeParams(IT_CLIENT_INFO, IT_TELEMETRY_ATTRIBUTES, HttpConfigurationDto.defaultConfig(), null, featureFlags,
           sonarUserHome.resolve("storage"),
           sonarUserHome.resolve("work"),
           Set.of(Paths.get("../plugins/global-extension-plugin/target/global-extension-plugin.jar")), Collections.emptyMap(),
-          languages, Collections.emptySet(), Collections.emptySet(), Collections.emptyList(), Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null))
+          languages, Collections.emptySet(), Collections.emptySet(), Collections.emptyList(), Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null, false))
         .get();
       System.out.println("After backend initialize");
     } catch (Exception e) {
@@ -181,7 +181,7 @@ class StandaloneTests {
     var filePath = Path.of("projects").resolve(baseDir).resolve(filePathStr);
     var fileUri = filePath.toUri();
     backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(),
-      List.of(new ClientFileDto(fileUri, Path.of(filePathStr), configScopeId, false, null, filePath.toAbsolutePath(), null, null))));
+      List.of(new ClientFileDto(fileUri, Path.of(filePathStr), configScopeId, false, null, filePath.toAbsolutePath(), null, null, true))));
 
     var analyzeResponse = backend.getAnalysisService().analyzeFiles(
       new AnalyzeFilesParams(configScopeId, UUID.randomUUID(), List.of(fileUri), toMap(properties), System.currentTimeMillis())

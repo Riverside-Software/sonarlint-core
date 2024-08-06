@@ -32,4 +32,16 @@ public interface FileRpcService {
 
   @JsonNotification
   void didUpdateFileSystem(DidUpdateFileSystemParams params);
+
+  /**
+   * Should be called by clients when a file has been opened in the editor.
+   */
+  @JsonNotification
+  void didOpenFile(DidOpenFileParams params);
+
+  /**
+   * Should be called by clients when a file has been closed in the editor.
+   */
+  @JsonNotification
+  void didCloseFile(DidCloseFileParams params);
 }

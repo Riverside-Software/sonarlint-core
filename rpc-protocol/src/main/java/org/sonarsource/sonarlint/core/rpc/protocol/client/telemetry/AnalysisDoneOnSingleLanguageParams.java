@@ -24,7 +24,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 
 public class AnalysisDoneOnSingleLanguageParams {
   @Nullable
-  private final  Language language;
+  private final Language language;
   private final int analysisTimeMs;
 
   public AnalysisDoneOnSingleLanguageParams(@Nullable Language language, int analysisTimeMs) {

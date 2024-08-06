@@ -56,13 +56,14 @@ public class ClientFileSystemService {
   private final ApplicationEventPublisher eventPublisher;
   private final Map<URI, ClientFile> filesByUri = new ConcurrentHashMap<>();
   private final Map<String, Path> baseDirPerConfigScopeId = new ConcurrentHashMap<>();
-
+  private final OpenFilesRepository openFilesRepository;
   private final SmartCancelableLoadingCache<String, Map<URI, ClientFile>> filesByConfigScopeIdCache =
     new SmartCancelableLoadingCache<>("sonarlint-filesystem", this::initializeFileSystem);
 
-  public ClientFileSystemService(SonarLintRpcClient rpcClient, ApplicationEventPublisher eventPublisher) {
+  public ClientFileSystemService(SonarLintRpcClient rpcClient, ApplicationEventPublisher eventPublisher, OpenFilesRepository openFilesRepository) {
     this.rpcClient = rpcClient;
     this.eventPublisher = eventPublisher;
+    this.openFilesRepository = openFilesRepository;
   }
 
   public List<ClientFile> getFiles(String configScopeId) {
@@ -78,7 +79,8 @@ public class ClientFileSystemService {
       clientFileDto.isTest(),
       charset,
       clientFileDto.getFsPath(),
-      forcedSonarLanguage);
+      forcedSonarLanguage,
+      clientFileDto.isUserDefined());
     if (clientFileDto.getContent() != null) {
       file.setDirty(clientFileDto.getContent());
     }
@@ -186,5 +188,14 @@ public class ClientFileSystemService {
         return null;
       }
     });
+  }
+
+  public void didOpenFile(String configurationScopeId, URI fileUri) {
+    openFilesRepository.considerOpened(configurationScopeId, fileUri);
+    eventPublisher.publishEvent(new FileOpenedEvent(configurationScopeId, fileUri));
+  }
+
+  public void didCloseFile(String configurationScopeId, URI fileUri) {
+    openFilesRepository.considerClosed(configurationScopeId, fileUri);
   }
 }

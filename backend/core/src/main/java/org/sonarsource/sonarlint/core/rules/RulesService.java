@@ -59,9 +59,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleDefinitionD
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleParamDefinitionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleParamType;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.StandaloneRuleConfigDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaisedHotspotDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rule.extractor.SonarLintRuleDefinition;
 import org.sonarsource.sonarlint.core.rule.extractor.SonarLintRuleParamDefinition;
 import org.sonarsource.sonarlint.core.rule.extractor.SonarLintRuleParamType;
@@ -75,6 +73,7 @@ import org.sonarsource.sonarlint.core.serverconnection.storage.StorageException;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.sync.SynchronizationService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
 import static org.sonarsource.sonarlint.core.commons.CleanCodeAttribute.CONVENTIONAL;
@@ -93,19 +92,21 @@ public class RulesService {
   private final StorageService storageService;
   private final SynchronizationService synchronizationService;
   private final ConnectionConfigurationRepository connectionConfigurationRepository;
+  private final ApplicationEventPublisher eventPublisher;
   private static final String COULD_NOT_FIND_RULE = "Could not find rule '";
   private final Map<String, StandaloneRuleConfigDto> standaloneRuleConfig = new ConcurrentHashMap<>();
   private FindingReportingService findingReportingService;
 
   @Inject
   public RulesService(ServerApiProvider serverApiProvider, ConfigurationRepository configurationRepository, RulesRepository rulesRepository, StorageService storageService,
-    SynchronizationService synchronizationService, ConnectionConfigurationRepository connectionConfigurationRepository, InitializeParams params) {
-    this(serverApiProvider, configurationRepository, rulesRepository, storageService, synchronizationService, connectionConfigurationRepository,
+    SynchronizationService synchronizationService, ConnectionConfigurationRepository connectionConfigurationRepository, InitializeParams params,
+    ApplicationEventPublisher eventPublisher) {
+    this(serverApiProvider, configurationRepository, rulesRepository, storageService, synchronizationService, connectionConfigurationRepository, eventPublisher,
       params.getStandaloneRuleConfigByKey());
   }
 
   RulesService(ServerApiProvider serverApiProvider, ConfigurationRepository configurationRepository, RulesRepository rulesRepository, StorageService storageService,
-    SynchronizationService synchronizationService, ConnectionConfigurationRepository connectionConfigurationRepository,
+    SynchronizationService synchronizationService, ConnectionConfigurationRepository connectionConfigurationRepository, ApplicationEventPublisher eventPublisher,
     @Nullable Map<String, StandaloneRuleConfigDto> standaloneRuleConfigByKey) {
     this.serverApiProvider = serverApiProvider;
     this.configurationRepository = configurationRepository;
@@ -113,6 +114,7 @@ public class RulesService {
     this.storageService = storageService;
     this.synchronizationService = synchronizationService;
     this.connectionConfigurationRepository = connectionConfigurationRepository;
+    this.eventPublisher = eventPublisher;
     if (standaloneRuleConfigByKey != null) {
       this.standaloneRuleConfig.putAll(standaloneRuleConfigByKey);
     }
@@ -292,13 +294,10 @@ public class RulesService {
     return new GetStandaloneRuleDescriptionResponse(convert(ruleDefinition), RuleDetailsAdapter.transformDescriptions(ruleDetails, null));
   }
 
-  public void updateStandaloneRulesConfiguration(Map<String, StandaloneRuleConfigDto> ruleConfigByKey) {
-    setStandaloneRuleConfig(ruleConfigByKey);
-  }
-
-  private synchronized void setStandaloneRuleConfig(Map<String, StandaloneRuleConfigDto> standaloneRuleConfig) {
+  public void updateStandaloneRulesConfiguration(Map<String, StandaloneRuleConfigDto> standaloneRuleConfig) {
     this.standaloneRuleConfig.clear();
     this.standaloneRuleConfig.putAll(standaloneRuleConfig);
+    eventPublisher.publishEvent(new StandaloneRulesConfigurationChanged(standaloneRuleConfig));
   }
 
   public synchronized Map<String, StandaloneRuleConfigDto> getStandaloneRuleConfig() {
@@ -317,40 +316,28 @@ public class RulesService {
   }
 
   private void processEvent(RuleSetChangedEvent event, String connectionId) {
-    // TODO add analysis triggering here if rules were activated - https://sonarsource.atlassian.net/browse/SLCORE-829
+    if (!event.getActivatedRules().isEmpty()) {
+      eventPublisher.publishEvent(new NewRulesActivatedOnServer());
+    }
     var deactivatedRules = event.getDeactivatedRules();
     if (!deactivatedRules.isEmpty()) {
       var changedProjectKeys = event.getProjectKeys();
       configurationRepository.getAllBoundScopes().stream()
         .filter(scope -> connectionId.equals(scope.getConnectionId()) && changedProjectKeys.contains(scope.getSonarProjectKey()))
         .map(BoundScope::getConfigScopeId)
-        .forEach(scopeId -> findingReportingService.updateAndReportFindings(scopeId,
-          hotspot -> raisedHotspotUpdater(hotspot, event),
-          issue -> raisedIssueUpdater(issue, event)));
+        .forEach(scopeId -> updateAndReportFindings(scopeId, event.getDeactivatedRules()));
     }
   }
 
-  @CheckForNull
-  public static RaisedIssueDto raisedIssueUpdater(RaisedIssueDto raisedIssue, RuleSetChangedEvent event) {
-    var finding = raisedFindingUpdater(raisedIssue, event);
-    if (finding instanceof RaisedIssueDto) {
-      return ((RaisedIssueDto) finding);
-    }
-    return null;
+  public void updateAndReportFindings(String scopeId, List<String> deactivatedRules) {
+    findingReportingService.updateAndReportFindings(scopeId,
+      hotspot -> raisedFindingUpdater(hotspot, deactivatedRules),
+      issue -> raisedFindingUpdater(issue, deactivatedRules)
+    );
   }
 
   @CheckForNull
-  public static RaisedHotspotDto raisedHotspotUpdater(RaisedHotspotDto raisedHotspot, RuleSetChangedEvent event) {
-    var finding = raisedFindingUpdater(raisedHotspot, event);
-    if (finding instanceof RaisedHotspotDto) {
-      return ((RaisedHotspotDto) finding);
-    }
-    return null;
-  }
-
-  @CheckForNull
-  private static RaisedFindingDto raisedFindingUpdater(RaisedFindingDto raisedFinding, RuleSetChangedEvent event) {
-    var deactivatedRules = event.getDeactivatedRules();
+  private static <T extends RaisedFindingDto> T raisedFindingUpdater(T raisedFinding, List<String> deactivatedRules) {
     if (deactivatedRules.contains(raisedFinding.getRuleKey())) {
       return null;
     }

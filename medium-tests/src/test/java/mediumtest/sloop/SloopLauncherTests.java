@@ -42,7 +42,6 @@ import org.sonarsource.sonarlint.core.rpc.client.Sloop;
 import org.sonarsource.sonarlint.core.rpc.client.SloopLauncher;
 import org.sonarsource.sonarlint.core.rpc.client.SonarLintCancelChecker;
 import org.sonarsource.sonarlint.core.rpc.client.SonarLintRpcClientDelegate;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcServer;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.ConfigurationScopeDto;
@@ -60,6 +59,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreat
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.ConnectionSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.event.DidReceiveServerHotspotEvent;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.fix.FixSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.HotspotDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.GetProxyPasswordAuthenticationResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.ProxyDto;
@@ -73,6 +73,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.StartProgress
 import org.sonarsource.sonarlint.core.rpc.protocol.client.smartnotification.ShowSmartNotificationParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.UsernamePasswordDto;
 import testutils.PluginLocator;
@@ -124,11 +125,11 @@ class SloopLauncherTests {
     var telemetryInitDto = new TelemetryClientConstantAttributesDto("SonarLint ITs", "SonarLint ITs",
       "1.2.3", "4.5.6", Collections.emptyMap());
     var clientInfo = new ClientConstantInfoDto("clientName", "integrationTests", 0);
-    var featureFlags = new FeatureFlagsDto(false, false, false, false, false, false, false, false, false);
+    var featureFlags = new FeatureFlagsDto(false, false, false, false, false, false, false, false, false, false);
 
     server.initialize(new InitializeParams(clientInfo, telemetryInitDto, HttpConfigurationDto.defaultConfig(), null, featureFlags, sonarUserHome.resolve("storage"), sonarUserHome.resolve("workDir"),
       Set.of(PluginLocator.getPhpPluginPath().toAbsolutePath()), Collections.emptyMap(), Set.of(PHP), Collections.emptySet(), Collections.emptySet(), Collections.emptyList(),
-      Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null)).get();
+      Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null, false, null)).get();
 
     var result = server.getRulesService().listAllStandaloneRulesDefinitions().get();
     assertThat(result.getRulesByKey()).hasSize(219);
@@ -145,10 +146,10 @@ class SloopLauncherTests {
     var telemetryInitDto = new TelemetryClientConstantAttributesDto("SonarLint ITs", "SonarLint ITs",
       "1.2.3", "4.5.6", Collections.emptyMap());
     var clientInfo = new ClientConstantInfoDto("clientName", "integrationTests", 0);
-    var featureFlags = new FeatureFlagsDto(false, false, false, false, false, false, false, false, false);
+    var featureFlags = new FeatureFlagsDto(false, false, false, false, false, false, false, false, false, false);
     server.initialize(new InitializeParams(clientInfo, telemetryInitDto, HttpConfigurationDto.defaultConfig(), null, featureFlags, sonarUserHome.resolve("storage"), sonarUserHome.resolve("workDir"),
       Set.of(PluginLocator.getPhpPluginPath().toAbsolutePath()), Collections.emptyMap(), Set.of(PHP), Collections.emptySet(), Collections.emptySet(), Collections.emptyList(),
-      Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null)).join();
+      Collections.emptyList(), sonarUserHome.toString(), Map.of(), false, null, false, null)).join();
     sloop.onExit().thenAccept(exitValue -> this.exitValue = exitValue);
 
     shutdownRequested = true;
@@ -219,6 +220,11 @@ class SloopLauncherTests {
 
     @Override
     public void showIssue(String configurationScopeId, IssueDetailsDto issueDetails) {
+
+    }
+
+    @Override
+    public void showFixSuggestion(String configurationScopeId, String issueKey, FixSuggestionDto fixSuggestion) {
 
     }
 

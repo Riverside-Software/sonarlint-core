@@ -4,12 +4,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>74.0.0.1768</version>
+    <version>75.0.0.1943</version>
     <relativePath/>
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.3.99000</version>
+  <version>10.4.99000</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -46,7 +46,6 @@
     <module>medium-tests</module>
     <module>report-aggregate</module>
     <module>rpc-protocol</module>
-    <module>rule-extractor-cli</module>
   </modules>
 
   <properties>

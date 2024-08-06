@@ -20,6 +20,7 @@
 package mediumtest;
 
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import java.time.OffsetDateTime;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import mediumtest.fixtures.SonarLintTestRpcServer;
@@ -31,11 +32,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.OpenHotspotInBrowserParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryMigrationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddQuickFixAppliedForRuleParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddReportedRulesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisDoneOnSingleLanguageParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.DevNotificationsClickedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.HelpAndFeedbackClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
@@ -53,6 +58,7 @@ import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonarsource.sonarlint.core.telemetry.TelemetrySpringConfig.PROPERTY_TELEMETRY_ENDPOINT;
 
@@ -169,7 +175,7 @@ class TelemetryMediumTests {
     assertThat(backend.telemetryFilePath()).isNotEmptyFile();
 
     // Emulate another process has disabled telemetry
-    var telemetryLocalStorageManager = new TelemetryLocalStorageManager(backend.telemetryFilePath());
+    var telemetryLocalStorageManager = new TelemetryLocalStorageManager(backend.telemetryFilePath(), mock(InitializeParams.class));
     telemetryLocalStorageManager.tryUpdateAtomically(data -> data.setEnabled(false));
 
     assertThat(backend.getTelemetryService().getStatus().get().isEnabled()).isFalse();
@@ -335,6 +341,16 @@ class TelemetryMediumTests {
   }
 
   @Test
+  void it_should_record_fixSuggestionResolved() {
+    setupClientAndBackend();
+
+    backend.getTelemetryService().fixSuggestionResolved(new FixSuggestionResolvedParams("suggestionId", FixSuggestionStatus.ACCEPTED, 0));
+    backend.getTelemetryService().fixSuggestionResolved(new FixSuggestionResolvedParams("suggestionId2", FixSuggestionStatus.DECLINED, null));
+    await().untilAsserted(() -> assertThat(backend.telemetryFilePath()).content().asBase64Decoded().asString().contains(
+      "\"fixSuggestionResolved\":{\"suggestionId\":[{\"fixSuggestionResolvedStatus\":\"ACCEPTED\",\"fixSuggestionResolvedSnippetIndex\":0}],\"suggestionId2\":[{\"fixSuggestionResolvedStatus\":\"DECLINED\"}]}"));
+  }
+
+  @Test
   void it_should_record_addQuickFixAppliedForRule() {
     setupClientAndBackend();
 
@@ -405,6 +421,16 @@ class TelemetryMediumTests {
 
     backend.getTelemetryService().addedAutomaticBindings();
     await().untilAsserted(() -> assertThat(backend.telemetryFilePath()).content().asBase64Decoded().asString().contains("\"autoAddedBindingsCount\":1"));
+  }
+
+  @Test
+  void it_should_apply_telemetry_migration() throws ExecutionException, InterruptedException {
+    backend = newBackend()
+      .withTelemetryMigration(new TelemetryMigrationDto(OffsetDateTime.now(), 42, false))
+      .withTelemetryEnabled()
+      .build();
+
+    assertThat(backend.getTelemetryService().getStatus().get().isEnabled()).isFalse();
   }
 
   private void setupClientAndBackend() {

@@ -29,8 +29,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaiseIssuesParam
 
 @JsonSegment("analysis")
 public interface AnalysisRpcService {
-
-
   /**
    * This is the list of file patterns declared as part of a language by one of the enabled analyzer.
    * Beware that some analyzers may analyze more files that the one matching one of those patterns.
@@ -46,6 +44,9 @@ public interface AnalysisRpcService {
   @JsonRequest
   CompletableFuture<GetGlobalConfigurationResponse> getGlobalConnectedConfiguration(GetGlobalConnectedConfigurationParams params);
 
+  /**
+   * @since 10.3 this method returns not only server analyser properties, but also user properties provided by client
+   */
   @JsonRequest
   CompletableFuture<GetAnalysisConfigResponse> getAnalysisConfig(GetAnalysisConfigParams params);
 
@@ -82,4 +83,73 @@ public interface AnalysisRpcService {
    */
   @JsonRequest
   CompletableFuture<AnalyzeFilesResponse> analyzeFilesAndTrack(AnalyzeFilesAndTrackParams params);
+
+  /**
+   *  Inform the backend that user settings analysis properties has changed.
+   *  The backend will take the provided set of properties as new user configuration, and previous user values will be cleared.
+   * @param params configuration scope ID, new properties for this scope
+   */
+  @JsonNotification
+  void didSetUserAnalysisProperties(DidChangeAnalysisPropertiesParams params);
+
+  /**
+   * Inform the backend that path to compile commands has changed.
+   * The backend will trigger the analysis for all open files after updating the setting value.
+   * @param params configuration scope ID, path to compile commands
+   */
+  @JsonNotification
+  void didChangePathToCompileCommands(DidChangePathToCompileCommandsParams params);
+
+  /**
+   * Allows to enable or disable automatic analysis.
+   * Automatic analysis happens on the following triggers:
+   * <ul>
+   *   <li>on file open</li>
+   *   <li>on open file content change</li>
+   *   <li>on some server events, e.g. when some rules were enabled</li>
+   * </ul>
+   * When this setting becomes enabled, an automatic analysis of open files will be triggered.
+   */
+  @JsonNotification
+  void didChangeAutomaticAnalysisSetting(DidChangeAutomaticAnalysisSettingParams params);
+
+  /**
+   * Analyze all files in the project. User file exclusions and .gitignore will be respected.
+   * @param params configuration scope ID, flag to report only hotspots
+   * @return analysis ID or null if not ready for analysis
+   * Issues will be reported to the client via
+   * {@link SonarLintRpcClient#raiseIssues(RaiseIssuesParams)} and {@link SonarLintRpcClient#raiseHotspots(RaiseHotspotsParams)}
+   */
+  @JsonRequest
+  CompletableFuture<ForceAnalyzeResponse> analyzeFullProject(AnalyzeFullProjectParams params);
+
+  /**
+   * Analyze all files in the provided list. User file exclusions and .gitignore will be respected.
+   * @param params configuration scope ID, list of files to analyse
+   * @return analysis ID or null if not ready for analysis
+   * Issues will be reported to the client via
+   * {@link SonarLintRpcClient#raiseIssues(RaiseIssuesParams)} and {@link SonarLintRpcClient#raiseHotspots(RaiseHotspotsParams)}
+   */
+  @JsonRequest
+  CompletableFuture<ForceAnalyzeResponse> analyzeFileList(AnalyzeFileListParams params);
+
+  /**
+   * Analyze all files that were reported by the client as opened. User file exclusions and .gitignore will be respected.
+   * @param params configuration scope ID
+   * @return analysis ID or null if not ready for analysis
+   * Issues will be reported to the client via
+   * {@link SonarLintRpcClient#raiseIssues(RaiseIssuesParams)} and {@link SonarLintRpcClient#raiseHotspots(RaiseHotspotsParams)}
+   */
+  @JsonRequest
+  CompletableFuture<ForceAnalyzeResponse> analyzeOpenFiles(AnalyzeOpenFilesParams params);
+
+  /**
+   * Analyze all files that were created/modified and tracked by git since the last commit. User file exclusions and .gitignore will be respected.
+   * @param params configuration scope ID, list of files to analyse
+   * @return analysis ID or null if not ready for analysis
+   * Issues will be reported to the client via
+   * {@link SonarLintRpcClient#raiseIssues(RaiseIssuesParams)} and {@link SonarLintRpcClient#raiseHotspots(RaiseHotspotsParams)}
+   */
+  @JsonRequest
+  CompletableFuture<ForceAnalyzeResponse> analyzeVCSChangedFiles(AnalyzeVCSChangedFilesParams params);
 }

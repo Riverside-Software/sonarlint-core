@@ -110,13 +110,13 @@ class SonarQubeCommunityEditionTests extends AbstractConnectedTests {
 
     backend = clientLauncher.getServerProxy();
     try {
-      var featureFlags = new FeatureFlagsDto(true, true, true, false, true, true, false, true, false);
+      var featureFlags = new FeatureFlagsDto(true, true, true, false, true, true, false, true, false, true);
       var enabledLanguages = Set.of(JAVA);
       backend.initialize(
           new InitializeParams(IT_CLIENT_INFO,
             IT_TELEMETRY_ATTRIBUTES, HttpConfigurationDto.defaultConfig(), null, featureFlags, sonarUserHome.resolve("storage"),
             sonarUserHome.resolve("work"),
-            Collections.emptySet(), Collections.emptyMap(), enabledLanguages, Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptyMap(), enabledLanguages, Collections.emptySet(),
             List.of(new SonarQubeConnectionConfigurationDto(CONNECTION_ID, ORCHESTRATOR.getServer().getUrl(), true)),
             Collections.emptyList(),
             sonarUserHome.toString(),
@@ -219,8 +219,12 @@ class SonarQubeCommunityEditionTests extends AbstractConnectedTests {
       var fooJavaIssues = issuesByIdeRelativePath.get(Path.of("src/main/java/foo/Foo.java"));
       assertThat(fooJavaIssues).hasSize(1);
 
-      assertThat(fooJavaIssues.get(0).isLeft()).isTrue();
-      assertThat(fooJavaIssues.get(0).getLeft().getType()).isEqualTo(CODE_SMELL);
+      if (ORCHESTRATOR.getServer().version().isGreaterThanOrEquals(9, 5)) {
+        assertThat(fooJavaIssues.get(0).isLeft()).isTrue();
+        assertThat(fooJavaIssues.get(0).getLeft().getType()).isEqualTo(CODE_SMELL);
+      } else {
+        assertThat(fooJavaIssues.get(0).isRight()).isTrue();
+      }
     }
   }
 

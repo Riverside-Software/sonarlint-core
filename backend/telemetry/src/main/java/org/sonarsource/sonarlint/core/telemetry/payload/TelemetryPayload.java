@@ -104,6 +104,9 @@ public class TelemetryPayload {
   @SerializedName("help_and_feedback")
   private final TelemetryHelpAndFeedbackPayload helpAndFeedbackPayload;
 
+  @SerializedName("ai_fix_suggestions")
+  private final TelemetryFixSuggestionPayload[] aiFixSuggestionsPayload;
+
   @SerializedName("cayc")
   private final CleanAsYouCodePayload cleanAsYouCodePayload;
 
@@ -116,7 +119,8 @@ public class TelemetryPayload {
     boolean connectedMode, boolean connectedModeSonarcloud, OffsetDateTime systemTime, OffsetDateTime installTime, String os, String jre, @Nullable String nodejs,
     TelemetryAnalyzerPerformancePayload[] analyses, TelemetryNotificationsPayload notifications, ShowHotspotPayload showHotspotPayload,
     ShowIssuePayload showIssuePayload, TaintVulnerabilitiesPayload taintVulnerabilitiesPayload, TelemetryRulesPayload telemetryRulesPayload, HotspotPayload hotspotPayload,
-    IssuePayload issuePayload, TelemetryHelpAndFeedbackPayload helpAndFeedbackPayload, CleanAsYouCodePayload cleanAsYouCodePayload,
+    IssuePayload issuePayload, TelemetryHelpAndFeedbackPayload helpAndFeedbackPayload, TelemetryFixSuggestionPayload[] aiFixSuggestionsPayload,
+    CleanAsYouCodePayload cleanAsYouCodePayload,
     ShareConnectedModePayload shareConnectedModePayload,
     Map<String, Object> additionalAttributes) {
     this.daysSinceInstallation = daysSinceInstallation;
@@ -142,6 +146,7 @@ public class TelemetryPayload {
     this.hotspotPayload = hotspotPayload;
     this.issuePayload = issuePayload;
     this.helpAndFeedbackPayload = helpAndFeedbackPayload;
+    this.aiFixSuggestionsPayload = aiFixSuggestionsPayload;
     this.cleanAsYouCodePayload = cleanAsYouCodePayload;
     this.shareConnectedModePayload = shareConnectedModePayload;
     this.additionalAttributes = additionalAttributes;
@@ -235,6 +240,10 @@ public class TelemetryPayload {
     return shareConnectedModePayload;
   }
 
+  public TelemetryFixSuggestionPayload[] getAiFixSuggestionsPayload() {
+    return aiFixSuggestionsPayload;
+  }
+
   public String getIdeVersion() {
     return ideVersion;
   }
@@ -254,6 +263,7 @@ public class TelemetryPayload {
   public String toJson() {
     var gson = new GsonBuilder()
       .registerTypeAdapter(OffsetDateTime.class, new OffsetDateTimeAdapter())
+      .serializeNulls()
       .create();
     var jsonPayload = gson.toJsonTree(this).getAsJsonObject();
     var jsonAdditional = gson.toJsonTree(additionalAttributes, new TypeToken<Map<String, Object>>() {

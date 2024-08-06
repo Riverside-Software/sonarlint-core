@@ -32,10 +32,18 @@ import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
 import org.sonarsource.sonarlint.core.fs.ClientFile;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcErrorCode;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFileListParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFullProjectParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangePathToCompileCommandsParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.ForceAnalyzeResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeOpenFilesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeVCSChangedFilesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeAutomaticAnalysisSettingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeClientNodeJsPathParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeAnalysisPropertiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAutoDetectedNodeJsResponse;
@@ -79,7 +87,7 @@ class AnalysisRpcServiceDelegate extends AbstractRpcServiceDelegate implements A
   @Override
   public CompletableFuture<GetAnalysisConfigResponse> getAnalysisConfig(GetAnalysisConfigParams params) {
     return requestAsync(
-      cancelChecker -> getBean(AnalysisService.class).getAnalysisConfig(params.getConfigScopeId()), params.getConfigScopeId());
+      cancelChecker -> getBean(AnalysisService.class).getAnalysisConfig(params.getConfigScopeId(), false), params.getConfigScopeId());
   }
 
   @Override
@@ -115,7 +123,7 @@ class AnalysisRpcServiceDelegate extends AbstractRpcServiceDelegate implements A
     return requestAsync(cancelChecker -> {
       var analysisResults = getBean(AnalysisService.class)
         .analyze(cancelChecker, params.getConfigurationScopeId(), params.getAnalysisId(), params.getFilesToAnalyze(),
-          params.getExtraProperties(), params.getStartTime(), false, false).join();
+          params.getExtraProperties(), params.getStartTime(), false, false, false).join();
       return generateAnalyzeFilesResponse(analysisResults);
     }, configurationScopeId);
   }
@@ -126,9 +134,50 @@ class AnalysisRpcServiceDelegate extends AbstractRpcServiceDelegate implements A
     return requestAsync(cancelChecker -> {
       var analysisResults = getBean(AnalysisService.class)
         .analyze(cancelChecker, params.getConfigurationScopeId(), params.getAnalysisId(), params.getFilesToAnalyze(), params.getExtraProperties(), params.getStartTime(),
-          true, params.isShouldFetchServerIssues()).join();
+          true, params.isShouldFetchServerIssues(), false).join();
       return generateAnalyzeFilesResponse(analysisResults);
     }, configurationScopeId);
+  }
+
+  @Override
+  public void didSetUserAnalysisProperties(DidChangeAnalysisPropertiesParams params) {
+    notify(() -> getBean(AnalysisService.class).setUserAnalysisProperties(params.getConfigurationScopeId(), params.getProperties()));
+  }
+
+  @Override
+  public void didChangePathToCompileCommands(DidChangePathToCompileCommandsParams params) {
+    notify(() -> getBean(AnalysisService.class).didChangePathToCompileCommands(params.getConfigurationScopeId(), params.getPathToCompileCommands()));
+  }
+
+  @Override
+  public void didChangeAutomaticAnalysisSetting(DidChangeAutomaticAnalysisSettingParams params) {
+    notify(() -> getBean(AnalysisService.class).didChangeAutomaticAnalysisSetting(params.isEnabled()));
+  }
+
+  @Override
+  public CompletableFuture<ForceAnalyzeResponse> analyzeFullProject(AnalyzeFullProjectParams params) {
+    return requestAsync(
+      cancelChecker -> new ForceAnalyzeResponse(getBean(AnalysisService.class)
+        .analyzeFullProject(params.getConfigScopeId(), params.isHotspotsOnly())));
+  }
+
+  @Override
+  public CompletableFuture<ForceAnalyzeResponse> analyzeFileList(AnalyzeFileListParams params) {
+    return requestAsync(
+      cancelChecker -> new ForceAnalyzeResponse(getBean(AnalysisService.class)
+        .analyzeFileList(params.getConfigScopeId(), params.getFilesToAnalyze())));
+  }
+
+  @Override
+  public CompletableFuture<ForceAnalyzeResponse> analyzeOpenFiles(AnalyzeOpenFilesParams params) {
+    return requestAsync(
+      cancelChecker -> new ForceAnalyzeResponse(getBean(AnalysisService.class).analyzeOpenFiles(params.getConfigScopeId())));
+  }
+
+  @Override
+  public CompletableFuture<ForceAnalyzeResponse> analyzeVCSChangedFiles(AnalyzeVCSChangedFilesParams params) {
+    return requestAsync(
+      cancelChecker -> new ForceAnalyzeResponse(getBean(AnalysisService.class).analyzeVCSChangedFiles(params.getConfigScopeId())));
   }
 
   private static AnalyzeFilesResponse generateAnalyzeFilesResponse(AnalysisResults analysisResults) {

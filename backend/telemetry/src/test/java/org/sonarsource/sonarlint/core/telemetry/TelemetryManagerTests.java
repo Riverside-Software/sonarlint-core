@@ -30,6 +30,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.stubbing.Answer;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AiSuggestionSource;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
 
 import static java.util.Collections.emptyMap;
@@ -59,7 +62,7 @@ class TelemetryManagerTests {
   @BeforeEach
   void setUp(@TempDir Path temp) {
     client = mock(TelemetryHttpClient.class);
-    storageManager = new TelemetryLocalStorageManager(temp.resolve("storage"));
+    storageManager = new TelemetryLocalStorageManager(temp.resolve("storage"), mock(InitializeParams.class));
     telemetryManager = new TelemetryManager(storageManager, client);
   }
 
@@ -212,6 +215,8 @@ class TelemetryManagerTests {
       data.incrementOpenHotspotInBrowserCount();
       data.incrementShowHotspotRequestCount();
       data.incrementShowIssueRequestCount();
+      data.fixSuggestionReceived("suggestionId", AiSuggestionSource.SONARCLOUD, 2);
+      data.fixSuggestionResolved("suggestionId", FixSuggestionStatus.ACCEPTED, 0);
       data.incrementTaintVulnerabilitiesInvestigatedLocallyCount();
       data.incrementTaintVulnerabilitiesInvestigatedRemotelyCount();
       data.setLastUploadTime(LocalDateTime.now().minusDays(2));
@@ -230,6 +235,8 @@ class TelemetryManagerTests {
     assertThat(reloaded.taintVulnerabilitiesInvestigatedRemotelyCount()).isZero();
     assertThat(reloaded.hotspotStatusChangedCount()).isZero();
     assertThat(reloaded.getShowIssueRequestsCount()).isZero();
+    assertThat(reloaded.getFixSuggestionReceivedCounter()).isEmpty();
+    assertThat(reloaded.getFixSuggestionResolved()).isEmpty();
     assertThat(reloaded.openHotspotInBrowserCount()).isZero();
     assertThat(reloaded.getHelpAndFeedbackLinkClickedCounter()).isEmpty();
   }

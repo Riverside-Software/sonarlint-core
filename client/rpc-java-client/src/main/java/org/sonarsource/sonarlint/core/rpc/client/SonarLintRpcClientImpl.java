@@ -39,6 +39,10 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.OpenUrlInBrowserParams
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidChangeAnalysisReadinessParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidDetectSecretParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidRaiseIssueParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetInferredAnalysisPropertiesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetInferredAnalysisPropertiesResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetFileExclusionsParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetFileExclusionsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams;
@@ -52,6 +56,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.GetCredenti
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.GetCredentialsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.SuggestConnectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.event.DidReceiveServerHotspotEvent;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.fix.ShowFixSuggestionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.ListFilesParams;
@@ -220,6 +225,11 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
   }
 
   @Override
+  public void showFixSuggestion(ShowFixSuggestionParams params) {
+    notify(() -> delegate.showFixSuggestion(params.getConfigurationScopeId(), params.getIssueKey(), params.getFixSuggestion()));
+  }
+
+  @Override
   public CompletableFuture<AssistCreatingConnectionResponse> assistCreatingConnection(AssistCreatingConnectionParams params) {
     return requestAsync(cancelChecker -> delegate.assistCreatingConnection(params, new SonarLintCancelChecker(cancelChecker)));
   }
@@ -376,5 +386,27 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
   @Override
   public void promoteExtraEnabledLanguagesInConnectedMode(PromoteExtraEnabledLanguagesInConnectedModeParams params) {
     notify(() -> delegate.promoteExtraEnabledLanguagesInConnectedMode(params.getConfigurationScopeId(), params.getLanguagesToPromote()));
+  }
+
+  @Override
+  public CompletableFuture<GetInferredAnalysisPropertiesResponse> getInferredAnalysisProperties(GetInferredAnalysisPropertiesParams params) {
+    return requestAsync(cancelChecker -> {
+      try {
+        return new GetInferredAnalysisPropertiesResponse(delegate.getInferredAnalysisProperties(params.getConfigurationScopeId(), params.getFilesToAnalyze()));
+      } catch (ConfigScopeNotFoundException e) {
+        throw configScopeNotFoundError(params.getConfigurationScopeId());
+      }
+    });
+  }
+
+  @Override
+  public CompletableFuture<GetFileExclusionsResponse> getFileExclusions(GetFileExclusionsParams params) {
+    return requestAsync(cancelChecker -> {
+      try {
+        return new GetFileExclusionsResponse(delegate.getFileExclusions(params.getConfigurationScopeId()));
+      } catch (ConfigScopeNotFoundException e) {
+        throw configScopeNotFoundError(params.getConfigurationScopeId());
+      }
+    });
   }
 }

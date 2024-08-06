@@ -23,13 +23,17 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AiSuggestionSource;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
 
 import static java.time.temporal.ChronoUnit.DAYS;
 
@@ -54,6 +58,8 @@ public class TelemetryLocalStorage {
   private final Set<String> raisedIssuesRules;
   private final Set<String> quickFixesApplied;
   private final Map<String, TelemetryHelpAndFeedbackCounter> helpAndFeedbackLinkClickedCount;
+  private final Map<String, TelemetryFixSuggestionReceivedCounter> fixSuggestionReceivedCounter;
+  private final Map<String, List<TelemetryFixSuggestionResolvedStatus>> fixSuggestionResolved;
   private boolean isFocusOnNewCode;
   private int codeFocusChangedCount;
   private int manualAddedBindingsCount;
@@ -70,6 +76,8 @@ public class TelemetryLocalStorage {
     raisedIssuesRules = new HashSet<>();
     quickFixesApplied = new HashSet<>();
     helpAndFeedbackLinkClickedCount = new LinkedHashMap<>();
+    fixSuggestionReceivedCounter = new LinkedHashMap<>();
+    fixSuggestionResolved = new LinkedHashMap<>();
   }
 
   public Collection<String> getRaisedIssuesRules() {
@@ -127,6 +135,14 @@ public class TelemetryLocalStorage {
     return helpAndFeedbackLinkClickedCount;
   }
 
+  public Map<String, TelemetryFixSuggestionReceivedCounter> getFixSuggestionReceivedCounter() {
+    return fixSuggestionReceivedCounter;
+  }
+
+  public Map<String, List<TelemetryFixSuggestionResolvedStatus>> getFixSuggestionResolved() {
+    return fixSuggestionResolved;
+  }
+
   public boolean isFocusOnNewCode() {
     return isFocusOnNewCode;
   }
@@ -166,6 +182,8 @@ public class TelemetryLocalStorage {
     raisedIssuesRules.clear();
     quickFixesApplied.clear();
     helpAndFeedbackLinkClickedCount.clear();
+    fixSuggestionReceivedCounter.clear();
+    fixSuggestionResolved.clear();
     codeFocusChangedCount = 0;
     manualAddedBindingsCount = 0;
     importedAddedBindingsCount = 0;
@@ -274,6 +292,26 @@ public class TelemetryLocalStorage {
   public void incrementShowIssueRequestCount() {
     markSonarLintAsUsedToday();
     showIssueRequestsCount++;
+  }
+
+  public void fixSuggestionReceived(String suggestionId, AiSuggestionSource aiSuggestionSource, int snippetsCount) {
+    markSonarLintAsUsedToday();
+    this.fixSuggestionReceivedCounter.computeIfAbsent(suggestionId, k -> new TelemetryFixSuggestionReceivedCounter(aiSuggestionSource, snippetsCount));
+  }
+
+  public void fixSuggestionResolved(String suggestionId, FixSuggestionStatus status, @Nullable Integer snippetIndex) {
+    markSonarLintAsUsedToday();
+    var fixSuggestionSnippets = this.fixSuggestionResolved.computeIfAbsent(suggestionId, k -> new ArrayList<>());
+    var existingSnippetStatus = fixSuggestionSnippets.stream()
+      .filter(s -> {
+        var previousIndex = s.getFixSuggestionResolvedSnippetIndex();
+        return (snippetIndex == null && previousIndex == null) ||
+          (previousIndex != null && previousIndex.equals(snippetIndex));
+      })
+      .findFirst();
+    // if we already had a status for this snippet, we should replace it
+    existingSnippetStatus.ifPresentOrElse(telemetryFixSuggestionResolvedStatus -> telemetryFixSuggestionResolvedStatus.setFixSuggestionResolvedStatus(status),
+      () -> fixSuggestionSnippets.add(new TelemetryFixSuggestionResolvedStatus(status, snippetIndex)));
   }
 
   public int getShowIssueRequestsCount() {

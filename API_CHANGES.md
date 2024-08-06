@@ -1,3 +1,67 @@
+# 10.4
+
+## Breaking changes
+
+* Add new `isUserDefined` parameter into `org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto`
+  * User-defined files will be included in the analysis. Non-user-defined files such as generated or library files will be excluded from
+    analysis when analysis is triggered by the backend. If the analysis was forced by the client, exclusions are not respected.
+
+* Introduce a new parameter in the constructor of `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.FeatureFlagsDto`: `canOpenFixSuggestion`.
+  * This flag lets clients completely disable the opening a fix suggestion in the IDE, which can be useful if the feature is not yet available in the client.
+* Introduce a new initialization parameter `TelemetryMigrationDto` to `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams`
+  * The parameter is nullable and should be used only by the SLVS to migrate its telemetry. All other clients should provide `null` as a value.
+
+## New features
+
+* Add a method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient` to allow the backend to request client-defined file
+  exclusions from the client before every standalone analysis.
+  * `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#getFileExclusions` to request file exclusions
+
+* Add a field to `org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto` to allow the backend to distinguish non-user-defined
+  files to exclude from analysis
+
+* Add `showFixSuggestion` method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient`
+  * It's only available when the feature flag `canOpenFixSuggestion` is enabled
+  * When using this method, you will receive a single fix suggestion for a specific issue that should be displayed to the user
+  * The user should have the possibility to accept or decline the fix suggestion
+  * The fix suggestion can be displayed at different locations in the file
+
+* Add `fixSuggestionResolved` method to `org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.TelemetryRpcService`
+  * You should use this method whenever a fix suggestion has been accepted or declined
+  * If the fix has multiple changes (snippets), you should call the method once for each
+  * The `indexSnippet` should be filled if possible, it corresponds to the snippet index in the list of changes
+  * If you do not know if the fix was accepted or declined at the snippet level, you should call the method once for the whole fix
+
+### File events
+
+* Add the `didOpenFile` and `didCloseFile` methods to `org.sonarsource.sonarlint.core.rpc.protocol.backend.file.FileRpcService`.
+  * Clients are supposed to call these methods when a file is opened in the editor or closed.
+
+### Analysis
+
+* Add a new constructor in `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams` to let clients provide if automatic analysis is enabled.
+* Add a new `didChangeAutomaticAnalysisSetting` method in `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService`
+  * Clients are expected to call it whenever users change the "enable automatic analysis" setting.
+* Add new methods to `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService` to force analysis
+  * `analyzeFullProject` forces analysis all files of the project that was provided to backend by method `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#listFiles`
+  * `analyzeFileList` forces analysis for the provided set of files
+  * `analyzeOpenFiles` forces analysis of all files that were reported as opened using `org.sonarsource.sonarlint.core.rpc.protocol.backend.file.FileRpcService#didOpenFile`
+  * `analyzeVCSChangedFiles` forces analysis of modified and not committed files
+
+## New features
+
+* Add `showFixSuggestion` method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient`
+  * It's only available when the feature flag `canOpenFixSuggestion` is enabled
+  * When using this method, you will receive a single fix suggestion for a specific issue that should be displayed to the user
+  * The user should have the possibility to accept or decline the fix suggestion
+  * The fix suggestion can be displayed at different locations in the file
+
+* Add `fixSuggestionResolved` method to `org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.TelemetryRpcService`
+  * You should use this method whenever a fix suggestion has been accepted or declined
+  * If the fix has multiple changes (snippets), you should call the method once for each
+  * The `indexSnippet` should be filled if possible, it corresponds to the snippet index in the list of changes
+  * If you do not know if the fix was accepted or declined at the snippet level, you should call the method once for the whole fix
+
 # 10.3.2 
 
 ## Breaking changes
@@ -12,8 +76,12 @@
   * Analysis will be disabled for languages specified `disabledLanguagesForAnalysis` but it will be still possible to consume Rule Descriptions
   * Can be null or empty if clients do not wish to disable analysis for any loaded plugin
 
-
 ## New features
+* Add a method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient` to allow backend to request inferred analysis properties from the client before every analysis. It's important because properties may change depending on files being analysed.
+  * `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#getInferredAnalysisProperties` to request inferred properties
+* Add a method to the `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService` to let the client notify the backend with user defined analysis properties
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService#didSetUserAnalysisProperties` to set user defined properties
+* For analysis, both user-defined and inferred properties will be merged. If the same property is inferred by the client and provided by the user - the inferred value will be used for analysis.
 
 ### Open Issue in IDE
 
@@ -28,6 +96,8 @@
 
 * `org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionParams.getServerUrl` is only meaningful for SQ
   connections. Use `getConnection().getLeft().getServerUrl()` instead to get the `serverUrl` of a SQ connection
+
+* The existing constructor in `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams` is now deprecated, the newly added constructor should be used instead (see above).
 
 # 10.2
 

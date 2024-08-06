@@ -22,6 +22,7 @@ package org.sonarsource.sonarlint.core.rpc.client;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Path;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreat
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.ConnectionSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.event.DidReceiveServerHotspotEvent;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.fix.FixSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.HotspotDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaisedHotspotDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.GetProxyPasswordAuthenticationResponse;
@@ -104,6 +106,14 @@ public interface SonarLintRpcClientDelegate {
    * Sends a notification to the client to show a specific issue in the IDE
    */
   void showIssue(String configurationScopeId, IssueDetailsDto issueDetails);
+
+  /**
+   * Sends a notification to the client to show a fix suggestion for a specific issue in the IDE
+   * The fix is only on a single files, but it may contain different locations
+   */
+  default void showFixSuggestion(String configurationScopeId, String issueKey, FixSuggestionDto fixSuggestion) {
+
+  }
 
   /**
    * Can be triggered by the backend when trying to handle a feature that needs a connection, e.g. open hotspot.
@@ -197,5 +207,13 @@ public interface SonarLintRpcClientDelegate {
   }
 
   default void promoteExtraEnabledLanguagesInConnectedMode(String configurationScopeId, Set<Language> languagesToPromote) {
+  }
+
+  default Map<String, String> getInferredAnalysisProperties(String configurationScopeId, List<URI> filesToAnalyze) throws ConfigScopeNotFoundException {
+    return Map.of();
+  }
+
+  default Set<String> getFileExclusions(String configurationScopeId) throws ConfigScopeNotFoundException {
+    return Collections.emptySet();
   }
 }

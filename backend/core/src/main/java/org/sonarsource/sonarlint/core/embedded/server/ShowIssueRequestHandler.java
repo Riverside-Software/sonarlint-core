@@ -113,8 +113,8 @@ public class ShowIssueRequestHandler implements HttpRequestHandler {
   }
 
   private static AssistCreatingConnectionParams createAssistServerConnectionParams(ShowIssueQuery query) {
-    String tokenName = query.getTokenName();
-    String tokenValue = query.getTokenValue();
+    var tokenName = query.getTokenName();
+    var tokenValue = query.getTokenValue();
     return query.isSonarCloud ?
       new AssistCreatingConnectionParams(new SonarCloudConnectionParams(query.getOrganizationKey(), tokenName, tokenValue))
       : new AssistCreatingConnectionParams(new SonarQubeConnectionParams(query.getServerUrl(), tokenName, tokenValue));
@@ -217,7 +217,7 @@ public class ShowIssueRequestHandler implements HttpRequestHandler {
     private final String organizationKey;
     private final boolean isSonarCloud;
 
-    public ShowIssueQuery(String serverUrl, String projectKey, String issueKey, String branch, @Nullable String pullRequest,
+    public ShowIssueQuery(@Nullable String serverUrl, String projectKey, String issueKey, String branch, @Nullable String pullRequest,
       @Nullable String tokenName, @Nullable String tokenValue, @Nullable String organizationKey, boolean isSonarCloud) {
       this.serverUrl = serverUrl;
       this.projectKey = projectKey;
