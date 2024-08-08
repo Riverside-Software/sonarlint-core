@@ -638,7 +638,7 @@ public class AnalysisService {
     var analysisEngine = engineCache.getOrCreateAnalysisEngine(configurationScopeId);
     var analysisConfig = getAnalysisConfigForEngine(configurationScopeId, filePathsToAnalyze, extraProperties, hotspotsOnly);
 
-    LOG.info("Triggering analysis with configuration: {}", analysisConfig);
+    LOG.debug("Triggering analysis with configuration: {}", analysisConfig);
     if (!analysisConfig.inputFiles().iterator().hasNext()) {
       LOG.error("No file to analyze");
       return CompletableFuture.completedFuture(new AnalysisResults());
