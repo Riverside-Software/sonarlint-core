@@ -30,7 +30,7 @@ import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 
 public class ClientFile {
 
-  private static final String SONARLINT_FOLDER_NAME = ".sonarlint";
+  private static final String SONARLINT_FOLDER_NAME = ".sonarlint-cabl";
 
   /**
    * Unique identifier for this file on the client side

@@ -39,6 +39,6 @@ public class SonarLintUserHome {
     if (slHome != null) {
       return Paths.get(slHome);
     }
-    return Paths.get(System.getProperty("user.home")).resolve(".sonarlint");
+    return Paths.get(System.getProperty("user.home")).resolve(".sonarlint-cabl");
   }
 }

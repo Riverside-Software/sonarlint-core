@@ -305,13 +305,13 @@ class BindingSuggestionsMediumTests {
     verify(fakeClient, timeout(5000)).suggestBinding(argThat(suggestion -> suggestion.get(CONFIG_SCOPE_ID).isEmpty()));
 
     // Now add a binding clue to the FS
-    var sonarlintDir = tmp.resolve(".sonarlint/");
+    var sonarlintDir = tmp.resolve(".sonarlint-cabl/");
     Files.createDirectory(sonarlintDir);
-    var clue = tmp.resolve(".sonarlint/connectedMode.json");
+    var clue = tmp.resolve(".sonarlint-cabl/connectedMode.json");
     Files.writeString(clue, "{\"projectKey\": \"" + SLCORE_PROJECT_KEY + "\",\"sonarQubeUri\": \"" + sonarqubeMock.baseUrl() + "\"}", StandardCharsets.UTF_8);
 
     backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(),
-      List.of(new ClientFileDto(clue.toUri(), Paths.get(".sonarlint/connectedMode.json"), CONFIG_SCOPE_ID, null, StandardCharsets.UTF_8.name(), clue, null, null, true))));
+      List.of(new ClientFileDto(clue.toUri(), Paths.get(".sonarlint-cabl/connectedMode.json"), CONFIG_SCOPE_ID, null, StandardCharsets.UTF_8.name(), clue, null, null, true))));
 
     ArgumentCaptor<Map<String, List<BindingSuggestionDto>>> suggestionCaptor = ArgumentCaptor.forClass(Map.class);
     verify(fakeClient, timeout(5000).times(2)).suggestBinding(suggestionCaptor.capture());
