@@ -19,11 +19,17 @@
  */
 package mediumtest.analysis;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 import mediumtest.fixtures.SonarLintTestRpcServer;
 import mediumtest.fixtures.TestPlugin;
 import org.junit.jupiter.api.AfterEach;
@@ -42,6 +48,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -92,6 +99,68 @@ class AnalysisTriggeringMediumTests {
           .extracting(RaisedIssueDto::getPrimaryMessage)
           .containsExactly("Replace \"pom.version\" with \"project.version\".");
       });
+  }
+  
+  @Test
+  void it_should_not_fail_an_analysis_of_windows_shortcut_file_and_skip_the_file_analysis() {
+    var baseDir = new File("src/test/projects/windows-shortcut").getAbsoluteFile().toPath();
+    var actualFile = Paths.get(baseDir.toString(), "hello.py");
+    var windowsShortcut = Paths.get(baseDir.toString(), "hello.py.lnk");
+    var fakeWindowsShortcut = Paths.get(baseDir.toString(), "hello.py.fake.lnk");
+
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(
+        new ClientFileDto(actualFile.toUri(), baseDir.relativize(actualFile), CONFIG_SCOPE_ID, false, null, actualFile, null, null, true),
+        new ClientFileDto(windowsShortcut.toUri(), baseDir.relativize(windowsShortcut), CONFIG_SCOPE_ID, false, null, windowsShortcut, null, null, true),
+        new ClientFileDto(fakeWindowsShortcut.toUri(), baseDir.relativize(fakeWindowsShortcut), CONFIG_SCOPE_ID, false, null, fakeWindowsShortcut, null, null, true)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
+      .build(client);
+
+    backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, windowsShortcut.toUri()));
+    await().during(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isEmpty();
+      assertThat(client.getLogMessages().stream()
+        .filter(message -> message.startsWith("Filtered out URIs that are Windows shortcuts: "))
+        .collect(Collectors.toList())
+      ).isNotEmpty();
+    });
+
+    backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fakeWindowsShortcut.toUri()));
+    await().during(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());
+  }
+
+  @Test
+  void it_should_not_fail_an_analysis_of_symlink_file_and_skip_the_file_analysis(@TempDir Path baseDir) throws IOException {
+    var filePath = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var link = Paths.get(baseDir.toString(), "pom-link.xml");
+    Files.createSymbolicLink(link, filePath);
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(
+        new ClientFileDto(link.toUri(), baseDir.relativize(link), CONFIG_SCOPE_ID, false, null, link, null, null, true)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .build(client);
+
+    backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, link.toUri()));
+    await().during(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isEmpty();
+      assertThat(client.getLogMessages().stream()
+        .filter(message -> message.startsWith("Filtered out URIs that are symbolic links: "))
+        .collect(Collectors.toList())
+      ).isNotEmpty();
+    });
   }
 
   @Test

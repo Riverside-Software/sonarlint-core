@@ -215,4 +215,8 @@ public class DefaultSensorContext implements SensorContext {
     throw unsupported();
   }
 
+  @Override
+  public void addTelemetryProperty(String key, String value) {
+    // PLUGINAPI-95 NO OP
+  }
 }

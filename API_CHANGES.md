@@ -1,3 +1,39 @@
+# 10.7.1
+
+## Breaking changes
+
+* Add a new method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#matchProjectBranch` allowing the backend to check whether the locally checked-out branch matches a requesting server branch
+
+# 10.7
+
+## Breaking changes
+
+* Signature of `org.sonarsource.sonarlint.core.rpc.client.SonarLintRpcClientDelegate#raiseHotspots` was changed
+  * Parameter `issuesByFileUri` has been rightfully replaced by `hotspotsByFileUri`
+  * This is purely a naming change, there is no functional impact
+
+## New features
+
+* Add return value `GetForcedNodeJsResponse` to `org.sonarsource.sonarlint.core.rpc.client.SonarLintRpcClientDelegate#didChangeClientNodeJsPath` indicating whether
+  the Node.js path is effective or not. If that's the case, the path and the version will be returned. 
+  * It's not mandatory to use this return value. It is used by some IDEs to show the current Node.js version used.
+* Add a new system property `sonarlint.debug.active.rules` to log active rules in verbose mode when triggering an analysis
+
+# 10.6
+
+## Breaking changes
+
+* Signature of `org.sonarsource.sonarlint.core.rpc.client.SonarLintRpcClientDelegate#noBindingSuggestionFound` was changed
+  * Replaced parameter with `org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams`
+  * Former parameter `projectKey` can now be accessed by `params.getProjectKey()`
+* Removed deprecated constructors from `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams`
+
+## New features
+
+* Add a field to `org.sonarsource.sonarlint.core.rpc.protocol.common.NoBindingSuggestionFoundParams` indicating whether the suggestion where
+  no binding was found by is SonarCloud or not, can be used to display a more precise notification in the IDE rather than a generic one
+* Add a signature to `SloopLauncher.start`, allowing clients to add custom JVM arguments to the start of the process
+
 # 10.4
 
 ## Breaking changes
@@ -47,20 +83,6 @@
   * `analyzeFileList` forces analysis for the provided set of files
   * `analyzeOpenFiles` forces analysis of all files that were reported as opened using `org.sonarsource.sonarlint.core.rpc.protocol.backend.file.FileRpcService#didOpenFile`
   * `analyzeVCSChangedFiles` forces analysis of modified and not committed files
-
-## New features
-
-* Add `showFixSuggestion` method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient`
-  * It's only available when the feature flag `canOpenFixSuggestion` is enabled
-  * When using this method, you will receive a single fix suggestion for a specific issue that should be displayed to the user
-  * The user should have the possibility to accept or decline the fix suggestion
-  * The fix suggestion can be displayed at different locations in the file
-
-* Add `fixSuggestionResolved` method to `org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.TelemetryRpcService`
-  * You should use this method whenever a fix suggestion has been accepted or declined
-  * If the fix has multiple changes (snippets), you should call the method once for each
-  * The `indexSnippet` should be filled if possible, it corresponds to the snippet index in the list of changes
-  * If you do not know if the fix was accepted or declined at the snippet level, you should call the method once for the whole fix
 
 # 10.3.2 
 

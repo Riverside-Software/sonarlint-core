@@ -37,6 +37,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnera
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.RawIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.ConnectionSuggestionDto;
@@ -168,6 +169,8 @@ public interface SonarLintRpcClientDelegate {
   String matchSonarProjectBranch(String configurationScopeId, String mainBranchName, Set<String> allBranchesNames,
     SonarLintCancelChecker cancelChecker) throws ConfigScopeNotFoundException;
 
+  boolean matchProjectBranch(String configurationScopeId, String branchNameToMatch, SonarLintCancelChecker cancelChecker) throws ConfigScopeNotFoundException;
+
   void didChangeMatchedSonarProjectBranch(String configScopeId, String newMatchedBranchName);
 
   TelemetryClientLiveAttributesResponse getTelemetryLiveAttributes();
@@ -181,7 +184,7 @@ public interface SonarLintRpcClientDelegate {
 
   List<ClientFileDto> listFiles(String configScopeId) throws ConfigScopeNotFoundException;
 
-  void noBindingSuggestionFound(String projectKey);
+  void noBindingSuggestionFound(NoBindingSuggestionFoundParams params);
 
   void didChangeAnalysisReadiness(Set<String> configurationScopeIds, boolean areReadyForAnalysis);
 
@@ -196,7 +199,7 @@ public interface SonarLintRpcClientDelegate {
   default void raiseIssues(String configurationScopeId, Map<URI, List<RaisedIssueDto>> issuesByFileUri, boolean isIntermediatePublication, @Nullable UUID analysisId) {
   }
 
-  default void raiseHotspots(String configurationScopeId, Map<URI, List<RaisedHotspotDto>> issuesByFileUri, boolean isIntermediatePublication, @Nullable UUID analysisId) {
+  default void raiseHotspots(String configurationScopeId, Map<URI, List<RaisedHotspotDto>> hotspotsByFileUri, boolean isIntermediatePublication, @Nullable UUID analysisId) {
   }
 
   default void didSkipLoadingPlugin(String configurationScopeId, Language language, DidSkipLoadingPluginParams.SkipReason reason, String minVersion,

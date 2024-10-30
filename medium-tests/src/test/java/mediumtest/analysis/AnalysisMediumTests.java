@@ -67,7 +67,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
-import testutils.LogTestStartAndEnd;
+import org.sonarsource.sonarlint.core.commons.LogTestStartAndEnd;
 import testutils.OnDiskTestClientInputFile;
 
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
@@ -704,6 +704,20 @@ class AnalysisMediumTests {
     await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());
     assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).containsOnlyKeys(cFileUri);
     assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(cFileUri)).hasSize(1);
+  }
+
+  @Test
+  void should_allow_removing_compile_commands_path() {
+    assumeTrue(COMMERCIAL_ENABLED);
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.CFAMILY)
+      .build();
+
+    backend.getAnalysisService().didChangePathToCompileCommands(new DidChangePathToCompileCommandsParams(CONFIG_SCOPE_ID, null));
+
+    var analysisConfigResponse = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join();
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(analysisConfigResponse.getAnalysisProperties()).containsEntry("sonar.cfamily.compile-commands", ""));
   }
 
   private ClientInputFile prepareInputFile(String relativePath, String content, final boolean isTest, Charset encoding,

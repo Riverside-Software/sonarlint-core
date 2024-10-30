@@ -22,8 +22,11 @@ package org.sonarsource.sonarlint.core.telemetry;
 import com.google.common.annotations.VisibleForTesting;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -33,6 +36,9 @@ import org.sonarsource.sonarlint.core.http.HttpClient;
 import org.sonarsource.sonarlint.core.http.HttpClientProvider;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryClientConstantAttributesDto;
+import org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsDimension;
+import org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsPayload;
+import org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsValue;
 import org.sonarsource.sonarlint.core.telemetry.payload.HotspotPayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.IssuePayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.ShareConnectedModePayload;
@@ -44,6 +50,9 @@ import org.sonarsource.sonarlint.core.telemetry.payload.TelemetryPayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.TelemetryRulesPayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.cayc.CleanAsYouCodePayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.cayc.NewCodeFocusPayload;
+
+import static org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsValueGranularity.DAILY;
+import static org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsValueType.INTEGER;
 
 @Named
 @Singleton
@@ -78,6 +87,13 @@ public class TelemetryHttpClient {
     } catch (Throwable catchEmAll) {
       if (InternalDebug.isEnabled()) {
         LOG.error("Failed to upload telemetry data", catchEmAll);
+      }
+    }
+    try {
+      sendMetricsPostIfNeeded(createMetricsPayload(data, telemetryLiveAttributes));
+    } catch (Throwable catchEmAll) {
+      if (InternalDebug.isEnabled()) {
+        LOG.error("Failed to upload telemetry metrics data", catchEmAll);
       }
     }
   }
@@ -129,15 +145,58 @@ public class TelemetryHttpClient {
       mergedAdditionalAttributes);
   }
 
+  private TelemetryMetricsPayload createMetricsPayload(TelemetryLocalStorage data, TelemetryLiveAttributes telemetryLiveAttrs) {
+    var values = new ArrayList<TelemetryMetricsValue>();
+    if (telemetryLiveAttrs.usesConnectedMode()) {
+      values.add(new TelemetryMetricsValue("shared_connected_mode.manual", String.valueOf(data.getManualAddedBindingsCount()), INTEGER, DAILY));
+      values.add(new TelemetryMetricsValue("shared_connected_mode.imported", String.valueOf(data.getImportedAddedBindingsCount()), INTEGER, DAILY));
+      values.add(new TelemetryMetricsValue("shared_connected_mode.auto", String.valueOf(data.getAutoAddedBindingsCount()), INTEGER, DAILY));
+      values.add(new TelemetryMetricsValue("shared_connected_mode.exported", String.valueOf(data.getExportedConnectedModeCount()), INTEGER, DAILY));
+    }
+
+    data.getHelpAndFeedbackLinkClickedCounter().entrySet().stream()
+      .filter(e -> e.getValue().getHelpAndFeedbackLinkClickedCount() > 0)
+      .map(e -> new TelemetryMetricsValue(
+        "help_and_feedback." + e.getKey().toLowerCase(Locale.ROOT),
+        String.valueOf(e.getValue().getHelpAndFeedbackLinkClickedCount()),
+        INTEGER,
+        DAILY
+      ))
+      .forEach(values::add);
+
+    return new TelemetryMetricsPayload(UUID.randomUUID().toString(), platform, data.installTime(), product, TelemetryMetricsDimension.INSTALLATION, values);
+  }
+
   private void sendPost(TelemetryPayload payload) {
     logTelemetryPayload(payload);
     var responseCompletableFuture = client.postAsync(endpoint, HttpClient.JSON_CONTENT_TYPE, payload.toJson());
     handleTelemetryResponse(responseCompletableFuture, "data");
   }
 
+  private void sendMetricsPostIfNeeded(TelemetryMetricsPayload payload) {
+    if (!payload.hasMetrics()) {
+      // No metrics to send
+      if (isTelemetryLogEnabled()) {
+        LOG.info("Not sending empty telemetry metrics payload.");
+      }
+      return;
+    }
+
+    logTelemetryMetricsPayload(payload);
+    var responseCompletableFuture = client.postAsync(endpoint + "/metrics", HttpClient.JSON_CONTENT_TYPE, payload.toJson());
+    handleTelemetryResponse(responseCompletableFuture, "data");
+  }
+
   private void logTelemetryPayload(TelemetryPayload payload) {
     if (isTelemetryLogEnabled()) {
       LOG.info("Sending telemetry payload.");
+      LOG.info(payload.toJson());
+    }
+  }
+
+  private void logTelemetryMetricsPayload(TelemetryMetricsPayload payload) {
+    if (isTelemetryLogEnabled()) {
+      LOG.info("Sending telemetry metrics payload.");
       LOG.info(payload.toJson());
     }
   }

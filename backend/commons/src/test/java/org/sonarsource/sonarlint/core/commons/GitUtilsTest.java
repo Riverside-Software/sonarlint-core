@@ -19,23 +19,30 @@
  */
 package org.sonarsource.sonarlint.core.commons;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.UnaryOperator;
-import java.util.stream.IntStream;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.FilenameUtils;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.transport.URIish;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonarsource.sonarlint.core.commons.log.LogOutput;
@@ -44,16 +51,18 @@ import org.sonarsource.sonarlint.core.commons.util.git.GitUtils;
 
 import static java.util.function.Predicate.not;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.jgit.util.FileUtils.RECURSIVE;
-import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.addFileToGitIgnoreAndCommit;
-import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.blameWithFilesGitCommand;
-import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.getVSCChangedFiles;
-import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.commit;
 import static org.eclipse.jgit.lib.Constants.GITIGNORE_FILENAME;
+import static org.eclipse.jgit.util.FileUtils.RECURSIVE;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.addFileToGitIgnoreAndCommit;
+import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.commit;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.createFile;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.createRepository;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.modifyFile;
+import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.blameWithFilesGitCommand;
+import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.getVSCChangedFiles;
 
+@ExtendWith(LogTestStartAndEnd.class)
 class GitUtilsTest {
 
   @RegisterExtension
@@ -62,6 +71,23 @@ class GitUtilsTest {
   @TempDir
   private Path projectDirPath;
   private Git git;
+  private static Path bareRepoPath;
+  private static Path workingRepoPath;
+
+  @BeforeAll
+  public static void beforeAll() throws GitAPIException, IOException {
+    setUpBareRepo(Map.of(".gitignore", "*.log\n*.tmp\n"));
+  }
+
+  @AfterAll
+  public static void afterAll() {
+    try {
+      FileUtils.forceDelete(bareRepoPath.toFile());
+      FileUtils.forceDelete(workingRepoPath.toFile());
+    } catch (Exception ignored) {
+      //It throws an exception in windows
+    }
+  }
 
   @BeforeEach
   public void prepare() throws Exception {
@@ -222,9 +248,9 @@ class GitUtilsTest {
       .hasSize(1)
       .containsExactly(fileAUri);
   }
-
+  
   @Test
-  void should_consider_all_files_not_ignored_on_exception() throws IOException {
+  void should_consider_all_files_not_ignored_on_gitignore() throws IOException {
     createFile(projectDirPath, "fileA", "line1", "line2", "line3");
     createFile(projectDirPath, "fileB", "line1", "line2", "line3");
     createFile(projectDirPath, "fileC", "line1", "line2", "line3");
@@ -238,9 +264,8 @@ class GitUtilsTest {
 
     var sonarLintGitIgnore = GitUtils.createSonarLintGitIgnore(projectDirPath);
 
-    assertThat(logTester.logs(LogOutput.Level.WARN))
-      .anyMatch(s -> s.contains("Error occurred while reading .gitignore file"))
-      .anyMatch(s -> s.contains("Building empty ignore node with no rules. Files checked against this node will be considered as not ignored"));
+    assertThat(logTester.logs(LogOutput.Level.INFO))
+      .anyMatch(s -> s.contains(".gitignore file was not found for "));
 
     assertThat(Stream.of(fileAUri, fileBUri, fileCUri).filter(not(sonarLintGitIgnore::isFileIgnored)).collect(Collectors.toList()))
       .hasSize(3)
@@ -253,5 +278,83 @@ class GitUtilsTest {
 
     assertThat(sonarLintGitIgnore.isIgnored(URI.create("temp:///file/path"), false)).isFalse();
     assertThat(sonarLintGitIgnore.isIgnored(URI.create("http:///localhost:12345/file/path"), false)).isFalse();
+  }
+
+  @Test
+  void should_continue_normally_with_null_basedir() {
+    var sonarLintGitIgnore = GitUtils.createSonarLintGitIgnore(null);
+
+    assertThat(sonarLintGitIgnore.isIgnored(URI.create("temp:///file/path"), false)).isFalse();
+  }
+
+  @Test
+  void should_consider_files_ignored_when_git_root_above_project_root() throws IOException, GitAPIException {
+    var gitRoot = Files.createTempDirectory("test");
+    var projectRoot = Files.createDirectory(gitRoot.resolve("toto"));
+    try (var ignored = Git.init().setDirectory(gitRoot.toFile()).call()) {
+      var gitignoreFile = new File(gitRoot.toFile(), ".gitignore");
+      Files.writeString(gitignoreFile.toPath(), "*.js");
+    }
+
+    var sonarLintGitIgnore = GitUtils.createSonarLintGitIgnore(projectRoot);
+
+    assertThat(sonarLintGitIgnore.isIgnored(projectRoot.resolve("frontend/app/should_not_be_ignored.js").toUri(), false)).isTrue();
+  }
+
+  @Test
+  void should_respect_gitignore_rules() throws IOException {
+    Files.write(projectDirPath.resolve(GITIGNORE_FILENAME), List.of("app/", "!frontend/app/"), java.nio.file.StandardOpenOption.CREATE);
+    var sonarLintGitIgnore = GitUtils.createSonarLintGitIgnore(projectDirPath);
+
+    assertThat(sonarLintGitIgnore.isIgnored(projectDirPath.resolve("frontend/app/should_not_be_ignored.js").toUri(), false)).isFalse();
+    assertThat(sonarLintGitIgnore.isIgnored(projectDirPath.resolve("should_be_ignored.js").toUri(), false)).isFalse();
+    assertThat(sonarLintGitIgnore.isIgnored(projectDirPath.resolve("app/should_be_ignored.js").toUri(), false)).isTrue();
+  }
+
+  @Test
+  void createSonarLintGitIgnore_works_for_bare_repos_too() {
+    var sonarLintGitIgnore = GitUtils.createSonarLintGitIgnore(bareRepoPath);
+
+    assertThat(sonarLintGitIgnore.isFileIgnored(bareRepoPath.resolve("file.txt").toUri())).isFalse();
+    assertThat(sonarLintGitIgnore.isFileIgnored(bareRepoPath.resolve("file.tmp").toUri())).isTrue();
+    assertThat(sonarLintGitIgnore.isFileIgnored(bareRepoPath.resolve("file.log").toUri())).isTrue();
+  }
+
+  @Test
+  void git_blame_throws_illegal_state_exception_if_repo_is_bare() {
+    Set<Path> emptySet = Set.of();
+
+    var e = assertThrows(IllegalStateException.class, () -> GitUtils.blameWithFilesGitCommand(bareRepoPath, emptySet));
+
+    assertThat(e).hasMessage("GitRepo is a bare repository");
+  }
+
+  private static void setUpBareRepo(Map<String, String> filePathContentMap) throws IOException, GitAPIException {
+    bareRepoPath = Files.createTempDirectory("bare-repo");
+    workingRepoPath = Files.createTempDirectory("working-repo");
+    // Initialize a bare repository
+    try (var ignored = Git.init().setBare(true).setDirectory(bareRepoPath.toFile()).call()) {
+      // Initialize a working directory repository
+      try (var workingGit = Git.init().setDirectory(workingRepoPath.toFile()).call()) {
+        // Create a .gitignore file in the working directory
+        for (var filePath : filePathContentMap.keySet()) {
+          var gitignoreFile = new File(workingRepoPath.toFile(), filePath);
+          Files.writeString(gitignoreFile.toPath(), filePathContentMap.get(filePath));
+
+          // Stage and commit the .gitignore file
+          workingGit.add().addFilepattern(filePath).call();
+          workingGit.commit().setMessage("Add " + filePath).call();
+        }
+
+        // Add the bare repository as a remote and push the commit
+        workingGit.remoteAdd()
+          .setName("origin")
+          .setUri(new URIish(bareRepoPath.toUri().toString()))
+          .call();
+        workingGit.push().setRemote("origin").call();
+      } catch (Exception e) {
+        throw new RuntimeException(e);
+      }
+    }
   }
 }

@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Medium Tests
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,20 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package testutils;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.branch;
 
-import org.junit.jupiter.api.extension.AfterEachCallback;
-import org.junit.jupiter.api.extension.BeforeEachCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
+public class MatchProjectBranchResponse {
+  private final boolean isBranchMatched;
 
-public class LogTestStartAndEnd implements BeforeEachCallback, AfterEachCallback {
-  @Override
-  public void beforeEach(ExtensionContext extensionContext) {
-    extensionContext.getTestMethod().ifPresent(method -> System.out.printf(">>> Before test %s%n", method.getName()));
+  public MatchProjectBranchResponse(boolean matchedSonarBranch) {
+    this.isBranchMatched = matchedSonarBranch;
   }
 
-  @Override
-  public void afterEach(ExtensionContext extensionContext) {
-    extensionContext.getTestMethod().ifPresent(method -> System.out.printf("<<< After test %s%n", method.getName()));
+  public boolean isBranchMatched() {
+    return isBranchMatched;
   }
 }

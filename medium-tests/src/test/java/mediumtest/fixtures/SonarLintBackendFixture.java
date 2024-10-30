@@ -73,6 +73,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.StandaloneRuleC
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.ConnectionSuggestionDto;
@@ -726,6 +727,11 @@ public class SonarLintBackendFixture {
     }
 
     @Override
+    public boolean matchProjectBranch(String configurationScopeId, String branchNameToMatch, SonarLintCancelChecker cancelChecker) throws ConfigScopeNotFoundException {
+      return true;
+    }
+
+    @Override
     public void didChangeMatchedSonarProjectBranch(String configScopeId, String newMatchedBranchName) {
 
     }
@@ -797,8 +803,8 @@ public class SonarLintBackendFixture {
     }
 
     @Override
-    public void raiseHotspots(String configurationScopeId, Map<URI, List<RaisedHotspotDto>> issuesByFileUri, boolean isIntermediatePublication, @org.jetbrains.annotations.Nullable UUID analysisId) {
-      raisedHotspotsByScopeId.put(configurationScopeId, issuesByFileUri);
+    public void raiseHotspots(String configurationScopeId, Map<URI, List<RaisedHotspotDto>> hotspotsByFileUri, boolean isIntermediatePublication, @org.jetbrains.annotations.Nullable UUID analysisId) {
+      raisedHotspotsByScopeId.put(configurationScopeId, hotspotsByFileUri);
     }
 
     @Override
@@ -849,7 +855,7 @@ public class SonarLintBackendFixture {
     }
 
     @Override
-    public void noBindingSuggestionFound(String projectKey) {
+    public void noBindingSuggestionFound(NoBindingSuggestionFoundParams params) {
     }
 
     public List<DidChangeTaintVulnerabilitiesParams> getTaintVulnerabilityChanges() {
