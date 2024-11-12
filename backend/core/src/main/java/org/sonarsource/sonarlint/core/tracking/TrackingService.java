@@ -263,7 +263,7 @@ public class TrackingService {
   }
 
   private IntroductionDateProvider getIntroductionDateProvider(String configurationScopeId, Set<Path> fileRelativePaths, UnaryOperator<String> fileContentProvider) {
-    /* var baseDir = getBaseDir(configurationScopeId);
+    var baseDir = getBaseDir(configurationScopeId);
     if (baseDir != null) {
       try {
         var sonarLintBlameResult = blameWithFilesGitCommand(baseDir, fileRelativePaths, fileContentProvider);
@@ -273,7 +273,7 @@ public class TrackingService {
       } catch (Exception e) {
         LOG.error("Cannot access blame info for " + configurationScopeId, e);
       }
-    } */
+    }
     // we keep the detection date as the introduction date
     return (filePath, lineNumber) -> Instant.now();
   }
