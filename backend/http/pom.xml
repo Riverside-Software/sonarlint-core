@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.7.99100</version>
+    <version>10.7.99101</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-http</artifactId>
