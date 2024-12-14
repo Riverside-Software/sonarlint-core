@@ -129,6 +129,40 @@ class PushApiTests {
   }
 
   @Test
+  void should_notify_rule_set_changed_event_without_impacts() {
+    var mockResponse = new MockResponse();
+    mockResponse.setBody("event: RuleSetChanged\n" +
+      "data: {" +
+      "\"projects\": [\"projectKey1\", \"projectKey2\"]," +
+      "\"activatedRules\": [{" +
+      "\"key\": \"java:S0000\"," +
+      "\"severity\": \"MAJOR\"," +
+      "\"params\": [{" +
+      "\"key\": \"key1\"," +
+      "\"value\": \"value1\"" +
+      "}]" +
+      "}]," +
+      "\"deactivatedRules\": [\"java:S4321\"]" +
+      "}\n\n");
+    mockServer.addResponse("/api/push/sonarlint_events?projectKeys=projectKey1,projectKey2&languages=java,py", mockResponse);
+
+    List<SonarServerEvent> receivedEvents = new CopyOnWriteArrayList<>();
+    underTest.subscribe(new LinkedHashSet<>(List.of("projectKey1", "projectKey2")), new LinkedHashSet<>(List.of(SonarLanguage.JAVA, SonarLanguage.PYTHON)), receivedEvents::add);
+
+    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(receivedEvents)
+      .extracting("projectKeys", "deactivatedRules")
+      .containsOnly(tuple(List.of("projectKey1", "projectKey2"), List.of("java:S4321"))));
+    assertThat(receivedEvents)
+      .flatExtracting("activatedRules")
+      .extracting("key", "severity")
+      .containsOnly(tuple("java:S0000", IssueSeverity.MAJOR));
+    assertThat(receivedEvents)
+      .flatExtracting("activatedRules")
+      .extracting("parameters")
+      .containsOnly(Map.of("key1", "value1"));
+  }
+
+  @Test
   void should_notify_rule_set_changed_event() {
     var mockResponse = new MockResponse();
     mockResponse.setBody("event: RuleSetChanged\n" +
@@ -140,6 +174,11 @@ class PushApiTests {
       "\"params\": [{" +
       "\"key\": \"key1\"," +
       "\"value\": \"value1\"" +
+      "}]," +
+      "\"templateKey\": \"templateKey\"," +
+      "\"impacts\": [{" +
+      "\"softwareQuality\": \"SECURITY\"," +
+      "\"severity\": \"HIGH\"" +
       "}]" +
       "}]," +
       "\"deactivatedRules\": [\"java:S4321\"]" +
@@ -267,19 +306,26 @@ class PushApiTests {
       "\"projectKey\": \"projectKey1\"," +
       "\"issues\": [{" +
       "  \"issueKey\": \"key1\"," +
-      "  \"branchName\": \"master\"" +
+      "  \"branchName\": \"master\"," +
+      "  \"impacts\": [ { \"softwareQuality\": \"MAINTAINABILITY\", \"severity\": \"HIGH\" } ]" +
       "}]," +
-      "\"resolved\": \"true\"" +
+      "\"resolved\": true" +
       "}\n\n");
     mockServer.addResponse("/api/push/sonarlint_events?projectKeys=projectKey1&languages=java,py", mockResponse);
 
     List<SonarServerEvent> receivedEvents = new CopyOnWriteArrayList<>();
     underTest.subscribe(new LinkedHashSet<>(List.of("projectKey1")), new LinkedHashSet<>(List.of(SonarLanguage.JAVA, SonarLanguage.PYTHON)), receivedEvents::add);
 
-    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(receivedEvents)
-      .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
-      .extracting(IssueChangedEvent::getImpactedIssueKeys, IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
-      .containsOnly(tuple(List.of("key1"), true, null, null)));
+    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(receivedEvents)
+        .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
+        .extracting(IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
+        .containsOnly(tuple(true, null, null));
+
+      assertThat(receivedEvents).isNotEmpty();
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues()).hasSize(1);
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getIssueKey()).isEqualTo("key1");
+    });
   }
 
   @Test
@@ -299,10 +345,16 @@ class PushApiTests {
     List<SonarServerEvent> receivedEvents = new CopyOnWriteArrayList<>();
     underTest.subscribe(new LinkedHashSet<>(List.of("projectKey1")), new LinkedHashSet<>(List.of(SonarLanguage.JAVA, SonarLanguage.PYTHON)), receivedEvents::add);
 
-    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(receivedEvents)
-      .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
-      .extracting(IssueChangedEvent::getImpactedIssueKeys, IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
-      .containsOnly(tuple(List.of("key1"), null, IssueSeverity.MAJOR, null)));
+    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(receivedEvents)
+        .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
+        .extracting(IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
+        .containsOnly(tuple(null, IssueSeverity.MAJOR, null));
+
+      assertThat(receivedEvents).isNotEmpty();
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues()).hasSize(1);
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getIssueKey()).isEqualTo("key1");
+    });
   }
 
   @Test
@@ -322,10 +374,16 @@ class PushApiTests {
     List<SonarServerEvent> receivedEvents = new CopyOnWriteArrayList<>();
     underTest.subscribe(new LinkedHashSet<>(List.of("projectKey1")), new LinkedHashSet<>(List.of(SonarLanguage.JAVA, SonarLanguage.PYTHON)), receivedEvents::add);
 
-    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(receivedEvents)
-      .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
-      .extracting(IssueChangedEvent::getImpactedIssueKeys, IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
-      .containsOnly(tuple(List.of("key1"), null, null, RuleType.BUG)));
+    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(receivedEvents)
+        .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
+        .extracting(IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
+        .containsOnly(tuple(null, null, RuleType.BUG));
+
+      assertThat(receivedEvents).isNotEmpty();
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues()).hasSize(1);
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getIssueKey()).isEqualTo("key1");
+    });
   }
 
   @Test
@@ -493,5 +551,39 @@ class PushApiTests {
     await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(receivedEvents)
       .extracting("taintIssueKey")
       .containsOnly("taintKey"));
+  }
+
+  @Test
+  void should_notify_issue_changed_event_when_software_impacts_changed() {
+    var mockResponse = new MockResponse();
+    mockResponse.setBody("event: IssueChanged\n" +
+      "data: {" +
+      "\"projectKey\": \"projectKey1\"," +
+      "\"issues\": [{" +
+      "  \"issueKey\": \"key1\"," +
+      "  \"branchName\": \"master\"," +
+      "  \"impacts\": [ { \"softwareQuality\": \"MAINTAINABILITY\", \"severity\": \"HIGH\" } ]" +
+      "}]," +
+      "\"resolved\": true" +
+      "}\n\n");
+    mockServer.addResponse("/api/push/sonarlint_events?projectKeys=projectKey1&languages=java,py", mockResponse);
+
+    List<SonarServerEvent> receivedEvents = new CopyOnWriteArrayList<>();
+    underTest.subscribe(new LinkedHashSet<>(List.of("projectKey1")), new LinkedHashSet<>(List.of(SonarLanguage.JAVA, SonarLanguage.PYTHON)), receivedEvents::add);
+
+    await().atMost(5, TimeUnit.SECONDS).untilAsserted(() -> {
+      assertThat(receivedEvents)
+        .asInstanceOf(InstanceOfAssertFactories.list(IssueChangedEvent.class))
+        .extracting(IssueChangedEvent::getResolved, IssueChangedEvent::getUserSeverity, IssueChangedEvent::getUserType)
+        .containsOnly(tuple(true, null, null));
+
+      assertThat(receivedEvents).isNotEmpty();
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues()).hasSize(1);
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getIssueKey()).isEqualTo("key1");
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getBranchName()).isEqualTo("master");
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getImpacts()).isNotEmpty();
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getImpacts()).containsKey(SoftwareQuality.MAINTAINABILITY);
+      assertThat(((IssueChangedEvent) receivedEvents.get(0)).getImpactedIssues().get(0).getImpacts()).containsValue(ImpactSeverity.HIGH);
+    });
   }
 }

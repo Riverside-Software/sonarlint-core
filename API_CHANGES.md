@@ -1,3 +1,54 @@
+# 11.11
+
+## Breaking changes
+
+* Signature of `org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams#DidUpdateFileSystemParams` was changed
+  * Parameter `addedOrChangedFiles` was split into `addedFiles` and `changedFiles`
+* Removed parameter `branch` and `pullRequest` from `org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueDetailsDto` as it should not be used anymore by the client.
+
+# 10.10
+
+## New features
+
+* Introduce a new method `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService.shouldUseEnterpriseCSharpAnalyzer` to allow clients to know what kind of C# analyzer should be used for the analysis.
+  * The method returns a boolean value indicating whether the enterprise C# analyzer should be used or not
+  * The method returns `true` if a binding exists for config scope AND the related connected server has the enterprise C# plugin (`csharpenterprise`) installed
+  * The method returns `true` if binding exists with a SonarQube version < 10.8 (i.e. SQ versions that do not include repackaged dotnet analyzer) OR SonarCloud
+  * The method returns `false` in standalone mode or if connected to non-commercial edition of SonarQube with a version >= 10.8
+* Inject the relevant C# analyzer to analysis engines based on the above and share the path to the analyzer JAR as an analysis property for the OmniSharp plugin.
+
+## Breaking changes
+
+* Add two new constructor arguments to `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.OmnisharpRequirementsDto` for clients to declare the paths to the Open-Source and Enterprise C# analyzers.
+
+# 10.9
+
+## New features
+
+* A new attribute `severityMode` has been added to `org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto`
+  and `org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto` that automatically contains either `StandardModeDetails` or `MQRModeDetails`
+  * A new type `StandardModeDetails` has been introduced, which contains information about severity and type
+  * A new type `MQRModeDetails` has been introduced, which contains information about clean code attribute and impacts
+  * You should display the finding accordingly to the information contained by `severityMode`
+* A new method `IssueRpcService#getEffectiveIssueDetails` has been added to the backend to allow clients to retrieve detailed information about an issue
+  * The method accepts a configuration scope ID and an issue ID (UUID) as parameters
+  * The method returns a `GetEffectiveIssueDetailsResponse` object containing the detailed information about the issue
+  * It is preferred to use this method instead of the `RulesRpcService#getEffectiveRuleDetails` when retrieving rule description details in the context of a specific issue, as this new method will provide more precise information based on the issue, like issue impacts & customized issue severity
+
+## Breaking changes
+
+* Remove the `org.sonarsource.sonarlint.core.serverconnection.ServerPathProvider` class.
+* Remove `severity` and `type` fields from `org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleDefinitionDto` as this class is only used for fetching standalone rule details, which should always have the Clean Code Attribute and Impacts
+
+## Deprecation
+
+* The following attributes have been deprecated from `org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto` and
+  `org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto`, you should now use the new attribute `severityMode`
+  * `severity`
+  * `type`
+  * `cleanCodeAttribute`
+  * `impacts`
+
 # 10.7.1
 
 ## Breaking changes
@@ -87,6 +138,7 @@
 # 10.3.2 
 
 ## Breaking changes
+
 * Change `disabledLanguagesForAnalysis` parameter of `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams` introduced in 10.3 version to `disabledPluginKeysForAnalysis`
   * Analysis will be disabled for plugins specified in `disabledPluginKeysForAnalysis` but it will be still possible to consume Rule Descriptions
   * Can be null or empty if clients do not wish to disable analysis for any loaded plugin
@@ -94,11 +146,13 @@
 # 10.3
 
 ## Breaking changes
+
 * Add new `disabledLanguagesForAnalysis` parameter into `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams`
   * Analysis will be disabled for languages specified `disabledLanguagesForAnalysis` but it will be still possible to consume Rule Descriptions
   * Can be null or empty if clients do not wish to disable analysis for any loaded plugin
 
 ## New features
+
 * Add a method to `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient` to allow backend to request inferred analysis properties from the client before every analysis. It's important because properties may change depending on files being analysed.
   * `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#getInferredAnalysisProperties` to request inferred properties
 * Add a method to the `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService` to let the client notify the backend with user defined analysis properties
@@ -113,6 +167,7 @@
   * Common methods of both connection types are added to the `AssistCreatingConnectionParams` class to provide users simplicity
 
 ## Deprecation
+
 * Deprecate `isSonarCloud` parameter from `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.HelpGenerateUserTokenParams`
   * This value on no longer needed on the backend side.
 

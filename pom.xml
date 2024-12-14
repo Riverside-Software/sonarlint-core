@@ -4,12 +4,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>79.0.0.2165</version>
+    <version>82.0.0.2314</version>
     <relativePath/>
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.7.99001</version>
+  <version>10.11.99001</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -39,7 +39,6 @@
     <module>backend/slf4j-sonar-log</module>
     <module>backend/telemetry</module>
     <module>client/java-client-dependencies</module>
-    <module>client/java-client-legacy</module>
     <module>client/java-client-utils</module>
     <module>client/java-client-osgi</module>
     <module>client/rpc-java-client</module>
@@ -49,6 +48,8 @@
   </modules>
 
   <properties>
+    <license.name>GNU LGPL v3</license.name>
+    
     <maven.compiler.release>11</maven.compiler.release>
     <sonar-plugin-api.version>10.11.0.2468</sonar-plugin-api.version>
     <sonar-markdown.version>9.4.0.54424</sonar-markdown.version>

@@ -21,9 +21,12 @@ package org.sonarsource.sonarlint.core.serverconnection.issues;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Map;
 import javax.annotation.Nullable;
+import org.sonarsource.sonarlint.core.commons.ImpactSeverity;
 import org.sonarsource.sonarlint.core.commons.IssueSeverity;
 import org.sonarsource.sonarlint.core.commons.RuleType;
+import org.sonarsource.sonarlint.core.commons.SoftwareQuality;
 
 /**
  * Issues reported at file level.
@@ -31,8 +34,8 @@ import org.sonarsource.sonarlint.core.commons.RuleType;
 public class FileLevelServerIssue extends ServerIssue<FileLevelServerIssue> {
 
   public FileLevelServerIssue(String key, boolean resolved, String ruleKey, String message, Path filePath, Instant creationDate, @Nullable IssueSeverity userSeverity,
-    RuleType type) {
-    super(key, resolved, ruleKey, message, filePath, creationDate, userSeverity, type);
+    RuleType type, Map<SoftwareQuality, ImpactSeverity> impacts) {
+    super(key, resolved, ruleKey, message, filePath, creationDate, userSeverity, type, impacts);
   }
 
 }

@@ -61,10 +61,8 @@ import org.sonarsource.sonarlint.core.analysis.command.NotifyModuleEventCommand;
 import org.sonarsource.sonarlint.core.analysis.sonarapi.MultivalueProperty;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
-import org.sonarsource.sonarlint.core.commons.ConnectionKind;
 import org.sonarsource.sonarlint.core.commons.RuleKey;
 import org.sonarsource.sonarlint.core.commons.RuleType;
-import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.api.TextRange;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -137,7 +135,6 @@ import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.getVSCCha
 @Named
 @Singleton
 public class AnalysisService {
-  private static final Version SECRET_ANALYSIS_MIN_SQ_VERSION = Version.create("9.9");
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
@@ -161,8 +158,7 @@ public class AnalysisService {
   private final OpenFilesRepository openFilesRepository;
   private final ClientFileSystemService clientFileSystemService;
   private boolean automaticAnalysisEnabled;
-  private final ScheduledExecutorService scheduledAnalysisExecutor =
-    Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "SonarLint Analysis Executor"));
+  private final ScheduledExecutorService scheduledAnalysisExecutor = Executors.newSingleThreadScheduledExecutor(r -> new Thread(r, "SonarLint Analysis Executor"));
 
   public AnalysisService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, LanguageSupportRepository languageSupportRepository,
     StorageService storageService, PluginsService pluginsService, RulesService rulesService, RulesRepository rulesRepository,
@@ -265,7 +261,7 @@ public class AnalysisService {
         Set.copyOf(pluginsService.getEmbeddedPluginPaths())));
   }
 
-  public AnalysisConfiguration getAnalysisConfigForEngine(String configScopeId, List<URI> filePathsToAnalyze, Map<String, String> extraProperties, boolean hotspotsOnly) {
+  private AnalysisConfiguration getAnalysisConfigForEngine(String configScopeId, List<URI> filePathsToAnalyze, Map<String, String> extraProperties, boolean hotspotsOnly) {
     var analysisConfig = getAnalysisConfig(configScopeId, hotspotsOnly);
     var analysisProperties = analysisConfig.getAnalysisProperties();
     var inferredAnalysisProperties = client.getInferredAnalysisProperties(new GetInferredAnalysisPropertiesParams(configScopeId, filePathsToAnalyze)).join().getProperties();
@@ -346,13 +342,12 @@ public class AnalysisService {
           }
         }
       });
-
-    var supportSecretAnalysis = supportsSecretAnalysis(binding.getConnectionId());
-    if (!supportSecretAnalysis) {
-      rulesRepository.getRules(binding.getConnectionId()).stream()
-        .filter(ruleDefinition -> ruleDefinition.getLanguage() == SonarLanguage.SECRETS)
-        .filter(r -> shouldIncludeRuleForAnalysis(binding.getConnectionId(), r, hotspotsOnly))
-        .forEach(r -> result.add(buildActiveRuleDto(r)));
+    if (languageSupportRepository.getEnabledLanguagesInConnectedMode().contains(SonarLanguage.IPYTHON)) {
+      // Jupyter Notebooks are not yet fully supported in connected mode, use standalone rule configuration in the meantime
+      var iPythonRules = buildStandaloneActiveRules()
+        .stream().filter(rule -> rule.getLanguageKey().equals(SonarLanguage.IPYTHON.getSonarLanguageKey()))
+        .collect(toList());
+      result.addAll(iPythonRules);
     }
     return result;
   }
@@ -395,18 +390,6 @@ public class AnalysisService {
     return storageService.connection(connectionId).serverInfo().read().isPresent();
   }
 
-  public boolean supportsSecretAnalysis(String connectionId) {
-    var connection = connectionConfigurationRepository.getConnectionById(connectionId);
-    if (connection == null) {
-      // Connection is gone
-      return false;
-    }
-    // when storage is not present, assume that secrets are not supported by server
-    return connection.getKind() == ConnectionKind.SONARCLOUD || storageService.connection(connectionId).serverInfo().read()
-      .map(serverInfo -> serverInfo.getVersion().compareToIgnoreQualifier(SECRET_ANALYSIS_MIN_SQ_VERSION) >= 0)
-      .orElse(false);
-  }
-
   private ServerActiveRule tryConvertDeprecatedKeys(String connectionId, ServerActiveRule possiblyDeprecatedActiveRuleFromStorage) {
     SonarLintRuleDefinition ruleOrTemplateDefinition;
     if (StringUtils.isNotBlank(possiblyDeprecatedActiveRuleFromStorage.getTemplateKey())) {
@@ -419,7 +402,7 @@ public class AnalysisService {
       var templateRuleKeyWithCorrectRepo = RuleKey.parse(ruleOrTemplateDefinition.getKey());
       var ruleKey = new RuleKey(templateRuleKeyWithCorrectRepo.repository(), ruleKeyPossiblyWithDeprecatedRepo.rule()).toString();
       return new ServerActiveRule(ruleKey, possiblyDeprecatedActiveRuleFromStorage.getSeverity(), possiblyDeprecatedActiveRuleFromStorage.getParams(),
-        ruleOrTemplateDefinition.getKey());
+        ruleOrTemplateDefinition.getKey(), possiblyDeprecatedActiveRuleFromStorage.getOverriddenImpacts());
     } else {
       ruleOrTemplateDefinition = rulesRepository.getRule(connectionId, possiblyDeprecatedActiveRuleFromStorage.getRuleKey()).orElse(null);
       if (ruleOrTemplateDefinition == null) {
@@ -427,7 +410,7 @@ public class AnalysisService {
         return possiblyDeprecatedActiveRuleFromStorage;
       }
       return new ServerActiveRule(ruleOrTemplateDefinition.getKey(), possiblyDeprecatedActiveRuleFromStorage.getSeverity(), possiblyDeprecatedActiveRuleFromStorage.getParams(),
-        null);
+        null, possiblyDeprecatedActiveRuleFromStorage.getOverriddenImpacts());
     }
   }
 
@@ -637,6 +620,16 @@ public class AnalysisService {
     return isReady;
   }
 
+  public boolean shouldUseEnterpriseCSharpAnalyzer(String configurationScopeId) {
+    var binding = configurationRepository.getEffectiveBinding(configurationScopeId);
+    if (binding.isEmpty()) {
+      return false;
+    } else {
+      var connectionId = binding.get().getConnectionId();
+      return pluginsService.shouldUseEnterpriseCSharpAnalyzer(connectionId);
+    }
+  }
+
   public CompletableFuture<AnalysisResults> analyze(SonarLintCancelMonitor cancelMonitor, String configurationScopeId, UUID analysisId, List<URI> filePathsToAnalyze,
     Map<String, String> extraProperties, long startTime, boolean enableTracking, boolean shouldFetchServerIssues, boolean hotspotsOnly) {
     var analysisEngine = engineCache.getOrCreateAnalysisEngine(configurationScopeId);
@@ -753,7 +746,6 @@ public class AnalysisService {
 
   private List<ClientInputFile> toInputFiles(String configScopeId, Path actualBaseDir, List<URI> fileUrisToAnalyze) {
     var sonarLintGitIgnore = createSonarLintGitIgnore(actualBaseDir);
-    
     // INFO: When there are additional filters coming at some point, add them here and log them down below as well!
     var filteredURIsFromExclusionService = new ArrayList<URI>();
     var filteredURIsFromGitIgnore = new ArrayList<URI>();
@@ -772,7 +764,12 @@ public class AnalysisService {
         return true;
       })
       .filter(uri -> {
-        if (sonarLintGitIgnore.isFileIgnored(uri)) {
+        var clientFile = clientFileSystemService.getClientFile(uri);
+        if (clientFile == null) {
+          LOG.error("File to analyze was not found in the file system: {}", uri);
+          return false;
+        }
+        if (sonarLintGitIgnore.isFileIgnored(clientFile.getClientRelativePath())) {
           filteredURIsFromGitIgnore.add(uri);
           return false;
         }
@@ -815,7 +812,7 @@ public class AnalysisService {
       })
       .filter(Objects::nonNull)
       .collect(toList());
-    
+
     // Log all the filtered out URIs but not for the filters where there were none
     logFilteredURIs("Filtered out URIs based on the exclusion service", filteredURIsFromExclusionService);
     logFilteredURIs("Filtered out URIs ignored by Git", filteredURIsFromGitIgnore);
@@ -823,16 +820,16 @@ public class AnalysisService {
     logFilteredURIs("Filtered out URIs that are symbolic links", filteredURIsFromSymbolicLink);
     logFilteredURIs("Filtered out URIs that are Windows shortcuts", filteredURIsFromWindowsShortcut);
     logFilteredURIs("Filtered out URIs having no input file", filteredURIsNoInputFile);
-    
+
     return actualFilesToAnalyze;
   }
-  
+
   private void logFilteredURIs(String reason, ArrayList<URI> uris) {
     if (!uris.isEmpty()) {
       SonarLintLogger.get().debug(reason + ": " + uris.stream().map(Object::toString).collect(Collectors.joining(", ")));
     }
   }
-  
+
   private boolean isUserDefined(String configurationScopeId, URI uri) {
     return ofNullable(fileSystemService.getClientFiles(configurationScopeId, uri))
       .map(ClientFile::isUserDefined)

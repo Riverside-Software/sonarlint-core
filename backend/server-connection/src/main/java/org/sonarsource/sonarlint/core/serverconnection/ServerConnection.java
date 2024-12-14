@@ -29,8 +29,6 @@ import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.ServerApi;
 
 public class ServerConnection {
-  public static final Version SECRET_ANALYSIS_MIN_SQ_VERSION = Version.create("9.9");
-
   private static final Version CLEAN_CODE_TAXONOMY_MIN_SQ_VERSION = Version.create("10.2");
 
   private final Set<SonarLanguage> enabledLanguagesToSync;
@@ -50,7 +48,6 @@ public class ServerConnection {
     this.storage = storageFacade.connection(connectionId);
     serverInfoSynchronizer = new ServerInfoSynchronizer(storage);
     this.storageSynchronizer = new LocalStorageSynchronizer(enabledLanguagesToSync, embeddedPluginKeys, serverInfoSynchronizer, storage);
-    storage.plugins().cleanUp();
   }
 
   public PluginSynchronizationSummary sync(ServerApi serverApi, SonarLintCancelMonitor cancelMonitor) {
@@ -63,13 +60,6 @@ public class ServerConnection {
 
   public Version readOrSynchronizeServerVersion(ServerApi serverApi, SonarLintCancelMonitor cancelMonitor) {
     return serverInfoSynchronizer.readOrSynchronizeServerInfo(serverApi, cancelMonitor).getVersion();
-  }
-
-  public boolean shouldSkipCleanCodeTaxonomy() {
-    // In connected mode, Clean Code taxonomy is skipped if the server is SonarQube < 10.2
-    return !isSonarCloud && storage.serverInfo().read()
-      .map(serverInfo -> serverInfo.getVersion().compareToIgnoreQualifier(CLEAN_CODE_TAXONOMY_MIN_SQ_VERSION) < 0)
-      .orElse(false);
   }
 
   public Set<SonarLanguage> getEnabledLanguagesToSync() {

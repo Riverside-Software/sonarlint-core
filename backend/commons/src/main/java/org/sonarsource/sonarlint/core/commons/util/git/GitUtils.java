@@ -87,11 +87,7 @@ public class GitUtils {
   public static SonarLintBlameResult blameWithFilesGitCommand(Path projectBaseDir, Set<Path> projectBaseRelativeFilePaths, @Nullable UnaryOperator<String> fileContentProvider) {
     var gitRepo = buildGitRepository(projectBaseDir);
 
-    if (gitRepo.isBare()) {
-      throw new IllegalStateException("GitRepo is a bare repository");
-    }
-
-    var gitRepoRelativeProjectBaseDir = gitRepo.getWorkTree().toPath().relativize(projectBaseDir);
+    var gitRepoRelativeProjectBaseDir = getRelativePath(gitRepo, projectBaseDir);
 
     var gitRepoRelativeFilePaths = projectBaseRelativeFilePaths.stream()
       .map(gitRepoRelativeProjectBaseDir::resolve)
@@ -112,6 +108,11 @@ public class GitUtils {
     } catch (GitAPIException e) {
       throw new IllegalStateException("Failed to blame repository files", e);
     }
+  }
+
+  private static Path getRelativePath(Repository gitRepo, Path projectBaseDir) {
+    var repoDir = gitRepo.isBare() ? gitRepo.getDirectory() : gitRepo.getWorkTree();
+    return repoDir.toPath().relativize(projectBaseDir);
   }
 
   public static Repository buildGitRepository(Path basedir) {
@@ -139,13 +140,12 @@ public class GitUtils {
    */
   public static SonarLintGitIgnore createSonarLintGitIgnore(@Nullable Path baseDir) {
     if (baseDir == null) {
-      return new SonarLintGitIgnore(new IgnoreNode(), null, null);
+      return new SonarLintGitIgnore(new IgnoreNode());
     }
     try {
       var gitRepo = buildGitRepository(baseDir);
-      var gitRepoRelativeProjectBaseDir = getRelativePath(gitRepo, baseDir);
       var ignoreNode = buildIgnoreNode(gitRepo);
-      return new SonarLintGitIgnore(ignoreNode, gitRepoRelativeProjectBaseDir, baseDir);
+      return new SonarLintGitIgnore(ignoreNode);
     } catch (GitRepoNotFoundException e) {
       LOG.info("Git Repository not found for {}. The path {} is not in a Git repository", baseDir, e.getPath());
     } catch (FileNotFoundException e) {
@@ -154,12 +154,7 @@ public class GitUtils {
       LOG.warn("Error occurred while reading .gitignore file: ", e);
       LOG.warn("Building empty ignore node with no rules. Files checked against this node will be considered as not ignored.");
     }
-    return new SonarLintGitIgnore(new IgnoreNode(), null, baseDir);
-  }
-
-  private static Path getRelativePath(Repository gitRepo, Path projectBaseDir) {
-    var repoDir = gitRepo.isBare() ? gitRepo.getDirectory() : gitRepo.getWorkTree();
-    return repoDir.toPath().relativize(projectBaseDir);
+    return new SonarLintGitIgnore(new IgnoreNode());
   }
 
   private static IgnoreNode buildIgnoreNode(Repository repository) throws IOException {

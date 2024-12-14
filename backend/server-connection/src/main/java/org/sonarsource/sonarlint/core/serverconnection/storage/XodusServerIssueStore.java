@@ -77,6 +77,7 @@ import org.sonarsource.sonarlint.core.serverconnection.proto.Sonarlint.TextRange
 
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.joining;
+import static org.sonarsource.sonarlint.core.commons.storage.XodusPurgeUtils.purgeOldTemporaryFiles;
 import static org.sonarsource.sonarlint.core.serverconnection.storage.StorageUtils.deserializeLanguages;
 
 public class XodusServerIssueStore implements ProjectServerIssueStore {
@@ -91,6 +92,8 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
+  private static final String SERVER_ISSUE_STORE = "xodus-issue-store";
+  private static final Integer PURGE_NUMBER_OF_DAYS = 3;
   private static final String BRANCH_ENTITY_TYPE = "Branch";
   private static final String FILE_ENTITY_TYPE = "File";
   private static final String ISSUE_ENTITY_TYPE = "Issue";
@@ -149,7 +152,8 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
   }
 
   XodusServerIssueStore(Path backupDir, Path workDir, StoreTransactionalExecutable afterInit) throws IOException {
-    xodusDbDir = Files.createTempDirectory(workDir, "xodus-issue-store");
+    xodusDbDir = Files.createTempDirectory(workDir, SERVER_ISSUE_STORE);
+    purgeOldTemporaryFiles(workDir, PURGE_NUMBER_OF_DAYS, SERVER_ISSUE_STORE + "*");
     backupFile = backupDir.resolve(BACKUP_TAR_GZ);
     if (Files.isRegularFile(backupFile)) {
       LOG.debug("Restoring previous server issue database from {}", backupFile);
@@ -192,8 +196,10 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
     var creationDate = (Instant) requireNonNull(storedIssue.getProperty(CREATION_DATE_PROPERTY_NAME));
     var userSeverity = (IssueSeverity) storedIssue.getProperty(USER_SEVERITY_PROPERTY_NAME);
     var type = (RuleType) requireNonNull(storedIssue.getProperty(TYPE_PROPERTY_NAME));
+    var impacts = readImpacts(storedIssue.getBlob(IMPACTS_BLOB_NAME));
+    var effectiveFilePath = Path.of(filePath);
     if (startLine == null) {
-      return new FileLevelServerIssue(key, resolved, ruleKey, msg, Path.of(filePath), creationDate, userSeverity, type);
+      return new FileLevelServerIssue(key, resolved, ruleKey, msg, effectiveFilePath, creationDate, userSeverity, type, impacts);
     } else {
       var rangeHash = storedIssue.getBlobString(RANGE_HASH_PROPERTY_NAME);
       if (rangeHash != null) {
@@ -206,11 +212,12 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
           resolved,
           ruleKey,
           msg,
-          Path.of(filePath),
+          effectiveFilePath,
           creationDate,
           userSeverity,
           type,
-          textRange);
+          textRange,
+          impacts);
       } else {
         return new LineLevelServerIssue(
           key,
@@ -218,11 +225,12 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
           ruleKey,
           msg,
           storedIssue.getBlobString(LINE_HASH_PROPERTY_NAME),
-          Path.of(filePath),
+          effectiveFilePath,
           creationDate,
           userSeverity,
           type,
-          (Integer) storedIssue.getProperty(START_LINE_PROPERTY_NAME));
+          (Integer) storedIssue.getProperty(START_LINE_PROPERTY_NAME),
+          impacts);
       }
     }
   }
@@ -649,6 +657,7 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
       issueEntity.setProperty(END_LINE_OFFSET_PROPERTY_NAME, textRange.getEndLineOffset());
       issueEntity.setBlobString(RANGE_HASH_PROPERTY_NAME, textRange.getHash());
     }
+    issueEntity.setBlob(IMPACTS_BLOB_NAME, toProtoImpact(issue.getImpacts()));
   }
 
   private static void updateOrCreateTaintIssue(Entity branchEntity, Entity fileEntity, ServerTaintIssue issue, StoreTransaction transaction) {

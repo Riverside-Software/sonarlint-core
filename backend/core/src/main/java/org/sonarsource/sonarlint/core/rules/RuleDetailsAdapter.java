@@ -37,12 +37,6 @@ import org.sonarsource.sonarlint.core.analysis.api.QuickFix;
 import org.sonarsource.sonarlint.core.analysis.api.TextEdit;
 import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.FileEditDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueFlowDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueLocationDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.QuickFixDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.TextEditDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.EffectiveRuleDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.EffectiveRuleParamDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.ImpactDto;
@@ -53,12 +47,20 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleMonolithicD
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleNonContextualSectionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RuleSplitDescriptionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.VulnerabilityProbability;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.FileEditDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueFlowDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.IssueLocationDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.QuickFixDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.TextEditDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.CleanCodeAttribute;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.CleanCodeAttributeCategory;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.MQRModeDetails;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.StandardModeDetails;
 
 import static org.sonarsource.sonarlint.core.tracking.TextRangeUtils.toTextRangeDto;
 
@@ -78,14 +80,15 @@ public class RuleDetailsAdapter {
   }
 
   public static EffectiveRuleDetailsDto transform(RuleDetails ruleDetails, @Nullable String contextKey) {
+    var cleanCodeAttribute = ruleDetails.getCleanCodeAttribute().map(RuleDetailsAdapter::adapt).orElse(null);
+    Either<StandardModeDetails, MQRModeDetails> severityDetails = cleanCodeAttribute != null && !ruleDetails.getImpacts().isEmpty() ?
+      Either.forRight(new MQRModeDetails(cleanCodeAttribute, toDto(ruleDetails.getImpacts()))) :
+      Either.forLeft(new StandardModeDetails(adapt(Objects.requireNonNull(ruleDetails.getDefaultSeverity())),
+        adapt(Objects.requireNonNull(ruleDetails.getType()))));
     return new EffectiveRuleDetailsDto(
       ruleDetails.getKey(),
       ruleDetails.getName(),
-      adapt(ruleDetails.getDefaultSeverity()),
-      adapt(ruleDetails.getType()),
-      ruleDetails.getCleanCodeAttribute().map(RuleDetailsAdapter::adapt).orElse(null),
-      ruleDetails.getCleanCodeAttribute().map(org.sonarsource.sonarlint.core.commons.CleanCodeAttribute::getAttributeCategory).map(RuleDetailsAdapter::adapt).orElse(null),
-      toDto(ruleDetails.getDefaultImpacts()),
+      severityDetails,
       transformDescriptions(ruleDetails, contextKey),
       transform(ruleDetails.getParams()),
       adapt(ruleDetails.getLanguage()),
@@ -120,7 +123,7 @@ public class RuleDetailsAdapter {
     return new RuleSplitDescriptionDto(extractIntroductionFromSections(sectionsByKey), tabbedSections);
   }
 
-  @org.jetbrains.annotations.Nullable
+  @Nullable
   private static String extractIntroductionFromSections(Map<String, List<RuleDetails.DescriptionSection>> sectionsByKey) {
     var introductionSections = sectionsByKey.get(INTRODUCTION_SECTION_KEY);
     String introductionHtmlContent = null;
@@ -175,16 +178,16 @@ public class RuleDetailsAdapter {
   }
 
   private static String getTabTitle(RuleDetails ruleDetails, String sectionKey) {
-    if (ROOT_CAUSE_SECTION_KEY.equals(sectionKey)) {
-      return RuleType.SECURITY_HOTSPOT.equals(ruleDetails.getType()) ? "What's the risk?" : "Why is this an issue?";
+    switch (sectionKey) {
+      case ROOT_CAUSE_SECTION_KEY:
+        return RuleType.SECURITY_HOTSPOT.equals(ruleDetails.getType()) ? "What's the risk?" : "Why is this an issue?";
+      case ASSESS_THE_PROBLEM_SECTION_KEY:
+        return "Assess the risk";
+      case HOW_TO_FIX_SECTION_KEY:
+        return "How can I fix it?";
+      default:
+        return "More Info";
     }
-    if (ASSESS_THE_PROBLEM_SECTION_KEY.equals(sectionKey)) {
-      return "Assess the risk";
-    }
-    if (HOW_TO_FIX_SECTION_KEY.equals(sectionKey)) {
-      return "How can I fix it?";
-    }
-    return "More Info";
   }
 
   private static String concat(Collection<String> htmlSnippets) {

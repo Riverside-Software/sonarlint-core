@@ -21,6 +21,7 @@ package mediumtest.analysis;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -31,9 +32,11 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
+import mediumtest.fixtures.ServerFixture;
 import mediumtest.fixtures.SonarLintTestRpcServer;
 import mediumtest.fixtures.TestPlugin;
 import org.apache.commons.io.FileUtils;
+import org.eclipse.jgit.api.errors.GitAPIException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
@@ -43,14 +46,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.sonar.api.utils.System2;
 import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
+import org.sonarsource.sonarlint.core.commons.LogTestStartAndEnd;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
+import org.sonarsource.sonarlint.core.commons.testutils.GitUtils;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeAnalysisPropertiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangePathToCompileCommandsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.ShouldUseEnterpriseCSharpAnalyzerParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.ConfigurationScopeDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddConfigurationScopesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidRemoveConfigurationScopeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidOpenFileParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
@@ -67,9 +75,9 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
-import org.sonarsource.sonarlint.core.commons.LogTestStartAndEnd;
 import testutils.OnDiskTestClientInputFile;
 
+import static mediumtest.fixtures.ServerFixture.newSonarQubeServer;
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -88,6 +96,7 @@ class AnalysisMediumTests {
 
   private static final String CONFIG_SCOPE_ID = "CONFIG_SCOPE_ID";
   private SonarLintTestRpcServer backend;
+  private ServerFixture.Server server;
   private String javaVersion;
   private static final boolean COMMERCIAL_ENABLED = System.getProperty("commercial") != null;
 
@@ -382,8 +391,12 @@ class AnalysisMediumTests {
     backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
       new ConfigurationScopeDto(CONFIG_SCOPE_ID, null, false, CONFIG_SCOPE_ID, null))));
     backend.getFileService().didUpdateFileSystem(
-      new DidUpdateFileSystemParams(List.of(), List.of(new ClientFileDto(fileIssueUri, baseDir.relativize(fileIssue), CONFIG_SCOPE_ID, false, null, fileIssue, null, null, true),
-        new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef), CONFIG_SCOPE_ID, false, null, fileFuncDef, null, null, true))));
+      new DidUpdateFileSystemParams(
+        List.of(new ClientFileDto(fileIssueUri, baseDir.relativize(fileIssue), CONFIG_SCOPE_ID, false, null, fileIssue, null, null, true),
+        new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef), CONFIG_SCOPE_ID, false, null, fileFuncDef, null, null, true)),
+        List.of(),
+        List.of()
+      ));
 
     result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
       List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
@@ -473,8 +486,12 @@ class AnalysisMediumTests {
       "def foo(a):\n" +
         "    print(a)\n");
     var fileFuncDefUri = fileFuncDef.toUri();
-    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(),
-      List.of(new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef), CONFIG_SCOPE_ID, false, null, fileFuncDef, null, null, true))));
+    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(
+      List.of(new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef), CONFIG_SCOPE_ID, false, null, fileFuncDef, null, null,
+        true)),
+      List.of(),
+      List.of()
+    ));
 
     parentConfigScopeResult = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID,
       analysisId, List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
@@ -521,7 +538,7 @@ class AnalysisMediumTests {
     assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
 
     removeFile(baseDir, "fileFuncDef.py");
-    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(fileFuncDefUri), List.of()));
+    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(), List.of(), List.of(fileFuncDefUri)));
 
     result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
       List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
@@ -565,9 +582,12 @@ class AnalysisMediumTests {
     assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
 
     editFile(baseDir, "fileFuncDef.py", "");
-    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(),
+    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(
       List.of(new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef),
-        CONFIG_SCOPE_ID, false, null, fileFuncDef, "", null, true))));
+        CONFIG_SCOPE_ID, false, null, fileFuncDef, "", null, true)),
+      List.of(),
+      List.of()
+    ));
 
     result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
       List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
@@ -694,7 +714,7 @@ class AnalysisMediumTests {
       .build(client);
     backend.getAnalysisService().didSetUserAnalysisProperties(new DidChangeAnalysisPropertiesParams(CONFIG_SCOPE_ID, Map.of("sonar.cfamily.build-wrapper-content", buildWrapperContent)));
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, cFileUri));
-    await().atMost(10, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(cFileUri)).isNotEmpty());
+    await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(cFileUri)).isNotEmpty());
     client.cleanRaisedIssues();
 
     backend.getAnalysisService().didChangePathToCompileCommands(new DidChangePathToCompileCommandsParams(CONFIG_SCOPE_ID, "/path"));
@@ -718,6 +738,237 @@ class AnalysisMediumTests {
 
     var analysisConfigResponse = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join();
     await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(analysisConfigResponse.getAnalysisProperties()).containsEntry("sonar.cfamily.compile-commands", ""));
+  }
+
+  @Test
+  void it_should_unload_rules_cache_on_config_scope_closed(@TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var filePath2 = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var fileUri = filePath.toUri();
+    var fileUri2 = filePath2.toUri();
+    var configScope2 = "configScope2";
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
+      .withInitialFs(configScope2, baseDir, List.of(new ClientFileDto(fileUri2, baseDir.relativize(filePath2), configScope2, false, null, filePath2, null, null, true)))
+      .build();
+    var projectKey = "projectKey";
+    var connectionId = "connectionId";
+    var projectKey2 = "projectKey-2";
+    var connectionId2 = "connectionId-2";
+    var server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
+    backend = newBackend()
+      .withSonarQubeConnection(connectionId, server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,
+          project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withSonarQubeConnection(connectionId2, server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey2,
+          project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
+      .withBoundConfigScope(configScope2, connectionId2, projectKey2)
+      .withExtraEnabledLanguagesInConnectedMode(Language.XML)
+      .withFullSynchronization()
+      .build(client);
+    backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
+      new ConfigurationScopeDto(configScope2, null, true, configScope2,
+        new BindingConfigurationDto(connectionId2, projectKey2, true)))));
+
+    // analyse files to warmup caches
+    var analysisId1 = UUID.randomUUID();
+    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var analysisId2 = UUID.randomUUID();
+    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), System.currentTimeMillis())).join();
+
+    // unload one of the projects
+    backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams(configScope2));
+
+    // expect corresponding cache to be evicted
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getLogMessages()).contains("Evict cached rules definitions for connection 'connectionId-2'"));
+  }
+
+  @Test
+  void it_should_not_unload_rules_cache_on_config_scope_closed_if_another_config_scope_still_opened(@TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var filePath2 = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var filePath3 = createFile(baseDir, "pom.xml",
+      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        + "<project>\n"
+        + "  <modelVersion>4.0.0</modelVersion>\n"
+        + "  <groupId>com.foo</groupId>\n"
+        + "  <artifactId>bar</artifactId>\n"
+        + "  <version>${pom.version}</version>\n"
+        + "</project>");
+    var fileUri = filePath.toUri();
+    var fileUri2 = filePath2.toUri();
+    var fileUri3 = filePath3.toUri();
+    var configScope2 = "configScope2";
+    var configScope3 = "configScope3";
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
+      .withInitialFs(configScope2, baseDir, List.of(new ClientFileDto(fileUri2, baseDir.relativize(filePath2), configScope2, false, null, filePath2, null, null, true)))
+      .withInitialFs(configScope3, baseDir, List.of(new ClientFileDto(fileUri3, baseDir.relativize(filePath3), configScope3, false, null, filePath3, null, null, true)))
+      .build();
+    var projectKey = "projectKey";
+    var connectionId = "connectionId";
+    var projectKey2 = "projectKey-2";
+    var connectionId2 = "connectionId-2";
+    var server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
+    backend = newBackend()
+      .withSonarQubeConnection(connectionId, server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,
+          project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withSonarQubeConnection(connectionId2, server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey2,
+          project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
+      .withBoundConfigScope(configScope2, connectionId2, projectKey2)
+      .withExtraEnabledLanguagesInConnectedMode(Language.XML)
+      .withFullSynchronization()
+      .build(client);
+    backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
+      new ConfigurationScopeDto(configScope2, null, true, configScope2,
+        new BindingConfigurationDto(connectionId2, projectKey2, true)))));
+    backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
+      new ConfigurationScopeDto(configScope3, null, true, configScope3,
+        new BindingConfigurationDto(connectionId2, projectKey2, true)))));
+
+    // analyse files to warmup caches
+    var analysisId1 = UUID.randomUUID();
+    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var analysisId2 = UUID.randomUUID();
+    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), System.currentTimeMillis())).join();
+
+    // unload one of the projects
+    backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams(configScope2));
+
+    // expect corresponding cache not to be evicted
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getLogMessages())
+      .doesNotContain("Evict cached rules definitions for connection 'connectionId-2'"));
+  }
+
+  @Test
+  void it_should_analyse_file_with_non_file_uri_schema(@TempDir Path baseDir) {
+    var filePath1 = createFile(baseDir, "Foo.java", "public interface Foo {}");
+    var fileUri1 = URI.create("temp:///file/path/Foo.java");
+    var filePath2 = createFile(baseDir, "Bar.java", "public interface Bar {}");
+    var fileUri2 = URI.create("http:///localhost:12345/file/path/Bar.java");
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(
+        new ClientFileDto(fileUri1, baseDir.relativize(filePath1), CONFIG_SCOPE_ID, false, null, filePath1, null, null, true),
+        new ClientFileDto(fileUri2, baseDir.relativize(filePath2), CONFIG_SCOPE_ID, false, null, filePath2, null, null, true)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
+      .build(client);
+
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri1), Map.of(), false, System.currentTimeMillis())).join();
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).hasSize(1));
+
+    var raisedIssues = client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID);
+    assertThat(raisedIssues).hasSize(1);
+
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri2), Map.of(), false, System.currentTimeMillis())).join();
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).hasSize(1));
+
+    raisedIssues = client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID);
+    assertThat(raisedIssues).hasSize(1);
+  }
+
+  @Test
+  void it_should_respect_gitignore_exclusions(@TempDir Path baseDir) throws GitAPIException, IOException {
+    var filePath = createFile(baseDir, "Foo.java", "public interface Foo {}");
+    GitUtils.createRepository(baseDir);
+    var gitignorePath = createFile(baseDir, ".gitignore", "*.java");
+    var fileUri = filePath.toUri();
+    var gitignoreUri = gitignorePath.toUri();
+    var client = newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(
+        new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true),
+        new ClientFileDto(gitignoreUri, baseDir.relativize(gitignorePath), CONFIG_SCOPE_ID, false, null, gitignorePath, null, null, true)))
+      .build();
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
+      .build(client);
+
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isEmpty());
+  }
+
+  @Test
+  void it_should_not_use_enterprise_csharp_analyzer_in_standalone() {
+    backend = newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .build();
+
+    var response = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
+
+    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(response.shouldUseEnterpriseAnalyzer()).isFalse());
+  }
+
+  @Test
+  void it_should_not_use_enterprise_csharp_analyzer_when_connected_to_community() {
+    server = newSonarQubeServer("10.8").start();
+    backend = newBackend()
+      .withSonarQubeConnection("connectionId",
+        server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
+      .withExtraEnabledLanguagesInConnectedMode(Language.XML)
+      .withFullSynchronization()
+      .build();
+
+    var result = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
+
+    assertThat(result.shouldUseEnterpriseAnalyzer()).isFalse();
+  }
+
+  @Test
+  void it_should_use_enterprise_csharp_analyzer_when_connected_to_community_non_repackaged() {
+    server = newSonarQubeServer("10.7").start();
+    backend = newBackend()
+      .withSonarQubeConnection("connectionId",
+        server,
+        storage -> storage
+          .withPlugin(TestPlugin.XML)
+          .withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER")))
+          .withServerVersion("10.7"))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
+      .withExtraEnabledLanguagesInConnectedMode(Language.XML)
+      .withFullSynchronization()
+      .build();
+
+    var result = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
+
+    assertThat(result.shouldUseEnterpriseAnalyzer()).isTrue();
   }
 
   private ClientInputFile prepareInputFile(String relativePath, String content, final boolean isTest, Charset encoding,

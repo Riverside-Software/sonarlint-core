@@ -155,7 +155,7 @@ public class SynchronizationService {
       return;
     }
     taskManager.startTask(null, "Synchronizing projects...", null, false, false, progressNotifier -> {
-      var connectionsCount = boundScopeByConnectionAndSonarProject.keySet().size();
+      var connectionsCount = boundScopeByConnectionAndSonarProject.size();
       var progressGap = 100f / connectionsCount;
       var progress = 0f;
       var synchronizedConfScopeIds = new HashSet<String>();
@@ -252,6 +252,9 @@ public class SynchronizationService {
 
   @EventListener
   public void onBindingChanged(BindingConfigChangedEvent event) {
+    if (!fullSynchronizationEnabled) {
+      return;
+    }
     var configScopeId = event.getConfigScopeId();
     scopeSynchronizationTimestampRepository.clearLastSynchronizationTimestamp(configScopeId);
     if (event.getPreviousConfig().isBound()) {

@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.7.99001</version>
+    <version>10.11.99001</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-java-client-dependencies</artifactId>
@@ -22,10 +22,37 @@
       <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
       <version>${lsp4j.version}</version>
     </dependency>
+    <dependency>
+      <groupId>org.eclipse.jgit</groupId>
+      <artifactId>org.eclipse.jgit</artifactId>
+      <version>${jgit.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.slf4j</groupId>
+      <artifactId>slf4j-api</artifactId>
+      <version>${slf4j.version}</version>
+    </dependency>
   </dependencies>
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>empty-javadoc-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>javadoc</classifier>
+              <classesDirectory>${basedir}/javadoc</classesDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-shade-plugin</artifactId>
@@ -48,6 +75,8 @@
             <includes>
               <include>com.google.code.gson:gson</include>
               <include>org.eclipse.lsp4j:org.eclipse.lsp4j.jsonrpc</include>
+              <include>org.eclipse.jgit:org.eclipse.jgit</include>
+              <include>org.slf4j:slf4j-api</include>
             </includes>
           </artifactSet>
 
@@ -59,6 +88,8 @@
               <includes>
                 <include>com.google.gson.**</include>
                 <include>org.eclipse.lsp4j.**</include>
+                <include>org.eclipse.jgit.**</include>
+                <include>org.slf4j.**</include>
               </includes>
             </relocation>
           </relocations>
@@ -69,11 +100,13 @@
               <artifact>*:*</artifact>
               <excludes>
                 <exclude>module-info.class</exclude>
+                <exclude>about.html</exclude>
                 <exclude>META-INF/*.SF</exclude>
                 <exclude>META-INF/*.DSA</exclude>
                 <exclude>META-INF/*.RSA</exclude>
                 <exclude>META-INF/LICENSE*</exclude>
                 <exclude>META-INF/NOTICE*</exclude>
+                <exclude>OSGI-INF/</exclude>
                 <exclude>LICENSE*</exclude>
                 <exclude>NOTICE*</exclude>
                 <exclude>*.proto</exclude>

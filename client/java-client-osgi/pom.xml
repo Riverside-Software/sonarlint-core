@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.7.99001</version>
+    <version>10.11.99001</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-java-client-osgi</artifactId>
@@ -14,12 +14,12 @@
   <dependencies>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>sonarlint-java-client-dependencies</artifactId>
+      <artifactId>sonarlint-commons</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
-      <artifactId>sonarlint-java-client-legacy</artifactId>
+      <artifactId>sonarlint-java-client-dependencies</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>
@@ -41,6 +41,23 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>empty-javadoc-jar</id>
+            <phase>package</phase>
+            <goals>
+              <goal>jar</goal>
+            </goals>
+            <configuration>
+              <classifier>javadoc</classifier>
+              <classesDirectory>${basedir}/javadoc</classesDirectory>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
@@ -121,7 +138,7 @@
           <!-- The dependencies we actually want to be shaded, without transitive ones! -->
           <artifactSet>
             <includes>
-              <include>${project.groupId}:sonarlint-java-client-legacy</include>
+              <include>${project.groupId}:sonarlint-commons</include>
               <include>${project.groupId}:sonarlint-java-client-dependencies</include>
               <include>${project.groupId}:sonarlint-java-client-utils</include>
               <include>${project.groupId}:sonarlint-rpc-java-client</include>
@@ -137,6 +154,8 @@
               <includes>
                 <include>com.google.gson.**</include>
                 <include>org.eclipse.lsp4j.**</include>
+                <include>org.eclipse.jgit.**</include>
+                <include>org.slf4j.**</include>
               </includes>
             </relocation>
           </relocations>
@@ -147,6 +166,8 @@
               <artifact>*:*</artifact>
               <excludes>
                 <exclude>module-info.class</exclude>
+                <exclude>logback-shared.xml</exclude>
+                <exclude>sl_core_version.txt</exclude>
                 <exclude>META-INF/*.SF</exclude>
                 <exclude>META-INF/*.DSA</exclude>
                 <exclude>META-INF/*.RSA</exclude>

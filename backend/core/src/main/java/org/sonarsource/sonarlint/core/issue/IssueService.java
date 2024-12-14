@@ -20,6 +20,8 @@
 package org.sonarsource.sonarlint.core.issue;
 
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,9 @@ import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.sonarsource.sonarlint.core.ServerApiProvider;
 import org.sonarsource.sonarlint.core.commons.Binding;
+import org.sonarsource.sonarlint.core.commons.ImpactSeverity;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
+import org.sonarsource.sonarlint.core.commons.NewCodeDefinition;
 import org.sonarsource.sonarlint.core.commons.Transition;
 import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
@@ -44,15 +48,26 @@ import org.sonarsource.sonarlint.core.event.ServerIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.event.SonarServerEventReceivedEvent;
 import org.sonarsource.sonarlint.core.local.only.LocalOnlyIssueStorageService;
 import org.sonarsource.sonarlint.core.local.only.XodusLocalOnlyIssueStore;
+import org.sonarsource.sonarlint.core.mode.SeverityModeService;
+import org.sonarsource.sonarlint.core.newcode.NewCodeService;
 import org.sonarsource.sonarlint.core.reporting.FindingReportingService;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcErrorCode;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.CheckStatusChangePermittedResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.EffectiveIssueDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.ReopenAllIssuesForFileParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.ResolutionStatus;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.ImpactDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
+import org.sonarsource.sonarlint.core.rules.RuleDetails;
+import org.sonarsource.sonarlint.core.rules.RuleDetailsAdapter;
+import org.sonarsource.sonarlint.core.rules.RuleNotFoundException;
+import org.sonarsource.sonarlint.core.rules.RulesService;
 import org.sonarsource.sonarlint.core.serverapi.ServerApi;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Issues;
 import org.sonarsource.sonarlint.core.serverapi.push.IssueChangedEvent;
@@ -60,6 +75,7 @@ import org.sonarsource.sonarlint.core.serverconnection.ServerInfoSynchronizer;
 import org.sonarsource.sonarlint.core.serverconnection.storage.ProjectServerIssueStore;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
+import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
@@ -68,7 +84,7 @@ import org.springframework.context.event.EventListener;
 public class IssueService {
 
   private static final String STATUS_CHANGE_PERMISSION_MISSING_REASON = "Marking an issue as resolved requires the 'Administer Issues' permission";
-  private static final String UNSUPPORTED_SQ_VERSION_REASON = "Marking a local-only issue as resolved requires SonarQube 10.2+";
+  private static final String UNSUPPORTED_SQ_VERSION_REASON = "Marking a local-only issue as resolved requires SonarQube Server 10.2+";
   private static final Version SQ_ANTICIPATED_TRANSITIONS_MIN_VERSION = Version.create("10.2");
 
   /**
@@ -90,10 +106,15 @@ public class IssueService {
   private final LocalOnlyIssueRepository localOnlyIssueRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final FindingReportingService findingReportingService;
+  private final SeverityModeService severityModeService;
+  private final NewCodeService newCodeService;
+  private final RulesService rulesService;
+  private final TaintVulnerabilityTrackingService taintVulnerabilityTrackingService;
 
   public IssueService(ConfigurationRepository configurationRepository, ServerApiProvider serverApiProvider, StorageService storageService,
     LocalOnlyIssueStorageService localOnlyIssueStorageService, LocalOnlyIssueRepository localOnlyIssueRepository,
-    ApplicationEventPublisher eventPublisher, FindingReportingService findingReportingService) {
+    ApplicationEventPublisher eventPublisher, FindingReportingService findingReportingService, SeverityModeService severityModeService,
+    NewCodeService newCodeService, RulesService rulesService, TaintVulnerabilityTrackingService taintVulnerabilityTrackingService) {
     this.configurationRepository = configurationRepository;
     this.serverApiProvider = serverApiProvider;
     this.storageService = storageService;
@@ -101,6 +122,10 @@ public class IssueService {
     this.localOnlyIssueRepository = localOnlyIssueRepository;
     this.eventPublisher = eventPublisher;
     this.findingReportingService = findingReportingService;
+    this.severityModeService = severityModeService;
+    this.newCodeService = newCodeService;
+    this.rulesService = rulesService;
+    this.taintVulnerabilityTrackingService = taintVulnerabilityTrackingService;
   }
 
   public void changeStatus(String configurationScopeId, String issueKey, ResolutionStatus newStatus, boolean isTaintIssue, SonarLintCancelMonitor cancelMonitor) {
@@ -323,6 +348,51 @@ public class IssueService {
     return localOnlyIssueStorageService.get().removeIssue(issueUuid);
   }
 
+  public EffectiveIssueDetailsDto getEffectiveIssueDetails(String configurationScopeId, UUID findingId, SonarLintCancelMonitor cancelMonitor)
+    throws IssueNotFoundException, RuleNotFoundException {
+    var effectiveBinding = configurationRepository.getEffectiveBinding(configurationScopeId);
+    String connectionId = null;
+    if (effectiveBinding.isPresent()) {
+      connectionId = effectiveBinding.get().getConnectionId();
+    }
+    var isMQRMode = severityModeService.isMQRModeForConnection(connectionId);
+    var newCodeDefinition = newCodeService.getFullNewCodeDefinition(configurationScopeId).orElseGet(NewCodeDefinition::withAlwaysNew);
+    var maybeIssue = findingReportingService.findReportedIssue(findingId, newCodeDefinition, isMQRMode);
+    var maybeHotspot = findingReportingService.findReportedHotspot(findingId, newCodeDefinition, isMQRMode);
+    var maybeTaint = taintVulnerabilityTrackingService.getTaintVulnerability(configurationScopeId, findingId, cancelMonitor);
+
+    if (maybeIssue != null) {
+      return getFindingDetails(maybeIssue, configurationScopeId, cancelMonitor);
+    } else if (maybeHotspot != null) {
+      return getFindingDetails(maybeHotspot, configurationScopeId, cancelMonitor);
+    } else if (maybeTaint.isPresent()) {
+      return getTaintDetails(maybeTaint.get(), configurationScopeId, cancelMonitor);
+    }
+    throw new IssueNotFoundException("Failed to retrieve finding details. Finding with key '"
+      + findingId + "' not found.", findingId);
+  }
+
+  private EffectiveIssueDetailsDto getFindingDetails(RaisedFindingDto finding, String configurationScopeId, SonarLintCancelMonitor cancelMonitor) throws RuleNotFoundException {
+    var ruleKey = finding.getRuleKey();
+    var ruleDetails = rulesService.getRuleDetails(configurationScopeId, ruleKey, cancelMonitor);
+    var ruleDetailsEnrichedWithActualIssueSeverity = RuleDetails.merging(ruleDetails, finding);
+    var effectiveRuleDetails = RuleDetailsAdapter.transform(ruleDetailsEnrichedWithActualIssueSeverity, finding.getRuleDescriptionContextKey());
+    return new EffectiveIssueDetailsDto(ruleKey, effectiveRuleDetails.getName(), effectiveRuleDetails.getLanguage(),
+      // users cannot customize vulnerability probability
+      effectiveRuleDetails.getVulnerabilityProbability(),
+      effectiveRuleDetails.getDescription(), effectiveRuleDetails.getParams(), finding.getSeverityMode(), finding.getRuleDescriptionContextKey());
+  }
+
+  private EffectiveIssueDetailsDto getTaintDetails(TaintVulnerabilityDto finding, String configurationScopeId, SonarLintCancelMonitor cancelMonitor) throws RuleNotFoundException {
+    var ruleKey = finding.getRuleKey();
+    var ruleDetails = rulesService.getRuleDetails(configurationScopeId, ruleKey, cancelMonitor);
+    var ruleDetailsEnrichedWithActualIssueSeverity = RuleDetails.merging(ruleDetails, finding);
+    var effectiveRuleDetails = RuleDetailsAdapter.transform(ruleDetailsEnrichedWithActualIssueSeverity, finding.getRuleDescriptionContextKey());
+    return new EffectiveIssueDetailsDto(ruleKey, effectiveRuleDetails.getName(), effectiveRuleDetails.getLanguage(),
+      effectiveRuleDetails.getVulnerabilityProbability(),
+      effectiveRuleDetails.getDescription(), effectiveRuleDetails.getParams(), finding.getSeverityMode(), finding.getRuleDescriptionContextKey());
+  }
+
   @EventListener
   public void onServerEventReceived(SonarServerEventReceivedEvent eventReceived) {
     var connectionId = eventReceived.getConnectionId();
@@ -338,29 +408,60 @@ public class IssueService {
   }
 
   private void republishPreviouslyRaisedIssues(String connectionId, IssueChangedEvent event) {
+    var isMQRMode = severityModeService.isMQRModeForConnection(connectionId);
     var boundScopes = configurationRepository.getBoundScopesToConnectionAndSonarProject(connectionId, event.getProjectKey());
     boundScopes.forEach(scope -> {
       var scopeId = scope.getConfigScopeId();
-      findingReportingService.updateAndReportIssues(scopeId, previouslyRaisedIssue -> raisedIssueUpdater(previouslyRaisedIssue, event));
+      findingReportingService.updateAndReportIssues(scopeId, previouslyRaisedIssue -> raisedIssueUpdater(previouslyRaisedIssue, isMQRMode, event));
     });
   }
 
-  public static RaisedIssueDto raisedIssueUpdater(RaisedIssueDto previouslyRaisedIssue, IssueChangedEvent event) {
+  public static RaisedIssueDto raisedIssueUpdater(RaisedIssueDto previouslyRaisedIssue, boolean isMQRMode, IssueChangedEvent event) {
+    var updatedIssue = previouslyRaisedIssue;
     var resolved = event.getResolved();
     var userSeverity = event.getUserSeverity();
     var userType = event.getUserType();
-    var impactedIssueKeys = Set.copyOf(event.getImpactedIssueKeys());
+    var impactedIssueKeys = event.getImpactedIssues().stream().map(IssueChangedEvent.Issue::getIssueKey).collect(Collectors.toSet());
     if (resolved != null) {
       UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withResolution(resolved).buildIssue();
-      return updateIssue(previouslyRaisedIssue, impactedIssueKeys, issueUpdater);
-    } else if (userSeverity != null) {
-      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withSeverity(IssueSeverity.valueOf(userSeverity.name())).buildIssue();
-      return updateIssue(previouslyRaisedIssue, impactedIssueKeys, issueUpdater);
-    } else if (userType != null) {
-      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withType(RuleType.valueOf(userType.name())).buildIssue();
-      return updateIssue(previouslyRaisedIssue, impactedIssueKeys, issueUpdater);
+      updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
     }
-    return previouslyRaisedIssue;
+    if (userSeverity != null) {
+      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withSeverity(IssueSeverity.valueOf(userSeverity.name())).buildIssue();
+      updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+    }
+    if (userType != null) {
+      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withType(RuleType.valueOf(userType.name())).buildIssue();
+      updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+    }
+    for (var issue : event.getImpactedIssues()) {
+      if (!issue.getImpacts().isEmpty() && isMQRMode) {
+        var impacts = issue.getImpacts().entrySet().stream()
+          .map(impact ->
+            new ImpactDto(
+              SoftwareQuality.valueOf(impact.getKey().name()),
+              org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.valueOf(impact.getValue().name())
+            )
+          ).collect(Collectors.toList());
+        UnaryOperator<RaisedIssueDto> issueUpdater =
+          it -> it.builder().withMQRModeDetails(
+            it.getCleanCodeAttribute(),
+            mergeImpacts(it.getSeverityMode().getRight().getImpacts(), impacts)
+          ).buildIssue();
+        updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+      }
+
+    }
+    return updatedIssue;
+  }
+
+  private static List<ImpactDto> mergeImpacts(List<ImpactDto> currentImpacts, List<ImpactDto> overriddenImpacts) {
+    for (var impact : overriddenImpacts) {
+      currentImpacts.removeIf(i -> i.getSoftwareQuality().equals(impact.getSoftwareQuality()));
+      currentImpacts.add(new ImpactDto(impact.getSoftwareQuality(), impact.getImpactSeverity()));
+    }
+
+    return currentImpacts;
   }
 
   private static RaisedIssueDto updateIssue(RaisedIssueDto issue, Set<String> impactedIssueKeys, UnaryOperator<RaisedIssueDto> issueUpdater) {
@@ -373,20 +474,41 @@ public class IssueService {
 
   private void updateProjectIssueStorage(String connectionId, IssueChangedEvent event) {
     var findingsStorage = storageService.connection(connectionId).project(event.getProjectKey()).findings();
-    event.getImpactedIssueKeys().forEach(issueKey -> findingsStorage.updateIssue(issueKey, issue -> {
+    event.getImpactedIssues().forEach(issue -> findingsStorage.updateIssue(issue.getIssueKey(), storedIssue -> {
       var userSeverity = event.getUserSeverity();
       if (userSeverity != null) {
-        issue.setUserSeverity(userSeverity);
+        storedIssue.setUserSeverity(userSeverity);
       }
       var userType = event.getUserType();
       if (userType != null) {
-        issue.setType(userType);
+        storedIssue.setType(userType);
       }
       var resolved = event.getResolved();
       if (resolved != null) {
-        issue.setResolved(resolved);
+        storedIssue.setResolved(resolved);
+      }
+      var impacts = issue.getImpacts();
+      if (!impacts.isEmpty()) {
+        storedIssue.setImpacts(mergeImpacts(storedIssue.getImpacts(), impacts));
       }
     }));
+  }
+
+  private static Map<org.sonarsource.sonarlint.core.commons.SoftwareQuality, ImpactSeverity> mergeImpacts(
+    Map<org.sonarsource.sonarlint.core.commons.SoftwareQuality, ImpactSeverity> defaultImpacts,
+    Map<org.sonarsource.sonarlint.core.commons.SoftwareQuality, ImpactSeverity> overriddenImpacts) {
+    var mergedImpacts = new EnumMap<org.sonarsource.sonarlint.core.commons.SoftwareQuality, ImpactSeverity>(org.sonarsource.sonarlint.core.commons.SoftwareQuality.class);
+    if (!defaultImpacts.isEmpty()) {
+      mergedImpacts = new EnumMap<>(defaultImpacts);
+    }
+
+    for (var entry : overriddenImpacts.entrySet()) {
+      var quality = org.sonarsource.sonarlint.core.commons.SoftwareQuality.valueOf(entry.getKey().name());
+      var severity = ImpactSeverity.mapSeverity(entry.getValue().name());
+      mergedImpacts.put(quality, severity);
+    }
+
+    return Collections.unmodifiableMap(mergedImpacts);
   }
 
   private static Optional<UUID> asUUID(String key) {

@@ -22,9 +22,10 @@ package org.sonarsource.sonarlint.core.serverconnection.storage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
+import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
-import org.sonarsource.sonarlint.core.serverapi.system.ServerInfo;
+import org.sonarsource.sonarlint.core.serverapi.system.ServerStatusInfo;
 import org.sonarsource.sonarlint.core.serverconnection.FileUtils;
 import org.sonarsource.sonarlint.core.serverconnection.StoredServerInfo;
 import org.sonarsource.sonarlint.core.serverconnection.proto.Sonarlint;
@@ -32,8 +33,8 @@ import org.sonarsource.sonarlint.core.serverconnection.proto.Sonarlint;
 import static org.sonarsource.sonarlint.core.serverconnection.storage.ProtobufFileUtil.writeToFile;
 
 public class ServerInfoStorage {
-  private static final SonarLintLogger LOG = SonarLintLogger.get();
   public static final String SERVER_INFO_PB = "server_info.pb";
+  private static final SonarLintLogger LOG = SonarLintLogger.get();
 
   private final Path storageFilePath;
   private final RWLock rwLock = new RWLock();
@@ -42,23 +43,33 @@ public class ServerInfoStorage {
     this.storageFilePath = rootPath.resolve(SERVER_INFO_PB);
   }
 
-  public void store(ServerInfo serverInfo) {
+  public void store(ServerStatusInfo serverStatus, @Nullable Boolean isMQRMode) {
     FileUtils.mkdirs(storageFilePath.getParent());
-    var serverInfoToStore = adapt(serverInfo);
+    var serverInfoToStore = adapt(serverStatus, isMQRMode);
     LOG.debug("Storing server info in {}", storageFilePath);
     rwLock.write(() -> writeToFile(serverInfoToStore, storageFilePath));
     LOG.debug("Stored server info");
   }
 
   public Optional<StoredServerInfo> read() {
-    return rwLock.read(() -> Files.exists(storageFilePath) ? Optional.of(adapt(ProtobufFileUtil.readFile(storageFilePath, Sonarlint.ServerInfo.parser()))) : Optional.empty());
+    return rwLock.read(() -> Files.exists(storageFilePath) ? Optional.of(adapt(ProtobufFileUtil.readFile(storageFilePath, Sonarlint.ServerInfo.parser())))
+      : Optional.empty());
   }
 
-  private static Sonarlint.ServerInfo adapt(ServerInfo serverInfo) {
-    return Sonarlint.ServerInfo.newBuilder().setVersion(serverInfo.getVersion()).build();
+  private static Sonarlint.ServerInfo adapt(ServerStatusInfo serverStatus, @Nullable Boolean isMQRMode) {
+    var serverInfoBuilder = Sonarlint.ServerInfo.newBuilder().setVersion(serverStatus.getVersion());
+    if (isMQRMode != null) {
+      serverInfoBuilder.setIsMqrMode(isMQRMode);
+    }
+    return serverInfoBuilder.build();
   }
 
   private static StoredServerInfo adapt(Sonarlint.ServerInfo serverInfo) {
-    return new StoredServerInfo(Version.create(serverInfo.getVersion()));
+    if (serverInfo.hasIsMqrMode()) {
+      return new StoredServerInfo(Version.create(serverInfo.getVersion()), serverInfo.getIsMqrMode());
+    } else {
+      return new StoredServerInfo(Version.create(serverInfo.getVersion()), null);
+    }
   }
+
 }

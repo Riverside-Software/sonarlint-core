@@ -31,6 +31,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisC
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.ConfigurationScopeDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddConfigurationScopesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 
 import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,28 +83,6 @@ class RulesInConnectedModeMediumTests {
   }
 
   @Test
-  void secrets_rules_should_always_be_active_with_legacy_sonarqube() throws Exception {
-    backend = newBackend()
-      .withEnabledLanguageInStandaloneMode(org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA)
-      .withEnabledLanguageInStandaloneMode(org.sonarsource.sonarlint.core.rpc.protocol.common.Language.SECRETS)
-      .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
-      .withSonarQubeConnection(CONNECTION_ID)
-      .withStorage(CONNECTION_ID, s -> s
-        .withPlugins(TestPlugin.JAVA)
-        .withServerVersion("9.8")
-        .withProject(JAVA_MODULE_KEY))
-      .build();
-
-    backend.getConfigurationService().didAddConfigurationScopes(
-      new DidAddConfigurationScopesParams(List.of(new ConfigurationScopeDto(CONFIG_SCOPE_ID, null, true, "My project",
-        new BindingConfigurationDto(CONNECTION_ID, JAVA_MODULE_KEY, true)))));
-
-    var activeRules = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).get().getActiveRules();
-    assertThat(activeRules).extracting(ActiveRuleDto::getRuleKey, ActiveRuleDto::getLanguageKey).contains(
-      tuple("secrets:S6292", "secrets"));
-  }
-
-  @Test
   void hotspot_rules_should_be_active_when_feature_flag_is_enabled() throws Exception {
     backend = newBackend()
       .withSecurityHotspotsEnabled()
@@ -132,6 +111,23 @@ class RulesInConnectedModeMediumTests {
     var activeRules = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).get().getActiveRules();
 
     assertThat(activeRules).isEmpty();
+  }
+
+  @Test
+  void should_use_ipython_standalone_active_rules_in_connected_mode() throws Exception {
+    backend = newBackend()
+      .withStandaloneEmbeddedPlugin(TestPlugin.PYTHON)
+      .withEnabledLanguageInStandaloneMode(Language.IPYTHON)
+      .withSonarQubeConnection(CONNECTION_ID,
+        storage -> storage.withServerVersion("9.9").withProject(JAVA_MODULE_KEY, project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule("java:S4792", "INFO"))))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, JAVA_MODULE_KEY)
+      .build();
+
+    var activeRules = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).get().getActiveRules();
+
+    assertThat(activeRules)
+      .extracting(ActiveRuleDto::getRuleKey)
+      .contains("ipython:PrintStatementUsage");
   }
 
 }

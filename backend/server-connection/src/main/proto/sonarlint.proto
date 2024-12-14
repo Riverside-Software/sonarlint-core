@@ -28,6 +28,7 @@ option optimize_for = SPEED;
 
 message ServerInfo {
   string version = 1;
+  optional bool isMqrMode = 2;
 }
 
 message PluginReferences {
@@ -59,6 +60,7 @@ message RuleSet {
     string severity = 2;
     string template_key = 3;
     map<string, string> params = 4;
+    repeated Impact overriddenImpacts = 5;
   }
 }
 

@@ -22,6 +22,7 @@ package mediumtest.synchronization;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import javax.annotation.Nullable;
 import mediumtest.fixtures.SonarLintTestRpcServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -58,8 +59,62 @@ class ServerInfoSynchronizationMediumTests {
 
     waitAtMost(3, SECONDS).untilAsserted(() -> assertThat(getServerInfoFile())
       .exists()
-      .extracting(this::readServerVersion)
-      .isEqualTo("10.3"));
+      .extracting(this::readServerVersion, this::readServerMode)
+      .containsExactly("10.3", null));
+  }
+
+  @Test
+  void it_should_pull_old_server_info_and_mode_should_be_missing() {
+    var server = newSonarQubeServer("10.1")
+      .withProject("projectKey", project -> project.withBranch("main"))
+      .start();
+    backend = newBackend()
+      .withEnabledLanguageInStandaloneMode(Language.JAVA)
+      .withSonarQubeConnection("connectionId", server)
+      .withFullSynchronization()
+      .build();
+
+    addConfigurationScope("configScopeId", "connectionId", "projectKey");
+
+    waitAtMost(3, SECONDS).untilAsserted(() -> assertThat(getServerInfoFile())
+      .exists()
+      .extracting(this::readServerVersion, this::readServerMode)
+      .containsExactly("10.1", null));
+  }
+
+  @Test
+  void it_should_synchronize_with_sonarcloud_and_mode_should_be_missing() {
+    backend = newBackend()
+      .withEnabledLanguageInStandaloneMode(Language.JAVA)
+      .withSonarCloudConnection("connectionId", "test")
+      .withFullSynchronization()
+      .build();
+
+    addConfigurationScope("configScopeId", "connectionId", "projectKey");
+
+    waitAtMost(3, SECONDS).untilAsserted(() -> assertThat(getServerInfoFile())
+      .exists()
+      .extracting(this::readServerMode)
+      .isNull());
+  }
+
+  @Test
+  void it_should_synchronize_with_recent_sonarqube_and_return_mode() {
+    var server = newSonarQubeServer("10.8")
+      .withProject("projectKey", project -> project.withBranch("main"))
+      .start();
+    backend = newBackend()
+      .withEnabledLanguageInStandaloneMode(Language.JAVA)
+      .withSonarQubeConnection("connectionId", server)
+      .withFullSynchronization()
+      .build();
+
+    addConfigurationScope("configScopeId", "connectionId", "projectKey");
+
+    waitAtMost(3, SECONDS).untilAsserted(() -> assertThat(getServerInfoFile())
+      .exists()
+      .extracting(this::readServerMode)
+      .isEqualTo(true));
   }
 
   @Test
@@ -114,6 +169,12 @@ class ServerInfoSynchronizationMediumTests {
 
   private String readServerVersion(Path protoFilePath) {
     return ProtobufFileUtil.readFile(protoFilePath, Sonarlint.ServerInfo.parser()).getVersion();
+  }
+
+  @Nullable
+  private Boolean readServerMode(Path protoFilePath) {
+    var serverInfo = ProtobufFileUtil.readFile(protoFilePath, Sonarlint.ServerInfo.parser());
+    return serverInfo.hasIsMqrMode() ? serverInfo.getIsMqrMode() : null;
   }
 
   @AfterEach

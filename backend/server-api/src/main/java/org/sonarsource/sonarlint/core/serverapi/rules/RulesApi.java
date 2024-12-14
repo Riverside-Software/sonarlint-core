@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.sonarsource.sonarlint.core.commons.CleanCodeAttribute;
 import org.sonarsource.sonarlint.core.commons.ImpactSeverity;
 import org.sonarsource.sonarlint.core.commons.IssueSeverity;
@@ -40,6 +41,7 @@ import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 import org.sonarsource.sonarlint.core.serverapi.UrlUtils;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Rules;
+import org.sonarsource.sonarlint.core.serverapi.push.parsing.common.ImpactPayload;
 
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
@@ -75,7 +77,7 @@ public class RulesApi {
       var cleanCodeAttribute = Enums.getIfPresent(CleanCodeAttribute.class, rule.getCleanCodeAttribute().name()).orNull();
       var impacts = rule.getImpacts().getImpactsList().stream().collect(toMap(
         impact -> SoftwareQuality.valueOf(impact.getSoftwareQuality().name()),
-        impact -> ImpactSeverity.valueOf(impact.getSeverity().name())));
+        impact -> ImpactSeverity.mapSeverity(impact.getSeverity().name())));
       return Optional.of(new ServerRule(rule.getName(), IssueSeverity.valueOf(rule.getSeverity()), RuleType.valueOf(rule.getType().name()), rule.getLang(), rule.getHtmlDesc(),
         convertDescriptionSections(rule),
         rule.getHtmlNote(), Set.copyOf(rule.getEducationPrinciples().getEducationPrinciplesList()), cleanCodeAttribute, impacts));
@@ -119,7 +121,10 @@ public class RulesApi {
           ruleKey,
           IssueSeverity.valueOf(ar.getSeverity()),
           ar.getParamsList().stream().collect(toMap(Rules.Active.Param::getKey, Rules.Active.Param::getValue)),
-          ruleTemplatesByRuleKey.get(ruleKey)));
+          ruleTemplatesByRuleKey.get(ruleKey),
+          ar.getImpacts().getImpactsList().stream()
+            .map(impact -> new ImpactPayload(impact.getSoftwareQuality().toString(), ImpactSeverity.mapSeverity(impact.getSeverity().name()).name()))
+            .collect(Collectors.toList())));
 
       },
       false,

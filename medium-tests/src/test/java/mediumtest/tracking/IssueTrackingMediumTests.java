@@ -746,12 +746,11 @@ class IssueTrackingMediumTests {
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
     backend = newBackend()
-      .withSonarCloudConnection(connectionId, orgKey, true,
-        storage -> storage.withPlugin(TestPlugin.XML))
+      .withSonarCloudConnection(connectionId, orgKey, true, storage -> {})
       .withFullSynchronization()
       .withSonarCloudUrl(server.baseUrl())
       .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
       .build(client);
 
     backend.getConfigurationService().didUpdateBinding(new DidUpdateBindingParams(CONFIG_SCOPE_ID,
@@ -795,13 +794,13 @@ class IssueTrackingMediumTests {
     var firstRaisedIntermediateIssuesByFile = allRaisedIntermediateIssuesByFile.get(0);
     assertThat(firstRaisedIntermediateIssuesByFile).containsOnlyKeys(fileUri);
     assertThat(firstRaisedIntermediateIssuesByFile.get(fileUri))
-      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode)
-      .containsExactly(tuple("Issue 1", introductionDate, true));
+      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode, f -> f.getSeverityMode().isRight())
+      .containsExactly(tuple("Issue 1", introductionDate, true, true));
     var secondRaisedIntermediateIssuesByFile = allRaisedIntermediateIssuesByFile.get(1);
     assertThat(secondRaisedIntermediateIssuesByFile).containsOnlyKeys(fileUri);
     assertThat(secondRaisedIntermediateIssuesByFile.get(fileUri))
-      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode)
-      .containsExactly(tuple("Issue 1", introductionDate, true), tuple("Issue 2", commitDate.toInstant(), true));
+      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode, f -> f.getSeverityMode().isRight())
+      .containsExactly(tuple("Issue 1", introductionDate, true, true), tuple("Issue 2", commitDate.toInstant(), true, true));
     ArgumentCaptor<Map<URI, List<RaisedIssueDto>>> finalIssuesByFileArgumentCaptor = ArgumentCaptor.forClass(Map.class);
     verify(client).raiseIssues(eq(CONFIG_SCOPE_ID), finalIssuesByFileArgumentCaptor.capture(), eq(false), any());
     var finalIssuesByFile = finalIssuesByFileArgumentCaptor.getValue();
@@ -839,13 +838,13 @@ class IssueTrackingMediumTests {
     var firstRaisedIntermediateIssuesByFile = allRaisedIntermediateIssuesByFile.get(0);
     assertThat(firstRaisedIntermediateIssuesByFile).containsOnlyKeys(fileUri);
     assertThat(firstRaisedIntermediateIssuesByFile.get(fileUri))
-      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode)
-      .containsExactly(tuple("Issue 1", introductionDate, true));
+      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode, f -> f.getSeverityMode().isRight())
+      .containsExactly(tuple("Issue 1", introductionDate, true, true));
     var secondRaisedIntermediateIssuesByFile = allRaisedIntermediateIssuesByFile.get(1);
     assertThat(secondRaisedIntermediateIssuesByFile).containsOnlyKeys(fileUri);
     assertThat(secondRaisedIntermediateIssuesByFile.get(fileUri))
-      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode)
-      .containsExactly(tuple("Issue 1", introductionDate, true), tuple("Issue 2", introductionDate, true));
+      .extracting(RaisedIssueDto::getPrimaryMessage, RaisedFindingDto::getIntroductionDate, RaisedFindingDto::isOnNewCode, f -> f.getSeverityMode().isRight())
+      .containsExactly(tuple("Issue 1", introductionDate, true, true), tuple("Issue 2", introductionDate, true, true));
     ArgumentCaptor<Map<URI, List<RaisedIssueDto>>> finalIssuesByFileArgumentCaptor = ArgumentCaptor.forClass(Map.class);
     verify(client).raiseIssues(eq(CONFIG_SCOPE_ID), finalIssuesByFileArgumentCaptor.capture(), eq(false), any());
     var finalIssuesByFile = finalIssuesByFileArgumentCaptor.getValue();

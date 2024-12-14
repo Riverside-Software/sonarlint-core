@@ -24,9 +24,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-import org.sonarsource.sonarlint.core.commons.PluginsMinVersions;
 import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -40,7 +41,6 @@ public class PluginsSynchronizer {
 
   private final Set<String> sonarSourceDisabledPluginKeys;
   private final ConnectionStorage storage;
-  private final PluginsMinVersions pluginsMinVersions = new PluginsMinVersions();
   private Set<String> embeddedPluginKeys;
 
   public PluginsSynchronizer(Set<SonarLanguage> enabledLanguages, ConnectionStorage storage, Set<String> embeddedPluginKeys) {
@@ -49,8 +49,8 @@ public class PluginsSynchronizer {
     this.embeddedPluginKeys = embeddedPluginKeys;
   }
 
-  public PluginSynchronizationSummary synchronize(ServerApi serverApi, boolean supportsCustomSecrets, SonarLintCancelMonitor cancelMonitor) {
-    if (supportsCustomSecrets) {
+  public PluginSynchronizationSummary synchronize(ServerApi serverApi, boolean useSecretsFromServer, SonarLintCancelMonitor cancelMonitor) {
+    if (useSecretsFromServer) {
       var embeddedPluginKeysCopy = new HashSet<>(embeddedPluginKeys);
       embeddedPluginKeysCopy.remove(SonarLanguage.SECRETS.getPluginKey());
       embeddedPluginKeys = embeddedPluginKeysCopy;
@@ -58,15 +58,25 @@ public class PluginsSynchronizer {
 
     var storedPluginsByKey = storage.plugins().getStoredPluginsByKey();
     var serverPlugins = serverApi.plugins().getInstalled(cancelMonitor);
-    var pluginsToDownload = serverPlugins.stream()
-      .filter(p -> shouldDownload(p, storedPluginsByKey))
+    var downloadSkipReasonByServerPlugin = serverPlugins.stream()
+      .collect(Collectors.toMap(Function.identity(), plugin -> determineIfShouldSkipDownload(plugin, storedPluginsByKey)));
+
+    var pluginsToDownload = downloadSkipReasonByServerPlugin.entrySet().stream()
+      .filter(entry -> entry.getValue().isEmpty())
+      .map(Map.Entry::getKey)
+      .collect(Collectors.toList());
+    var serverPluginsExpectedInStorage = downloadSkipReasonByServerPlugin.entrySet().stream()
+      .filter(entry -> entry.getValue().isEmpty() || entry.getValue().get().equals(DownloadSkipReason.UP_TO_DATE))
+      .map(Map.Entry::getKey)
       .collect(Collectors.toList());
 
     if (pluginsToDownload.isEmpty()) {
       storage.plugins().storeNoPlugins();
+      storage.plugins().cleanUpUnknownPlugins(serverPluginsExpectedInStorage);
       return new PluginSynchronizationSummary(false);
     }
     downloadAll(serverApi, pluginsToDownload, cancelMonitor);
+    storage.plugins().cleanUpUnknownPlugins(serverPluginsExpectedInStorage);
     return new PluginSynchronizationSummary(true);
   }
 
@@ -81,31 +91,24 @@ public class PluginsSynchronizer {
     serverApi.plugins().getPlugin(plugin.getKey(), pluginBinary -> storage.plugins().store(plugin, pluginBinary), cancelMonitor);
   }
 
-  private boolean shouldDownload(ServerPlugin serverPlugin, Map<String, StoredPlugin> storedPluginsByKey) {
+  private Optional<DownloadSkipReason> determineIfShouldSkipDownload(ServerPlugin serverPlugin, Map<String, StoredPlugin> storedPluginsByKey) {
     if (embeddedPluginKeys.contains(serverPlugin.getKey())) {
       LOG.debug("[SYNC] Code analyzer '{}' is embedded in SonarLint. Skip downloading it.", serverPlugin.getKey());
-      return false;
+      return Optional.of(DownloadSkipReason.EMBEDDED);
     }
     if (upToDate(serverPlugin, storedPluginsByKey)) {
       LOG.debug("[SYNC] Code analyzer '{}' is up-to-date. Skip downloading it.", serverPlugin.getKey());
-      return false;
+      return Optional.of(DownloadSkipReason.UP_TO_DATE);
     }
     if (!serverPlugin.isSonarLintSupported()) {
       LOG.debug("[SYNC] Code analyzer '{}' does not support SonarLint. Skip downloading it.", serverPlugin.getKey());
-      return false;
+      return Optional.of(DownloadSkipReason.NOT_SONARLINT_SUPPORTED);
     }
     if (sonarSourceDisabledPluginKeys.contains(serverPlugin.getKey())) {
       LOG.debug("[SYNC] Code analyzer '{}' is disabled in SonarLint (language not enabled). Skip downloading it.", serverPlugin.getKey());
-      return false;
+      return Optional.of(DownloadSkipReason.LANGUAGE_NOT_ENABLED);
     }
-    var pluginVersion = VersionUtils.getJarVersion(serverPlugin.getFilename());
-    if (!pluginsMinVersions.isVersionSupported(serverPlugin.getKey(), pluginVersion)) {
-      var minimumVersion = pluginsMinVersions.getMinimumVersion(serverPlugin.getKey());
-      LOG.debug("[SYNC] Code analyzer '{}' version '{}' is not supported (minimal version is '{}'). Skip downloading it.",
-        serverPlugin.getKey(), pluginVersion, minimumVersion);
-      return false;
-    }
-    return true;
+    return Optional.empty();
   }
 
   private static boolean upToDate(ServerPlugin serverPlugin, Map<String, StoredPlugin> storedPluginsByKey) {
@@ -126,5 +129,9 @@ public class PluginsSynchronizer {
       disabledPluginKeys.add(OLD_SONARTS_PLUGIN_KEY);
     }
     return disabledPluginKeys;
+  }
+
+  private enum DownloadSkipReason {
+    EMBEDDED, UP_TO_DATE, NOT_SONARLINT_SUPPORTED, LANGUAGE_NOT_ENABLED
   }
 }

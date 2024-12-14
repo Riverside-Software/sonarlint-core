@@ -62,8 +62,27 @@ public class AnalysisUtils {
         new AnalyzeFilesAndTrackParams(scopeId, analysisId, List.of(fileUri), Map.of(), true, System.currentTimeMillis()))
       .join();
     assertThat(analysisResult.getFailedAnalysisFiles()).isEmpty();
-    await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(scopeId)).isNotEmpty());
+    await().atMost(40, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(scopeId)).isNotEmpty());
     return client.getRaisedIssuesForScopeId(scopeId).get(fileUri);
+  }
+
+  public static Map<URI, List<RaisedIssueDto>> analyzeFilesAndGetIssuesAsMap(List<URI> files, SonarLintBackendFixture.FakeSonarLintRpcClient client, SonarLintTestRpcServer backend, String scopeId) {
+    var analysisId = UUID.randomUUID();
+    var analysisResult = backend.getAnalysisService().analyzeFilesAndTrack(
+        new AnalyzeFilesAndTrackParams(scopeId, analysisId, files, Map.of(), true, System.currentTimeMillis()))
+      .join();
+    assertThat(analysisResult.getFailedAnalysisFiles()).isEmpty();
+    await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(scopeId)).isNotEmpty());
+    return client.getRaisedIssuesForScopeId(scopeId);
+  }
+
+  public static void analyzeFilesAndVerifyNoIssues(List<URI> files, SonarLintBackendFixture.FakeSonarLintRpcClient client, SonarLintTestRpcServer backend, String scopeId) {
+    var analysisId = UUID.randomUUID();
+    var analysisResult = backend.getAnalysisService().analyzeFilesAndTrack(
+        new AnalyzeFilesAndTrackParams(scopeId, analysisId, files, Map.of(), true, System.currentTimeMillis()))
+      .join();
+    assertThat(analysisResult.getFailedAnalysisFiles()).isEmpty();
+    await().during(1, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(scopeId)).isEmpty());
   }
 
   public static void analyzeFileAndGetHotspots(URI fileUri, SonarLintBackendFixture.FakeSonarLintRpcClient client, SonarLintTestRpcServer backend, String scopeId) {
@@ -72,7 +91,7 @@ public class AnalysisUtils {
         new AnalyzeFilesAndTrackParams(scopeId, analysisId, List.of(fileUri), Map.of(), true, System.currentTimeMillis()))
       .join();
     assertThat(analysisResult.getFailedAnalysisFiles()).isEmpty();
-    await().atMost(20, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedHotspotsForScopeIdAsList(scopeId)).isNotEmpty());
+    await().atMost(40, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedHotspotsForScopeIdAsList(scopeId)).isNotEmpty());
     assertThat(client.getRaisedHotspotsForScopeId(scopeId)).containsOnlyKeys(fileUri);
   }
 

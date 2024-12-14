@@ -19,16 +19,35 @@
  */
 package org.sonarsource.sonarlint.core.serverconnection;
 
+import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.commons.Version;
 
 public class StoredServerInfo {
-  private final Version version;
 
-  public StoredServerInfo(Version version) {
+  private final Version version;
+  private final SeverityModeDetails severityMode;
+
+  public StoredServerInfo(Version version, @Nullable Boolean mode) {
     this.version = version;
+    if (mode == null) {
+      this.severityMode = SeverityModeDetails.DEFAULT;
+    } else if (mode) {
+      this.severityMode = SeverityModeDetails.MQR;
+    } else {
+      this.severityMode = SeverityModeDetails.STANDARD;
+    }
   }
 
   public Version getVersion() {
     return version;
   }
+
+  public SeverityModeDetails getSeverityMode() {
+    return this.severityMode;
+  }
+
+  public enum SeverityModeDetails {
+    DEFAULT, STANDARD, MQR
+  }
+
 }

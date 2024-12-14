@@ -77,7 +77,9 @@ public class PluginsLoader {
 
   private static Set<String> additionalAllowedPlugins(Configuration configuration) {
     var allowedPluginsIds = new HashSet<String>();
+    allowedPluginsIds.add("textdeveloper");
     allowedPluginsIds.add("textenterprise");
+    allowedPluginsIds.add("omnisharp");
     allowedPluginsIds.addAll(maybeDbdAllowedPlugins(configuration.enableDataflowBugDetection));
     return Collections.unmodifiableSet(allowedPluginsIds);
   }

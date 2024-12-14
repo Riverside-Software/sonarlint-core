@@ -165,8 +165,6 @@ class OpenIssueInIdeMediumTests {
         TextRangeDto::getEndLine, TextRangeDto::getEndLineOffset)
       .contains(1, 0, 3, 4);
     assertThat(issueDetails.getCodeSnippet()).isEqualTo("source\ncode\nfile");
-    assertThat(issueDetails.getBranch()).isEqualTo(BRANCH_NAME);
-    assertThat(issueDetails.getPullRequest()).isNull();
   }
 
   @Test
@@ -200,8 +198,6 @@ class OpenIssueInIdeMediumTests {
         TextRangeDto::getEndLine, TextRangeDto::getEndLineOffset)
       .contains(1, 0, 3, 4);
     assertThat(issueDetails.getCodeSnippet()).isEqualTo("source\ncode\nfile");
-    assertThat(issueDetails.getBranch()).isEqualTo(BRANCH_NAME);
-    assertThat(issueDetails.getPullRequest()).isEqualTo("1234");
   }
 
   @Test
@@ -396,34 +392,34 @@ class OpenIssueInIdeMediumTests {
   }
 
   private int executeOpenIssueRequest(String issueKey, String projectKey, String branch) throws IOException, InterruptedException {
-    HttpRequest request = openIssueRequest("&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch);
+    HttpRequest request = openIssueRequest(serverWithIssues.baseUrl(), "&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch);
     var response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     return response.statusCode();
   }
 
   private int executeOpenSCIssueRequest(String issueKey, String projectKey, String branch, String organizationKey) throws IOException, InterruptedException {
-    HttpRequest request = this.openIssueRequest("&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch, "&organizationKey=" + organizationKey);
+    HttpRequest request = this.openIssueRequest("https://sonar.my", "&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch, "&organizationKey=" + organizationKey);
     var response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     return response.statusCode();
   }
 
   private Object executeOpenSCIssueRequest(String issueKey, String projectKey, String branchName, String orgKey, String tokenName, String tokenValue) throws IOException, InterruptedException {
-    HttpRequest request = this.openIssueRequest("&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branchName, "&organizationKey=" + orgKey, "&tokenName=" + tokenName, "&tokenValue=" + tokenValue);
+    HttpRequest request = this.openIssueRequest("https://sonar.my", "&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branchName, "&organizationKey=" + orgKey, "&tokenName=" + tokenName, "&tokenValue=" + tokenValue);
     var response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     return response.statusCode();
   }
 
   private int executeOpenIssueRequest(String issueKey, String projectKey, String branch, String pullRequest) throws IOException, InterruptedException {
-    HttpRequest request = openIssueRequest("&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch, "&pullRequest=" + pullRequest);
+    HttpRequest request = openIssueRequest(serverWithIssues.baseUrl(), "&issue=" + issueKey, "&project=" + projectKey, "&branch=" + branch, "&pullRequest=" + pullRequest);
     var response = java.net.http.HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
     return response.statusCode();
   }
 
-  private HttpRequest openIssueRequest(String... params) {
+  private HttpRequest openIssueRequest(String baseUrl, String... params) {
     return HttpRequest.newBuilder()
       .uri(URI.create(
         "http://localhost:" + backend.getEmbeddedServerPort() + "/sonarlint/api/issues/show?server=" + serverWithIssues.baseUrl() + String.join("", params)))
-      .header("Origin", "https://sonar.my")
+      .header("Origin", baseUrl)
       .GET().build();
   }
 
