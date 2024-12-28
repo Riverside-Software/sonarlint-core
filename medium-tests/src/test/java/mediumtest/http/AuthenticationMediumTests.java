@@ -28,10 +28,10 @@ import mediumtest.fixtures.TestPlugin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcServer;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.EffectiveRuleDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
-import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Common;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Rules;
 
@@ -74,10 +74,12 @@ class AuthenticationMediumTests {
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .build(fakeClient);
+    sonarqubeMock.stubFor(get("/api/system/status")
+      .willReturn(aResponse().withStatus(200).withBody("{\"id\": \"20160308094653\",\"version\": \"10.8\",\"status\": " +
+        "\"UP\"}")));
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
-        .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc(
-          "desc").setHtmlNote("extendedDesc from server").build())
+        .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
     var details = getEffectiveRuleDetails("scopeId", "python:S139");
@@ -89,7 +91,7 @@ class AuthenticationMediumTests {
   }
 
   @Test
-  void it_should_authenticate_preemptively_on_sonarqube_with_token() {
+  void it_should_authenticate_preemptively_on_sonarqube_9_9_with_token_and_basic_scheme() {
     var fakeClient = newFakeClient()
       .withToken("connectionId", "myToken")
       .build();
@@ -102,9 +104,11 @@ class AuthenticationMediumTests {
       .build(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
-        .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc(
-          "desc").setHtmlNote("extendedDesc from server").build())
+        .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
+    sonarqubeMock.stubFor(get("/api/system/status")
+      .willReturn(aResponse().withStatus(200).withBody("{\"id\": \"20160308094653\",\"version\": \"9.9\",\"status\": " +
+        "\"UP\"}")));
 
     var details = getEffectiveRuleDetails("scopeId", "python:S139");
 
@@ -112,6 +116,34 @@ class AuthenticationMediumTests {
 
     sonarqubeMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139"))
       .withHeader("Authorization", equalTo("Basic " + Base64.getEncoder().encodeToString("myToken:".getBytes(StandardCharsets.UTF_8)))));
+  }
+
+  @Test
+  void it_should_authenticate_preemptively_on_sonarqube_10_4_with_token_and_bearer_scheme() {
+    var fakeClient = newFakeClient()
+      .withToken("connectionId", "myToken")
+      .build();
+    backend = newBackend()
+      .withSonarQubeConnection("connectionId", sonarqubeMock.baseUrl(), storage -> storage.withProject("projectKey",
+        projectStorage -> projectStorage.withRuleSet(SonarLanguage.PYTHON.getSonarLanguageKey(),
+          ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
+      .withBoundConfigScope("scopeId", "connectionId", "projectKey")
+      .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
+      .build(fakeClient);
+    sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
+      .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
+        .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
+        .build()))));
+    sonarqubeMock.stubFor(get("/api/system/status")
+      .willReturn(aResponse().withStatus(200).withBody("{\"id\": \"20160308094653\",\"version\": \"10.4\",\"status\": " +
+        "\"UP\"}")));
+
+    var details = getEffectiveRuleDetails("scopeId", "python:S139");
+
+    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+
+    sonarqubeMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139"))
+      .withHeader("Authorization", equalTo("Bearer myToken")));
   }
 
   private EffectiveRuleDetailsDto getEffectiveRuleDetails(String configScopeId, String ruleKey) {

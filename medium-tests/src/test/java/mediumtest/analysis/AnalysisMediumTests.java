@@ -229,8 +229,9 @@ class AnalysisMediumTests {
     var client = newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
+    server = newSonarQubeServer().start();
     backend = newBackend()
-      .withSonarQubeConnection("connectionId",
+      .withSonarQubeConnection("connectionId", server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
@@ -306,7 +307,7 @@ class AnalysisMediumTests {
 
     verify(client).startProgress(refEq(new StartProgressParams(analysisId.toString(), CONFIG_SCOPE_ID, "Analyzing 1 file", null, true, false)));
     var reportProgressCaptor = ArgumentCaptor.forClass(ReportProgressParams.class);
-    verify(client).reportProgress(reportProgressCaptor.capture());
+    verify(client, timeout(500)).reportProgress(reportProgressCaptor.capture());
     assertThat(reportProgressCaptor.getValue())
       .usingRecursiveComparison()
       .isEqualTo(new ReportProgressParams(analysisId.toString(), new ProgressEndNotification()));
@@ -611,6 +612,41 @@ class AnalysisMediumTests {
   }
 
   @Test
+  void should_set_js_internal_bundlePath_if_provided(@TempDir Path baseDir) {
+    var client = newFakeClient().build();
+    backend = newBackend()
+      .withEslintBridgeServerBundlePath(baseDir.resolve("eslint-bridge"))
+      .build(client);
+
+    var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
+
+    assertThat(analysisProperties).containsEntry("sonar.js.internal.bundlePath", baseDir.resolve("eslint-bridge").toString());
+  }
+
+  @Test
+  void should_not_set_js_internal_bundlePath_when_not_provided() {
+    var client = newFakeClient().build();
+    backend = newBackend()
+      .build(client);
+
+    var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
+
+    assertThat(analysisProperties).doesNotContainKey("sonar.js.internal.bundlePath");
+  }
+
+  @Test
+  void should_not_set_js_internal_bundlePath_when_no_language_specific_requirements() {
+    var client = newFakeClient().build();
+    backend = newBackend()
+      .withNoLanguageSpecificRequirements()
+      .build(client);
+
+    var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
+
+    assertThat(analysisProperties).doesNotContainKey("sonar.js.internal.bundlePath");
+  }
+
+  @Test
   void it_should_skip_analysis_and_keep_rules_if_disabled_language_for_analysis(@TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
       "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
@@ -769,7 +805,7 @@ class AnalysisMediumTests {
     var connectionId = "connectionId";
     var projectKey2 = "projectKey-2";
     var connectionId2 = "connectionId-2";
-    var server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
+    server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
     backend = newBackend()
       .withSonarQubeConnection(connectionId, server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,
@@ -839,7 +875,7 @@ class AnalysisMediumTests {
     var connectionId = "connectionId";
     var projectKey2 = "projectKey-2";
     var connectionId2 = "connectionId-2";
-    var server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
+    server = newSonarQubeServer().withSmartNotificationsSupported(false).start();
     backend = newBackend()
       .withSonarQubeConnection(connectionId, server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,

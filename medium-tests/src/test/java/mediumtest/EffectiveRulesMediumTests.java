@@ -140,7 +140,7 @@ class EffectiveRulesMediumTests {
   void it_should_return_rule_loaded_from_server_plugin_when_project_is_bound_and_project_storage_does_not_exist() {
     backend = newBackend()
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
-      .withSonarQubeConnection("connectionId", storage -> storage.withPlugin(TestPlugin.JAVA))
+      .withSonarQubeConnection("connectionId", mockWebServerExtension.endpointParams().getBaseUrl(), storage -> storage.withPlugin(TestPlugin.JAVA))
       .withEnabledLanguageInStandaloneMode(JAVA)
       .build();
 
@@ -164,7 +164,7 @@ class EffectiveRulesMediumTests {
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:S139", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc").build())
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc").build())
       .build());
 
     var details = getEffectiveRuleDetails("scopeId", "python:S139");
@@ -188,7 +188,7 @@ class EffectiveRulesMediumTests {
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:S139", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc").build())
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc").build())
       .build());
 
     var details = getEffectiveRuleDetails("childScopeId", "python:S139");
@@ -213,7 +213,6 @@ class EffectiveRulesMediumTests {
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=jssecurity:S5696", Rules.ShowResponse.newBuilder()
       .setRule(Rules.Rule.newBuilder().setName(name).setSeverity("BLOCKER").setType(Common.RuleType.VULNERABILITY).setLang("js")
-        .setHtmlDesc(desc)
         .setDescriptionSections(Rules.Rule.DescriptionSections.newBuilder()
           .addDescriptionSections(Rules.Rule.DescriptionSection.newBuilder()
             .setKey("default")
@@ -278,7 +277,14 @@ class EffectiveRulesMediumTests {
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:custom", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc").build())
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc")
+        .setDescriptionSections(Rules.Rule.DescriptionSections.newBuilder()
+          .addDescriptionSections(Rules.Rule.DescriptionSection.newBuilder()
+            .setKey("default")
+            .setContent("desc")
+            .build())
+          .build())
+        .build())
       .build());
 
     var details = getEffectiveRuleDetails("scopeId", "python:custom");
@@ -300,7 +306,14 @@ class EffectiveRulesMediumTests {
       .withEnabledLanguageInStandaloneMode(PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:S139", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc").build())
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc")
+        .setDescriptionSections(Rules.Rule.DescriptionSections.newBuilder()
+          .addDescriptionSections(Rules.Rule.DescriptionSection.newBuilder()
+            .setKey("default")
+            .setContent("desc")
+            .build())
+          .build())
+        .build())
       .build());
 
     var details = getEffectiveRuleDetails("scopeId", "python:S139");
@@ -410,7 +423,7 @@ class EffectiveRulesMediumTests {
       .withEnabledLanguageInStandaloneMode(PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:S139", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc")
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc")
         .setEducationPrinciples(Rules.Rule.EducationPrinciples.newBuilder().addEducationPrinciples("never_trust_user_input").build())
         .setDescriptionSections(Rules.Rule.DescriptionSections.newBuilder()
           .addDescriptionSections(Rules.Rule.DescriptionSection.newBuilder()
@@ -462,7 +475,7 @@ class EffectiveRulesMediumTests {
   @Test
   void it_should_split_security_hotspots_rule_description_and_adapt_title() {
     backend = newBackend()
-      .withSonarQubeConnection("connectionId")
+      .withSonarQubeConnection("connectionId", mockWebServerExtension.endpointParams().getBaseUrl())
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .withSecurityHotspotsEnabled()
@@ -486,7 +499,7 @@ class EffectiveRulesMediumTests {
       .withEnabledLanguageInStandaloneMode(PYTHON)
       .build();
     mockWebServerExtension.addProtobufResponse("/api/rules/show.protobuf?key=python:S139", Rules.ShowResponse.newBuilder()
-      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlDesc("desc").setHtmlNote("extendedDesc")
+      .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc")
         .setEducationPrinciples(Rules.Rule.EducationPrinciples.newBuilder().addEducationPrinciples("never_trust_user_input").build())
         .setDescriptionSections(Rules.Rule.DescriptionSections.newBuilder()
           .addDescriptionSections(Rules.Rule.DescriptionSection.newBuilder()

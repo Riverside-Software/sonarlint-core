@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Analysis Engine
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2024 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,16 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.analysis.api;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize;
 
-import java.util.List;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
+import java.nio.file.Path;
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 
-/**
- * @deprecated Use {@link AnalysisRpcService#analyzeFilesAndTrack(AnalyzeFilesAndTrackParams)} instead.
- */
-@Deprecated(since = "10.2")
-public interface ClientModulesProvider {
-  List<ClientModuleInfo> getModules();
+public class JsTsRequirementsDto {
+  @Nullable
+  private final Path clientNodeJsPath;
+  @Nullable
+  private final Path bundlePath;
+
+  public JsTsRequirementsDto(@Nullable Path clientNodeJsPath, @Nullable Path bundlePath) {
+    this.clientNodeJsPath = clientNodeJsPath;
+    this.bundlePath = bundlePath;
+  }
+
+  @CheckForNull
+  public Path getClientNodeJsPath() {
+    return clientNodeJsPath;
+  }
+
+  @CheckForNull
+  public Path getBundlePath() {
+    return bundlePath;
+  }
 }
