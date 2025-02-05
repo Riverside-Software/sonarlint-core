@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Analysis Engine
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -73,7 +73,6 @@ class AnalysisEngineMediumTests {
   void prepare(@TempDir Path workDir) throws IOException {
     var enabledLanguages = Set.of(SonarLanguage.PYTHON);
     var analysisGlobalConfig = AnalysisEngineConfiguration.builder()
-      .setModulesProvider(List::of)
       .setClientPid(1234L)
       .setWorkDir(workDir)
       .build();

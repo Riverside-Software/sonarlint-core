@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Server Connection
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -53,7 +53,7 @@ class PluginsSynchronizerTests {
       "]}");
 
     underTest = new PluginsSynchronizer(Set.of(SonarLanguage.SECRETS), new ConnectionStorage(dest, dest, "connectionId"), Set.of("text"));
-    underTest.synchronize(new ServerApi(mockServer.serverApiHelper()), false, new SonarLintCancelMonitor());
+    underTest.synchronize(new ServerApi(mockServer.serverApiHelper()), false, false, new SonarLintCancelMonitor());
 
     assertThat(dest.resolve("636f6e6e656374696f6e4964/plugins/plugin_references.pb")).exists();
     assertThat(dest.resolve("636f6e6e656374696f6e4964/plugins/sonar-text-plugin-1.2.3.4.jar")).doesNotExist();
@@ -73,7 +73,7 @@ class PluginsSynchronizerTests {
     mockServer.addStringResponse("/api/plugins/download?plugin=textenterprise", "content-textenterprise");
 
     underTest = new PluginsSynchronizer(Set.of(SonarLanguage.SECRETS), new ConnectionStorage(dest, dest, "connectionId"), Set.of("text"));
-    underTest.synchronize(new ServerApi(mockServer.serverApiHelper()), true, new SonarLintCancelMonitor());
+    underTest.synchronize(new ServerApi(mockServer.serverApiHelper()), true, false, new SonarLintCancelMonitor());
 
     assertThat(dest.resolve("636f6e6e656374696f6e4964/plugins/plugin_references.pb")).exists();
     assertThat(dest.resolve("636f6e6e656374696f6e4964/plugins/sonar-text-plugin-2.3.4.5.jar")).exists();

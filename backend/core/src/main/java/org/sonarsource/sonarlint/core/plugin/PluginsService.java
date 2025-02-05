@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Implementation
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -52,6 +52,7 @@ import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.springframework.context.event.EventListener;
 
 import static org.sonarsource.sonarlint.core.serverconnection.PluginsSynchronizer.CUSTOM_SECRETS_MIN_SQ_VERSION;
+import static org.sonarsource.sonarlint.core.serverconnection.PluginsSynchronizer.ENTERPRISE_IAC_MIN_SQ_VERSION;
 
 @Named
 @Singleton
@@ -164,23 +165,34 @@ public class PluginsService {
   }
 
   private Map<String, Path> getEmbeddedPluginPathsByKey(String connectionId) {
+    var embeddedPlugins = new HashMap<>(connectedModeEmbeddedPluginPathsByKey);
     if (supportsCustomSecrets(connectionId)) {
-      var embeddedPluginsExceptSecrets = new HashMap<>(connectedModeEmbeddedPluginPathsByKey);
-      embeddedPluginsExceptSecrets.remove(SonarLanguage.SECRETS.getPluginKey());
-      return embeddedPluginsExceptSecrets;
+      embeddedPlugins.remove(SonarLanguage.SECRETS.getPluginKey());
     }
-    return connectedModeEmbeddedPluginPathsByKey;
+    if (supportsIaCEnterprise(connectionId)) {
+      // if iacenterprise is there on the server, download both, iac and iacenterprise
+      embeddedPlugins.remove(SonarLanguage.AZURERESOURCEMANAGER.getPluginKey());
+    }
+    return embeddedPlugins;
+  }
+
+  public boolean supportsIaCEnterprise(String connectionId) {
+    return isSonarQubeCloudOrVersionHigherThan(ENTERPRISE_IAC_MIN_SQ_VERSION, connectionId);
   }
 
   public boolean supportsCustomSecrets(String connectionId) {
+    return isSonarQubeCloudOrVersionHigherThan(CUSTOM_SECRETS_MIN_SQ_VERSION, connectionId);
+  }
+
+  private boolean isSonarQubeCloudOrVersionHigherThan(Version version, String connectionId) {
     var connection = connectionConfigurationRepository.getConnectionById(connectionId);
     if (connection == null) {
       // Connection is gone
       return false;
     }
-    // when storage is not present, assume that secrets are not supported by server
+    // when storage is not present, assume that server version is lower than requested
     return connection.getKind() == ConnectionKind.SONARCLOUD || storageService.connection(connectionId).serverInfo().read()
-      .map(serverInfo -> serverInfo.getVersion().compareToIgnoreQualifier(CUSTOM_SECRETS_MIN_SQ_VERSION) >= 0)
+      .map(serverInfo -> serverInfo.getVersion().compareToIgnoreQualifier(version) >= 0)
       .orElse(false);
   }
 

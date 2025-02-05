@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Commons
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -69,7 +69,8 @@ public enum SonarLanguage {
   DOCKER("docker", "iac", new String[0], "sonar.docker.file.suffixes"),
   KUBERNETES("kubernetes", "iac", new String[0], "sonar.kubernetes.file.suffixes"),
   TERRAFORM("terraform", "iac", new String[]{".tf"}, "sonar.terraform.file.suffixes"),
-  AZURERESOURCEMANAGER("azureresourcemanager", "iac", new String[]{".bicep"}, Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE);
+  AZURERESOURCEMANAGER("azureresourcemanager", "iac", new String[]{".bicep"}, Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE),
+  ANSIBLE("ansible", "iacenterprise", new String[0], "sonar.ansible.file.suffixes");
   private final String sonarLanguageKey;
 
   /**

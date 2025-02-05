@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Java Client Utils
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -58,7 +58,8 @@ public enum Language {
   DOCKER("Docker"),
   KUBERNETES("Kubernetes"),
   TERRAFORM("Terraform"),
-  AZURERESOURCEMANAGER("AzureResourceManager");
+  AZURERESOURCEMANAGER("AzureResourceManager"),
+  ANSIBLE("Ansible");
   private String label;
 
   Language(String label) {
@@ -147,6 +148,8 @@ public enum Language {
         return TERRAFORM;
       case AZURERESOURCEMANAGER:
         return AZURERESOURCEMANAGER;
+      case ANSIBLE:
+        return ANSIBLE;
       default:
         throw new IllegalArgumentException("Unknown language: " + rpcEnum);
     }

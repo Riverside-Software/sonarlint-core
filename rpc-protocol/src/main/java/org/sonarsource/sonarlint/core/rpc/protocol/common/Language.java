@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - RPC Protocol
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,6 +22,7 @@ package org.sonarsource.sonarlint.core.rpc.protocol.common;
 public enum Language {
 
   ABAP,
+  ANSIBLE,
   APEX,
   AZURERESOURCEMANAGER,
   C,

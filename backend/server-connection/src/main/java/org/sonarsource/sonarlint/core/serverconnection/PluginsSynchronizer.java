@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Server Connection
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -37,6 +37,7 @@ import org.sonarsource.sonarlint.core.serverapi.plugins.ServerPlugin;
 
 public class PluginsSynchronizer {
   public static final Version CUSTOM_SECRETS_MIN_SQ_VERSION = Version.create("10.4");
+  public static final Version ENTERPRISE_IAC_MIN_SQ_VERSION = Version.create("2025.1");
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
   private final Set<String> sonarSourceDisabledPluginKeys;
@@ -49,9 +50,13 @@ public class PluginsSynchronizer {
     this.embeddedPluginKeys = embeddedPluginKeys;
   }
 
-  public PluginSynchronizationSummary synchronize(ServerApi serverApi, boolean useSecretsFromServer, SonarLintCancelMonitor cancelMonitor) {
+  public PluginSynchronizationSummary synchronize(ServerApi serverApi, boolean useSecretsFromServer, boolean usesIaCEnterprise, SonarLintCancelMonitor cancelMonitor) {
+    var embeddedPluginKeysCopy = new HashSet<>(embeddedPluginKeys);
+    if (usesIaCEnterprise) {
+      embeddedPluginKeysCopy.remove(SonarLanguage.TERRAFORM.getPluginKey());
+      embeddedPluginKeys = embeddedPluginKeysCopy;
+    }
     if (useSecretsFromServer) {
-      var embeddedPluginKeysCopy = new HashSet<>(embeddedPluginKeys);
       embeddedPluginKeysCopy.remove(SonarLanguage.SECRETS.getPluginKey());
       embeddedPluginKeys = embeddedPluginKeysCopy;
     }

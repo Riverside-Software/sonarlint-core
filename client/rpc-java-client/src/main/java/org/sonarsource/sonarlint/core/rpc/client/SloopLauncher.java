@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - RPC Java Client
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -134,6 +134,8 @@ public class SloopLauncher {
     if (clientJvmOpts != null) {
       commands.addAll(Arrays.asList(clientJvmOpts.split(" ")));
     }
+    // Avoid displaying the Java icon in the taskbar on Mac
+    commands.add("-Djava.awt.headless=true");
     commands.add("-classpath");
     commands.add(classpath);
     commands.add(SLOOP_CLI_ENTRYPOINT_CLASS);

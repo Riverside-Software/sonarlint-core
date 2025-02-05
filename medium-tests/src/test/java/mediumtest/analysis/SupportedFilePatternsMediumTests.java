@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Medium Tests
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -20,29 +20,19 @@
 package mediumtest.analysis;
 
 import java.util.concurrent.ExecutionException;
-import mediumtest.fixtures.TestPlugin;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcServer;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetSupportedFilePatternsParams;
+import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
+import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
+import utils.TestPlugin;
 
-import static mediumtest.fixtures.SonarLintBackendFixture.newBackend;
-import static mediumtest.fixtures.SonarLintBackendFixture.newFakeClient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA;
 
 class SupportedFilePatternsMediumTests {
 
-  private SonarLintRpcServer backend;
-
-  @AfterEach
-  void tearDown() throws ExecutionException, InterruptedException {
-    backend.shutdown().get();
-  }
-
-  @Test
-  void it_should_return_default_supported_file_patterns_in_standalone_mode() throws ExecutionException, InterruptedException {
-    backend = newBackend()
+  @SonarLintTest
+  void it_should_return_default_supported_file_patterns_in_standalone_mode(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
+    var backend = harness.newBackend()
       .withEnabledLanguageInStandaloneMode(JAVA)
       .build();
 
@@ -50,10 +40,10 @@ class SupportedFilePatternsMediumTests {
     assertThat(patterns).containsOnly("**/*.java", "**/*.jav");
   }
 
-  @Test
-  void it_should_return_default_supported_file_patterns_in_connected_mode_when_not_override_on_server() throws ExecutionException, InterruptedException {
-    var client = newFakeClient().withMatchedBranch("configScopeId", "branchName").build();
-    backend = newBackend()
+  @SonarLintTest
+  void it_should_return_default_supported_file_patterns_in_connected_mode_when_not_override_on_server(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
+    var client = harness.newFakeClient().withMatchedBranch("configScopeId", "branchName").build();
+    var backend = harness.newBackend()
       .withSonarQubeConnection("connectionId", storage -> storage.withPlugin(TestPlugin.JAVA)
         .withProject("projectKey"))
       .withBoundConfigScope("configScopeId", "connectionId", "projectKey")
@@ -64,14 +54,12 @@ class SupportedFilePatternsMediumTests {
     assertThat(patterns).containsOnly("**/*.java", "**/*.jav");
   }
 
-  @Test
-  void it_should_return_supported_file_patterns_with_server_defined_file_suffixes() throws ExecutionException, InterruptedException {
-    var client = newFakeClient().withMatchedBranch("configScopeId", "branchName").build();
-    backend = newBackend()
+  @SonarLintTest
+  void it_should_return_supported_file_patterns_with_server_defined_file_suffixes(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
+    var client = harness.newFakeClient().withMatchedBranch("configScopeId", "branchName").build();
+    var backend = harness.newBackend()
       .withSonarQubeConnection("connectionId", storage -> storage.withPlugin(TestPlugin.JAVA)
-        .withProject("projectKey", (projectStorageBuilder -> {
-          projectStorageBuilder.withSetting("sonar.java.file.suffixes", ".foo, .bar");
-        })))
+        .withProject("projectKey", project -> project.withSetting("sonar.java.file.suffixes", ".foo, .bar")))
       .withBoundConfigScope("configScopeId", "connectionId", "projectKey")
       .withEnabledLanguageInStandaloneMode(JAVA)
       .build(client);

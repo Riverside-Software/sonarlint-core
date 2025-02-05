@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Plugin Commons
- * Copyright (C) 2016-2024 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -80,6 +80,7 @@ public class PluginsLoader {
     allowedPluginsIds.add("textdeveloper");
     allowedPluginsIds.add("textenterprise");
     allowedPluginsIds.add("omnisharp");
+    allowedPluginsIds.add("iacenterprise");
     allowedPluginsIds.addAll(maybeDbdAllowedPlugins(configuration.enableDataflowBugDetection));
     return Collections.unmodifiableSet(allowedPluginsIds);
   }
