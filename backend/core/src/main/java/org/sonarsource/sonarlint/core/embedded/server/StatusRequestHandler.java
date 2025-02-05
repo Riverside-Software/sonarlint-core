@@ -23,8 +23,6 @@ import com.google.gson.Gson;
 import com.google.gson.annotations.Expose;
 import java.io.IOException;
 import java.util.Optional;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.ContentType;
@@ -40,8 +38,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.ClientConstantInfoDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 
-@Named
-@Singleton
 public class StatusRequestHandler implements HttpRequestHandler {
 
   private final SonarLintRpcClient client;
@@ -87,30 +83,9 @@ public class StatusRequestHandler implements HttpRequestHandler {
     return repository.hasConnectionWithOrigin(serverOrigin);
   }
 
-  private static class StatusResponse {
-    @Expose
-    private final String ideName;
-    @Expose
-    private final String description;
-    @Expose
-    private final boolean needsToken;
-    @Expose
-    private final CapabilitiesResponse capabilities;
+  private record StatusResponse(@Expose String ideName, @Expose String description, @Expose boolean needsToken,
+                                @Expose CapabilitiesResponse capabilities) { }
 
-    public StatusResponse(String ideName, String description, boolean needsToken, CapabilitiesResponse capabilities) {
-      this.ideName = ideName;
-      this.description = description;
-      this.needsToken = needsToken;
-      this.capabilities = capabilities;
-    }
-  }
+  private record CapabilitiesResponse(@Expose boolean canOpenFixSuggestion) { }
 
-  private static class CapabilitiesResponse {
-    @Expose
-    private final boolean canOpenFixSuggestion;
-
-    public CapabilitiesResponse(boolean canOpenFixSuggestion) {
-      this.canOpenFixSuggestion = canOpenFixSuggestion;
-    }
-  }
 }

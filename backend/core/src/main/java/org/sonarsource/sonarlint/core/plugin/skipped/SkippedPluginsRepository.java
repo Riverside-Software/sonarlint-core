@@ -23,11 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.CheckForNull;
-import javax.inject.Named;
-import javax.inject.Singleton;
 
-@Named
-@Singleton
 public class SkippedPluginsRepository {
   private List<SkippedPlugin> skippedEmbeddedPlugins;
   private final Map<String, List<SkippedPlugin>> skippedPluginsByConnectionId = new HashMap<>();

@@ -43,11 +43,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.jetbrains.annotations.NotNull;
-import org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment;
+import org.sonarsource.sonarlint.core.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.client.ClientJsonRpcLauncher;
 import org.sonarsource.sonarlint.core.rpc.client.ConfigScopeNotFoundException;
 import org.sonarsource.sonarlint.core.rpc.client.SonarLintCancelChecker;
@@ -125,8 +124,8 @@ public class SonarLintBackendFixture {
     return newBackend(null);
   }
 
-  public static SonarLintBackendBuilder newBackend(@Nullable Consumer<SonarLintTestRpcServer> onBuild) {
-    return new SonarLintBackendBuilder(onBuild);
+  public static SonarLintBackendBuilder newBackend(@Nullable Consumer<SonarLintTestRpcServer> afterStartCallback) {
+    return new SonarLintBackendBuilder(afterStartCallback);
   }
 
   public static SonarLintClientBuilder newFakeClient() {
@@ -134,7 +133,7 @@ public class SonarLintBackendFixture {
   }
 
   public static class SonarLintBackendBuilder {
-    private final Consumer<SonarLintTestRpcServer> onBuild;
+    private final Consumer<SonarLintTestRpcServer> afterStartCallback;
     private final List<SonarQubeConnectionConfigurationDto> sonarQubeConnections = new ArrayList<>();
     private final List<SonarCloudConnectionConfigurationDto> sonarCloudConnections = new ArrayList<>();
     private final List<ConfigurationScopeDto> configurationScopes = new ArrayList<>();
@@ -171,9 +170,10 @@ public class SonarLintBackendFixture {
     private boolean automaticAnalysisEnabled = true;
     private TelemetryMigrationDto telemetryMigration;
     private LanguageSpecificRequirements languageSpecificRequirements;
+    private final List<Consumer<SonarLintTestRpcServer>> beforeInitializeCallbacks = new ArrayList<>();
 
-    public SonarLintBackendBuilder(@Nullable Consumer<SonarLintTestRpcServer> onBuild) {
-      this.onBuild = onBuild;
+    public SonarLintBackendBuilder(@Nullable Consumer<SonarLintTestRpcServer> afterStartCallback) {
+      this.afterStartCallback = afterStartCallback;
     }
 
     public SonarLintBackendBuilder withSonarQubeConnection() {
@@ -252,7 +252,8 @@ public class SonarLintBackendFixture {
         storageBuilder.accept(storage);
         storages.add(storage);
       }
-      sonarCloudConnections.add(new SonarCloudConnectionConfigurationDto(connectionId, organizationKey, disableNotifications));
+      sonarCloudConnections.add(new SonarCloudConnectionConfigurationDto(connectionId, organizationKey,
+        org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion.EU, disableNotifications));
       return this;
     }
 
@@ -470,7 +471,12 @@ public class SonarLintBackendFixture {
       return this;
     }
 
-    public SonarLintTestRpcServer build(SonarLintRpcClientDelegate client) {
+    public SonarLintBackendBuilder beforeInitialize(Consumer<SonarLintTestRpcServer> backendConsumer) {
+      this.beforeInitializeCallbacks.add(backendConsumer);
+      return this;
+    }
+
+    public SonarLintTestRpcServer start(SonarLintRpcClientDelegate client) {
       var sonarlintUserHome = tempDirectory("slUserHome");
       var workDir = tempDirectory("work");
       var storageParentPath = tempDirectory("storage");
@@ -481,6 +487,7 @@ public class SonarLintBackendFixture {
       }
       try {
         var sonarLintBackend = createTestBackend(client);
+        beforeInitializeCallbacks.forEach(callback -> callback.accept(sonarLintBackend));
         var telemetryInitDto = new TelemetryClientConstantAttributesDto("mediumTests", "mediumTests",
           "1.2.3", "4.5.6", emptyMap());
         var clientInfo = new ClientConstantInfoDto(clientName, userAgent, 0);
@@ -490,8 +497,8 @@ public class SonarLintBackendFixture {
         SonarCloudAlternativeEnvironmentDto sonarCloudAlternativeEnvironment = null;
         if (sonarCloudUrl != null || sonarCloudWebSocketsUrl != null) {
           sonarCloudAlternativeEnvironment = new SonarCloudAlternativeEnvironmentDto(
-            sonarCloudUrl == null ? SonarCloudActiveEnvironment.PRODUCTION_URI : URI.create(sonarCloudUrl),
-            sonarCloudWebSocketsUrl == null ? SonarCloudActiveEnvironment.prod().getWebSocketsEndpointUri() : URI.create(sonarCloudWebSocketsUrl));
+            sonarCloudUrl == null ? SonarCloudRegion.EU.getProductionUri() : URI.create(sonarCloudUrl),
+            sonarCloudWebSocketsUrl == null ? SonarCloudRegion.EU.getWebSocketUri() : URI.create(sonarCloudWebSocketsUrl));
         }
 
         var sslConfiguration = new SslConfigurationDto(null, null, null, keyStorePath, keyStorePassword, keyStoreType);
@@ -505,8 +512,8 @@ public class SonarLintBackendFixture {
             standaloneConfigByKey, isFocusOnNewCode, languageSpecificRequirements, automaticAnalysisEnabled, telemetryMigration))
           .get();
         sonarLintBackend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(configurationScopes));
-        if (onBuild != null) {
-          onBuild.accept(sonarLintBackend);
+        if (afterStartCallback != null) {
+          afterStartCallback.accept(sonarLintBackend);
         }
         return sonarLintBackend;
       } catch (Exception e) {
@@ -570,8 +577,8 @@ public class SonarLintBackendFixture {
       }
     }
 
-    public SonarLintTestRpcServer build() {
-      return build(newFakeClient().build());
+    public SonarLintTestRpcServer start() {
+      return start(newFakeClient().build());
     }
   }
 
@@ -643,6 +650,7 @@ public class SonarLintBackendFixture {
     Map<String, Map<URI, List<RaisedHotspotDto>>> raisedHotspotsByScopeId = new HashMap<>();
     Map<String, Map<String, String>> inferredAnalysisPropertiesByScopeId = new HashMap<>();
     Map<String, Boolean> analysisReadinessPerScopeId = new HashMap<>();
+    Set<String> connectionIdsWithInvalidToken = new HashSet<>();
 
     public FakeSonarLintRpcClient(Map<String, Either<TokenDto, UsernamePasswordDto>> credentialsByConnectionId, boolean printLogsToStdOut,
       Map<String, String> matchedBranchPerScopeId, Map<String, Path> baseDirsByConfigScope, Map<String, List<ClientFileDto>> initialFilesByConfigScope,
@@ -713,6 +721,11 @@ public class SonarLintBackendFixture {
       } else {
         progressReport.complete();
       }
+    }
+
+    @Override
+    public void invalidToken(String connectionId) {
+      connectionIdsWithInvalidToken.add(connectionId);
     }
 
     public Map<String, ProgressReport> getProgressReportsByTaskId() {
@@ -874,7 +887,7 @@ public class SonarLintBackendFixture {
 
     public List<RaisedIssueDto> getRaisedIssuesForScopeIdAsList(String configurationScopeId) {
       return raisedIssuesByScopeId.getOrDefault(configurationScopeId, Map.of()).values().stream().flatMap(Collection::stream)
-        .collect(Collectors.toList());
+        .toList();
     }
 
     public Map<URI, List<RaisedHotspotDto>> getRaisedHotspotsForScopeId(String configurationScopeId) {
@@ -883,7 +896,7 @@ public class SonarLintBackendFixture {
 
     public List<RaisedHotspotDto> getRaisedHotspotsForScopeIdAsList(String configurationScopeId) {
       return raisedHotspotsByScopeId.getOrDefault(configurationScopeId, Map.of()).values().stream().flatMap(Collection::stream)
-        .collect(Collectors.toList());
+        .toList();
     }
 
     public void cleanRaisedIssues() {
@@ -904,7 +917,7 @@ public class SonarLintBackendFixture {
     }
 
     public List<String> getLogMessages() {
-      return logs.stream().map(LogParams::getMessage).collect(Collectors.toList());
+      return logs.stream().map(LogParams::getMessage).toList();
     }
 
     @Override
@@ -921,6 +934,10 @@ public class SonarLintBackendFixture {
 
     public void waitForSynchronization() {
       verify(this, timeout(5000)).didSynchronizeConfigurationScopes(any());
+    }
+
+    public Set<String> getConnectionIdsWithInvalidToken() {
+      return connectionIdsWithInvalidToken;
     }
 
     public static class ProgressReport {

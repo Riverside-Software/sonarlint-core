@@ -30,7 +30,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
@@ -90,10 +89,11 @@ class IssueTrackingMediumTests {
   void it_should_raise_tracked_and_untracked_issues_in_standalone_mode(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "package sonar;\n" +
-        "// FIXME foo bar\n" +
-        "public interface Foo {\n" +
-        "}");
+      """
+        package sonar;
+        // FIXME foo bar
+        public interface Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -109,17 +109,18 @@ class IssueTrackingMediumTests {
           .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build(client);
+      .start(client);
 
     var firstAnalysisPublishedIssues = analyzeFileAndGetAllIssuesOfRule(backend, fileUri, client, ruleKey);
 
     assertThat(firstAnalysisPublishedIssues).hasSize(1);
     changeFileContent(baseDir, ideFilePath,
-      "package sonar;\n" +
-        "// FIXME foo bar\n" +
-        "public interface Foo {\n" +
-        "// FIXME bar baz\n" +
-        "}");
+      """
+        package sonar;
+        // FIXME foo bar
+        public interface Foo {
+        // FIXME bar baz
+        }""");
     var secondAnalysisPublishedIssues = analyzeFileAndGetAllIssuesOfRule(backend, fileUri, client, ruleKey);
     assertThat(secondAnalysisPublishedIssues).hasSize(2);
 
@@ -131,9 +132,10 @@ class IssueTrackingMediumTests {
   void it_should_raise_tracked_and_untracked_issues_after_match_with_server_issues(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -158,7 +160,7 @@ class IssueTrackingMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -169,11 +171,12 @@ class IssueTrackingMediumTests {
 
     assertThat(firstAnalysisPublishedIssues).hasSize(1);
     changeFileContent(baseDir, ideFilePath,
-      "package sonar;\n" +
-        "// FIXME foo bar\n" +
-        "public interface Foo {\n" +
-        "// FIXME bar baz\n" +
-        "}");
+      """
+        package sonar;
+        // FIXME foo bar
+        public interface Foo {
+        // FIXME bar baz
+        }""");
     var secondAnalysisPublishedIssues = analyzeFileAndGetAllIssues(backend, fileUri, client);
     assertThat(secondAnalysisPublishedIssues).hasSize(2);
   }
@@ -183,10 +186,11 @@ class IssueTrackingMediumTests {
   void it_should_use_server_new_code_definition_for_server_issues_and_set_true_for_unmatched_issues(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "// FIXME foo bar2\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        // FIXME foo bar2
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -218,7 +222,7 @@ class IssueTrackingMediumTests {
             .withMainBranch(branchName)))
       .withFullSynchronization()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -232,12 +236,13 @@ class IssueTrackingMediumTests {
     assertThat(issues.stream().filter(raisedIssueDto -> raisedIssueDto.getServerKey().equals("uuid2")).findFirst().get().isOnNewCode()).isTrue();
 
     changeFileContent(baseDir, ideFilePath,
-      "package sonar;\n" +
-        "// FIXME foo bar\n" +
-        "// FIXME foo bar2\n" +
-        "public interface Foo {\n" +
-        "// FIXME bar baz\n" +
-        "}");
+      """
+        package sonar;
+        // FIXME foo bar
+        // FIXME foo bar2
+        public interface Foo {
+        // FIXME bar baz
+        }""");
     var secondAnalysisPublishedIssues = analyzeFileAndGetAllIssues(backend, fileUri, client);
     assertThat(secondAnalysisPublishedIssues).hasSize(3);
     assertThat(secondAnalysisPublishedIssues.stream().filter(raisedIssueDto -> Objects.isNull(raisedIssueDto.getServerKey())).findFirst().get().isOnNewCode()).isTrue();
@@ -247,9 +252,10 @@ class IssueTrackingMediumTests {
   void it_should_use_git_blame_to_set_introduction_date_for_git_repos(SonarLintTestHarness harness, @TempDir Path baseDir) throws IOException, GitAPIException {
     var repository = createRepository(baseDir);
     var filePath = createFile(baseDir, "Foobar.java",
-      "package sonar;\n" +
-        "public interface Foobar\n" +
-        "{}");
+      """
+        package sonar;
+        public interface Foobar
+        {}""");
     var commitDate = commit(repository, filePath.getFileName().toString());
     var fileUri = filePath.toUri();
     var client = harness.newFakeClient()
@@ -258,7 +264,7 @@ class IssueTrackingMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     var issue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -268,24 +274,26 @@ class IssueTrackingMediumTests {
   @SonarLintTest
   void it_should_use_git_blame_to_set_introduction_date_for_git_repos_for_given_content(SonarLintTestHarness harness, @TempDir Path baseDir) throws IOException, GitAPIException {
     var repository = createRepository(baseDir);
-    String committedFileContent = "package sonar;\n" +
-      "public interface Foobar\n" +
-      "{}";
+    String committedFileContent = """
+      package sonar;
+      public interface Foobar
+      {}""";
     var filePath = createFile(baseDir, "Foobar.java",
       committedFileContent);
     commit(repository, filePath.getFileName().toString());
     var fileUri = filePath.toUri();
-    String unsavedFileContent = "package sonar;\n" +
-      "public interface Foobar\n" +
-      "//TODO introduce new issue\n" +
-      "{}";
+    String unsavedFileContent = """
+      package sonar;
+      public interface Foobar
+      //TODO introduce new issue
+      {}""";
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, unsavedFileContent, null, true)))
       .build();
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     Instant analysisTime = Instant.now();
     var issues = analyzeFileAndGetAllIssues(backend, fileUri, client);
@@ -300,15 +308,17 @@ class IssueTrackingMediumTests {
   void it_should_track_issue_secondary_locations(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "package devoxx;\n" +
-        "\n" +
-        "public class Foo {\n" +
-        "  public void run() {\n" +
-        "    prepare(\"action1\");\n" +
-        "    execute(\"action1\");\n" +
-        "    release(\"action1\");\n" +
-        "  }\n" +
-        "}\n");
+      """
+        package devoxx;
+        
+        public class Foo {
+          public void run() {
+            prepare("action1");
+            execute("action1");
+            release("action1");
+          }
+        }
+        """);
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -333,7 +343,7 @@ class IssueTrackingMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -379,9 +389,10 @@ class IssueTrackingMediumTests {
   void it_should_track_line_level_server_issue_on_same_line(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -406,7 +417,7 @@ class IssueTrackingMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -426,9 +437,10 @@ class IssueTrackingMediumTests {
   void it_should_track_line_level_server_issue_on_different_line(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -453,7 +465,7 @@ class IssueTrackingMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -479,7 +491,7 @@ class IssueTrackingMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     var firstPublishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -493,17 +505,18 @@ class IssueTrackingMediumTests {
   @SonarLintTest
   void it_should_test_quick_fixes(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "FileHelper.java",
-      "package myapp.helpers;\n" +
-        "\n" +
-        "import java.io.IOException;\n" +
-        "import java.nio.file.*;\n" +
-        "import java.lang.Runnable;  // Noncompliant - java.lang is imported by default\n" +
-        "\n" +
-        "public class FileHelper {\n" +
-        "    public static String readFirstLine(String filePath) throws IOException {\n" +
-        "        return Files.readAllLines(Paths.get(filePath)).get(0);\n" +
-        "    }\n" +
-        "}");
+      """
+        package myapp.helpers;
+        
+        import java.io.IOException;
+        import java.nio.file.*;
+        import java.lang.Runnable;  // Noncompliant - java.lang is imported by default
+        
+        public class FileHelper {
+            public static String readFirstLine(String filePath) throws IOException {
+                return Files.readAllLines(Paths.get(filePath)).get(0);
+            }
+        }""");
     var fileUri = filePath.toUri();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
@@ -511,7 +524,7 @@ class IssueTrackingMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     var issues = analyzeFileAndGetAllIssues(backend, fileUri, client);
 
@@ -545,7 +558,7 @@ class IssueTrackingMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
     var startTime = System.currentTimeMillis();
 
     var publishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
@@ -565,7 +578,7 @@ class IssueTrackingMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     var firstPublishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -589,7 +602,7 @@ class IssueTrackingMediumTests {
         storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "MINOR"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
-      .build(client);
+      .start(client);
     var startTime = System.currentTimeMillis();
 
     var publishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
@@ -612,7 +625,7 @@ class IssueTrackingMediumTests {
         storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "MINOR"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
-      .build(client);
+      .start(client);
 
     var firstPublishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -646,7 +659,7 @@ class IssueTrackingMediumTests {
                 .withIntroductionDate(serverIssueIntroductionDate)))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
-      .build(client);
+      .start(client);
 
     var publishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -681,7 +694,7 @@ class IssueTrackingMediumTests {
                 .withIntroductionDate(serverIssueIntroductionDate)))))
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     var firstPublishedIssue = analyzeFileAndGetIssue(backend, client, fileUri);
 
@@ -712,13 +725,14 @@ class IssueTrackingMediumTests {
   void it_should_submit_server_path_to_sc_web_api(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var folder = createFolder(baseDir, "local/path/prefix");
     var filePath = createFile(baseDir, folder.resolve("pom.xml").toString(),
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var orgKey = "myOrganization";
     var connectionId = "connectionId";
@@ -741,7 +755,7 @@ class IssueTrackingMediumTests {
       .withSonarCloudUrl(server.baseUrl())
       .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService().didUpdateBinding(new DidUpdateBindingParams(CONFIG_SCOPE_ID,
       new BindingConfigurationDto(connectionId, projectKey, true)));
@@ -774,7 +788,7 @@ class IssueTrackingMediumTests {
       .withStandaloneEmbeddedPlugin(pluginPath)
       .withEnabledLanguageInStandaloneMode(Language.JAVA)
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build(client);
+      .start(client);
 
     analyzeFileAndGetAllIssues(backend, fileUri, client);
 
@@ -816,7 +830,7 @@ class IssueTrackingMediumTests {
       .withStandaloneEmbeddedPlugin(pluginPath)
       .withEnabledLanguageInStandaloneMode(Language.JAVA)
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build(client);
+      .start(client);
     analyzeFileAndGetAllIssues(backend, fileUri, client);
     reset(client);
 
@@ -855,7 +869,7 @@ class IssueTrackingMediumTests {
       .withStandaloneEmbeddedPlugin(pluginPath)
       .withEnabledLanguageInStandaloneMode(Language.JAVA)
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build(client);
+      .start(client);
     backend.getAnalysisService().analyzeFilesAndTrack(
       new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), true, System.currentTimeMillis()))
       .join();
@@ -873,7 +887,7 @@ class IssueTrackingMediumTests {
     assertThat(analysisResult.getFailedAnalysisFiles()).isEmpty();
     assertThat(publishedIssuesByFile).containsOnlyKeys(fileUri);
     var raisedIssues = publishedIssuesByFile.get(fileUri);
-    return raisedIssues.stream().filter(ri -> ri.getRuleKey().equals(ruleKey)).collect(Collectors.toList());
+    return raisedIssues.stream().filter(ri -> ri.getRuleKey().equals(ruleKey)).toList();
   }
 
   private List<RaisedIssueDto> analyzeFileAndGetAllIssues(SonarLintTestRpcServer backend, URI fileUri, SonarLintRpcClientDelegate client) {
@@ -900,13 +914,14 @@ class IssueTrackingMediumTests {
 
   private static Path createFileWithAnXmlIssue(Path folderPath) {
     return createFile(folderPath, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
   }
 
   private Map<URI, List<RaisedIssueDto>> getPublishedIssues(SonarLintRpcClientDelegate client, UUID analysisId) {

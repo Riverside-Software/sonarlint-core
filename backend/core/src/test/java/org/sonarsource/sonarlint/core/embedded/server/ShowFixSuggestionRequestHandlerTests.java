@@ -43,6 +43,7 @@ import org.mockito.ArgumentCaptor;
 import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
 import org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment;
+import org.sonarsource.sonarlint.core.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.file.FilePathTranslation;
@@ -70,7 +71,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-import static org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment.PRODUCTION_URI;
 
 class ShowFixSuggestionRequestHandlerTests {
   @RegisterExtension
@@ -108,7 +108,7 @@ class ShowFixSuggestionRequestHandlerTests {
     var clientFs = mock(ClientFileSystemService.class);
     when(clientFs.getFiles(any())).thenReturn(List.of(clientFile));
     var connectionConfiguration = mock(ConnectionConfigurationRepository.class);
-    when(connectionConfiguration.hasConnectionWithOrigin(PRODUCTION_URI.toString())).thenReturn(true);
+    when(connectionConfiguration.hasConnectionWithOrigin(SonarCloudRegion.EU.getProductionUri().toString())).thenReturn(true);
 
     showFixSuggestionRequestHandler = new ShowFixSuggestionRequestHandler(sonarLintRpcClient, telemetryService, initializeParams,
       new RequestHandlerBindingAssistant(bindingSuggestionProvider, bindingCandidatesFinder, sonarLintRpcClient, connectionConfigurationRepository,
@@ -124,22 +124,24 @@ class ShowFixSuggestionRequestHandlerTests {
       "&issue=AX2VL6pgAvx3iwyNtLyr&branch=branch" +
       "&organizationKey=sample-organization"));
     when(request.getMethod()).thenReturn(Method.POST.name());
-    when(request.getHeader("Origin")).thenReturn(new BasicHeader("Origin", PRODUCTION_URI));
-    when(request.getEntity()).thenReturn(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    when(request.getHeader("Origin")).thenReturn(new BasicHeader("Origin", SonarCloudRegion.EU.getProductionUri()));
+    when(request.getEntity()).thenReturn(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var response = mock(ClassicHttpResponse.class);
     var context = mock(HttpContext.class);
 
@@ -157,22 +159,24 @@ class ShowFixSuggestionRequestHandlerTests {
       "?project=org.sonarsource.sonarlint.core%3Asonarlint-core-parent" +
       "&issue=AX2VL6pgAvx3iwyNtLyr&branch=branch" +
       "&organizationKey=sample-organization");
-    request.addHeader("Origin", PRODUCTION_URI);
-    request.setEntity(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    request.addHeader("Origin", SonarCloudRegion.EU.getProductionUri());
+    request.setEntity(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var showFixSuggestionQuery = showFixSuggestionRequestHandler.extractQuery(request, request.getHeader("Origin").getValue());
     assertThat(showFixSuggestionQuery.getServerUrl()).isEqualTo("https://sonarcloud.io");
     assertThat(showFixSuggestionQuery.getProjectKey()).isEqualTo("org.sonarsource.sonarlint.core:sonarlint-core-parent");
@@ -181,13 +185,13 @@ class ShowFixSuggestionRequestHandlerTests {
     assertThat(showFixSuggestionQuery.getBranch()).isEqualTo("branch");
     assertThat(showFixSuggestionQuery.getTokenName()).isNull();
     assertThat(showFixSuggestionQuery.getTokenValue()).isNull();
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getSuggestionId()).isEqualTo("eb93b2b4-f7b0-4b5c-9460-50893968c264");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getExplanation()).isEqualTo("Modifying the variable name is good");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getPath()).isEqualTo("src/main/java/Main.java");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBefore()).isEmpty();
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getAfter()).isEqualTo("var fix = 1;");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBeforeLineRange().getStartLine()).isZero();
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBeforeLineRange().getEndLine()).isEqualTo(1);
+    assertThat(showFixSuggestionQuery.getFixSuggestion().suggestionId()).isEqualTo("eb93b2b4-f7b0-4b5c-9460-50893968c264");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().explanation()).isEqualTo("Modifying the variable name is good");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().path()).isEqualTo("src/main/java/Main.java");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).before()).isEmpty();
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).after()).isEqualTo("var fix = 1;");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).beforeLineRange().startLine()).isZero();
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).beforeLineRange().endLine()).isEqualTo(1);
   }
 
   @Test
@@ -199,22 +203,24 @@ class ShowFixSuggestionRequestHandlerTests {
       "&issue=AX2VL6pgAvx3iwyNtLyr&tokenName=abc" +
       "&organizationKey=sample-organization" +
       "&tokenValue=123");
-    request.addHeader("Origin", PRODUCTION_URI);
-    request.setEntity(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    request.addHeader("Origin", SonarCloudRegion.EU.getProductionUri());
+    request.setEntity(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var showFixSuggestionQuery = showFixSuggestionRequestHandler.extractQuery(request, request.getHeader("Origin").getValue());
     assertThat(showFixSuggestionQuery.getServerUrl()).isEqualTo("https://sonarcloud.io");
     assertThat(showFixSuggestionQuery.getProjectKey()).isEqualTo("org.sonarsource.sonarlint.core:sonarlint-core-parent");
@@ -222,13 +228,13 @@ class ShowFixSuggestionRequestHandlerTests {
     assertThat(showFixSuggestionQuery.getTokenName()).isEqualTo("abc");
     assertThat(showFixSuggestionQuery.getOrganizationKey()).isEqualTo("sample-organization");
     assertThat(showFixSuggestionQuery.getTokenValue()).isEqualTo("123");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getSuggestionId()).isEqualTo("eb93b2b4-f7b0-4b5c-9460-50893968c264");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getExplanation()).isEqualTo("Modifying the variable name is good");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getPath()).isEqualTo("src/main/java/Main.java");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBefore()).isEmpty();
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getAfter()).isEqualTo("var fix = 1;");
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBeforeLineRange().getStartLine()).isZero();
-    assertThat(showFixSuggestionQuery.getFixSuggestion().getFileEdit().getChanges().get(0).getBeforeLineRange().getEndLine()).isEqualTo(1);
+    assertThat(showFixSuggestionQuery.getFixSuggestion().suggestionId()).isEqualTo("eb93b2b4-f7b0-4b5c-9460-50893968c264");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().explanation()).isEqualTo("Modifying the variable name is good");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().path()).isEqualTo("src/main/java/Main.java");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).before()).isEmpty();
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).after()).isEqualTo("var fix = 1;");
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).beforeLineRange().startLine()).isZero();
+    assertThat(showFixSuggestionQuery.getFixSuggestion().fileEdit().changes().get(0).beforeLineRange().endLine()).isEqualTo(1);
   }
 
   @Test
@@ -245,27 +251,29 @@ class ShowFixSuggestionRequestHandlerTests {
       "?project=org.sonarsource.sonarlint.core%3Asonarlint-core-parent" +
       "&issue=AX2VL6pgAvx3iwyNtLyr&branch=branch" +
       "&organizationKey=sample-organization");
-    request.addHeader("Origin", PRODUCTION_URI);
-    request.setEntity(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    request.addHeader("Origin", SonarCloudRegion.EU.getProductionUri());
+    request.setEntity(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var response = mock(ClassicHttpResponse.class);
     var context = mock(HttpContext.class);
 
     when(connectionConfigurationRepository.findByOrganization(any())).thenReturn(List.of(
-      new SonarCloudConnectionConfiguration(PRODUCTION_URI, "name", "organizationKey", false)));
+      new SonarCloudConnectionConfiguration(SonarCloudRegion.EU.getProductionUri(), "name", "organizationKey", SonarCloudRegion.EU, false)));
     when(configurationRepository.getBoundScopesToConnectionAndSonarProject(any(), any())).thenReturn(List.of(new BoundScope("configScope", "connectionId", "projectKey")));
     when(sonarLintRpcClient.matchProjectBranch(any())).thenReturn(CompletableFuture.completedFuture(new MatchProjectBranchResponse(false)));
 
@@ -286,29 +294,31 @@ class ShowFixSuggestionRequestHandlerTests {
       "?project=org.sonarsource.sonarlint.core%3Asonarlint-core-parent" +
       "&issue=AX2VL6pgAvx3iwyNtLyr" +
       "&organizationKey=sample-organization");
-    request.addHeader("Origin", PRODUCTION_URI);
-    request.setEntity(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    request.addHeader("Origin", SonarCloudRegion.EU.getProductionUri());
+    request.setEntity(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var response = mock(ClassicHttpResponse.class);
     var context = mock(HttpContext.class);
 
     when(clientFile.getUri()).thenReturn(URI.create("file:///src/main/java/Main.java"));
     when(filePathTranslation.serverToIdePath(any())).thenReturn(Path.of("src/main/java/Main.java"));
     when(connectionConfigurationRepository.findByOrganization(any())).thenReturn(List.of(
-      new SonarCloudConnectionConfiguration(PRODUCTION_URI, "name", "organizationKey", false)));
+      new SonarCloudConnectionConfiguration(SonarCloudRegion.EU.getProductionUri(), "name", "organizationKey", SonarCloudRegion.EU, false)));
     when(configurationRepository.getBoundScopesToConnectionAndSonarProject(any(), any())).thenReturn(List.of(new BoundScope("configScope", "connectionId", "projectKey")));
     when(sonarLintRpcClient.matchProjectBranch(any())).thenReturn(CompletableFuture.completedFuture(new MatchProjectBranchResponse(true)));
 
@@ -323,21 +333,23 @@ class ShowFixSuggestionRequestHandlerTests {
       "?project=org.sonarsource.sonarlint.core%3Asonarlint-core-parent" +
       "&issue=AX2VL6pgAvx3iwyNtLyr&branch=branch" +
       "&organizationKey=sample-organization");
-    request.setEntity(new StringEntity("{\n" +
-      "\"fileEdit\": {\n" +
-      "\"path\": \"src/main/java/Main.java\",\n" +
-      "\"changes\": [{\n" +
-      "\"beforeLineRange\": {\n" +
-      "\"startLine\": 0,\n" +
-      "\"endLine\": 1\n" +
-      "},\n" +
-      "\"before\": \"\",\n" +
-      "\"after\": \"var fix = 1;\"\n" +
-      "}]\n" +
-      "},\n" +
-      "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-      "\"explanation\": \"Modifying the variable name is good\"\n" +
-      "}\n"));
+    request.setEntity(new StringEntity("""
+      {
+        "fileEdit": {
+          "path": "src/main/java/Main.java",
+          "changes": [{
+            "beforeLineRange": {
+              "startLine": 0,
+              "endLine": 1
+            },
+            "before": "",
+            "after": "var fix = 1;"
+          }]
+        },
+        "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+        "explanation": "Modifying the variable name is good"
+      }
+      """));
     var response = mock(ClassicHttpResponse.class);
     var context = mock(HttpContext.class);
 

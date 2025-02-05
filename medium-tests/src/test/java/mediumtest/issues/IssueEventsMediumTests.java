@@ -39,6 +39,8 @@ import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.SoftwareQuality;
 import org.sonarsource.sonarlint.core.commons.api.TextRange;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.ImpactDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.CleanCodeAttribute;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
 import org.sonarsource.sonarlint.core.serverconnection.issues.ServerIssue;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
@@ -86,22 +88,25 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, projectKey, "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"" +
-          "}]," +
-          "\"resolved\": true" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName"\
+          }],\
+          "resolved": true\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server,
           storage -> storage.withProject(projectKey, project -> project.withMainBranch("branchName", branch -> branch.withIssue(aServerIssue("key1").open()))))
         .withBoundConfigScope("configScope", "connectionId", projectKey)
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", projectKey, "branchName", "file/path"))
@@ -117,25 +122,28 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, projectKey, "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"," +
-          "  \"impacts\": [ { \"softwareQuality\": \"MAINTAINABILITY\", \"severity\": \"BLOCKER\" } ]" +
-          "}]," +
-          "\"resolved\": true" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName",\
+            "impacts": [ { "softwareQuality": "MAINTAINABILITY", "severity": "BLOCKER" } ]\
+          }],\
+          "resolved": true\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server,
-          storage -> storage.withProject(projectKey, project -> project.withMainBranch("branchName", branch ->
-            branch.withIssue(aServerIssue("key1").withImpacts(Map.of(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.HIGH)))
-          )))
+          storage -> storage.withProject(projectKey,
+            project -> project.withMainBranch("branchName",
+              branch -> branch.withIssue(aServerIssue("key1").withImpacts(Map.of(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.HIGH))))))
         .withBoundConfigScope("configScope", "connectionId", projectKey)
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", projectKey, "branchName", "file/path"))
@@ -151,25 +159,26 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, projectKey, "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"," +
-          "  \"impacts\": [ { \"softwareQuality\": \"SECURITY\", \"severity\": \"BLOCKER\" } ]" +
-          "}]," +
-          "\"resolved\": true" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName",\
+            "impacts": [ { "softwareQuality": "SECURITY", "severity": "BLOCKER" } ]\
+          }],\
+          "resolved": true\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server,
-          storage -> storage.withProject(projectKey, project -> project.withMainBranch("branchName", branch ->
-            branch.withIssue(aServerIssue("key1"))
-          )))
+          storage -> storage.withProject(projectKey, project -> project.withMainBranch("branchName", branch -> branch.withIssue(aServerIssue("key1")))))
         .withBoundConfigScope("configScope", "connectionId", projectKey)
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", projectKey, "branchName", "file/path"))
@@ -185,25 +194,28 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, projectKey, "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"," +
-          "  \"impacts\": [ { \"softwareQuality\": \"MAINTAINABILITY\", \"severity\": \"HIGH\" } ]" +
-          "}]," +
-          "\"resolved\": true" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName",\
+            "impacts": [ { "softwareQuality": "MAINTAINABILITY", "severity": "HIGH" } ]\
+          }],\
+          "resolved": true\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server,
-          storage -> storage.withProject(projectKey, project -> project.withMainBranch("branchName", branch ->
-            branch.withIssue(aServerIssue("key1").withImpacts(Map.of(SoftwareQuality.SECURITY, ImpactSeverity.BLOCKER)))
-          )))
+          storage -> storage.withProject(projectKey,
+            project -> project.withMainBranch("branchName",
+              branch -> branch.withIssue(aServerIssue("key1").withImpacts(Map.of(SoftwareQuality.SECURITY, ImpactSeverity.BLOCKER))))))
         .withBoundConfigScope("configScope", "connectionId", projectKey)
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", projectKey, "branchName", "file/path"))
@@ -218,15 +230,18 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, "projectKey", "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"" +
-          "}]," +
-          "\"userSeverity\": \"CRITICAL\"" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName"\
+          }],\
+          "userSeverity": "CRITICAL"\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
@@ -234,7 +249,7 @@ class IssueEventsMediumTests {
           storage -> storage.withProject("projectKey",
             project -> project.withMainBranch("branchName", branch -> branch.withIssue(aServerIssue("key1").withSeverity(IssueSeverity.INFO)))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", "projectKey", "branchName", "file/path"))
@@ -249,15 +264,18 @@ class IssueEventsMediumTests {
           project -> project.withBranch("branchName"))
         .start();
       mockEvent(server, "projectKey", "java",
-        "event: IssueChanged\n" +
-          "data: {" +
-          "\"projectKey\": \"projectKey\"," +
-          "\"issues\": [{" +
-          "  \"issueKey\": \"key1\"," +
-          "  \"branchName\": \"branchName\"" +
-          "}]," +
-          "\"userType\": \"BUG\"" +
-          "}\n\n");
+        """
+          event: IssueChanged
+          data: {\
+          "projectKey": "projectKey",\
+          "issues": [{\
+            "issueKey": "key1",\
+            "branchName": "branchName"\
+          }],\
+          "userType": "BUG"\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
@@ -265,7 +283,7 @@ class IssueEventsMediumTests {
           storage -> storage.withProject("projectKey",
             project -> project.withMainBranch("branchName", branch -> branch.withIssue(aServerIssue("key1").withType(RuleType.VULNERABILITY)))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readIssues(backend, "connectionId", "projectKey", "branchName", "file/path"))
@@ -290,16 +308,14 @@ class IssueEventsMediumTests {
       var introductionDate = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       var serverWithIssues = harness.newFakeSonarQubeServer("10.4")
         .withQualityProfile("qpKey", qualityProfile -> qualityProfile.withLanguage("java").withActiveRule("java:S2094", activeRule -> activeRule
-          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)
-        ))
+          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)))
         .withProject(projectKey,
           project -> project
             .withQualityProfile("qpKey")
             .withBranch(branchName,
               branch -> branch.withIssue(serverIssueKey, "java:S2094", "Remove this empty class, write its code or make it an \"interface\".",
                 "author", baseDir.relativize(filePath).toString(), "1356c67d7ad1638d816bfb822dd2c25d", Constants.Severity.MAJOR, RuleType.CODE_SMELL,
-                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))
-            ))
+                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))))
         .withPlugin(TestPlugin.JAVA)
         .start();
 
@@ -312,8 +328,7 @@ class IssueEventsMediumTests {
           "  \"branchName\": \"" + branchName + "\"" +
           "}]," +
           "\"userType\": \"BUG\"" +
-          "}\n\n"
-      );
+          "}\n\n");
 
       var backend = harness.newBackend()
         .withEnabledLanguageInStandaloneMode(JS)
@@ -322,7 +337,7 @@ class IssueEventsMediumTests {
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, serverWithIssues)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofMinutes(2)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
       analyzeFileAndGetIssue(fileUri, client, backend, CONFIG_SCOPE_ID);
@@ -335,8 +350,12 @@ class IssueEventsMediumTests {
       assertThat(raisedIssues).isNotEmpty();
       var raisedIssueDto = raisedIssues.get(0);
       assertThat(raisedIssueDto.getServerKey()).isEqualTo(serverIssueKey);
-      assertThat(raisedIssueDto.getType()).isEqualTo(org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType.BUG);
       assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
+      assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CLEAR);
+      assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
+        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
+        .containsExactly(
+          tuple(org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality.MAINTAINABILITY, org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.LOW));
     }
 
     @SonarLintTest
@@ -355,16 +374,14 @@ class IssueEventsMediumTests {
       var introductionDate = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       var serverWithIssues = harness.newFakeSonarQubeServer("10.4")
         .withQualityProfile("qpKey", qualityProfile -> qualityProfile.withLanguage("java").withActiveRule("java:S2094", activeRule -> activeRule
-          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)
-        ))
+          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)))
         .withProject(projectKey,
           project -> project
             .withQualityProfile("qpKey")
             .withBranch(branchName,
               branch -> branch.withIssue(serverIssueKey, "java:S2094", "Remove this empty class, write its code or make it an \"interface\".",
                 "author", baseDir.relativize(filePath).toString(), "1356c67d7ad1638d816bfb822dd2c25d", Constants.Severity.MAJOR, RuleType.CODE_SMELL,
-                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))
-            ))
+                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))))
         .withPlugin(TestPlugin.JAVA)
         .start();
 
@@ -377,8 +394,7 @@ class IssueEventsMediumTests {
           "  \"branchName\": \"" + branchName + "\"" +
           "}]," +
           "\"resolved\": \"true\"" +
-          "}\n\n"
-      );
+          "}\n\n");
       var backend = harness.newBackend()
         .withEnabledLanguageInStandaloneMode(JS)
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
@@ -386,7 +402,7 @@ class IssueEventsMediumTests {
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, serverWithIssues)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofMinutes(2)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
       analyzeFileAndGetIssue(fileUri, client, backend, CONFIG_SCOPE_ID);
@@ -419,16 +435,14 @@ class IssueEventsMediumTests {
       var introductionDate = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       var serverWithIssues = harness.newFakeSonarQubeServer("10.4")
         .withQualityProfile("qpKey", qualityProfile -> qualityProfile.withLanguage("java").withActiveRule("java:S2094", activeRule -> activeRule
-          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)
-        ))
+          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)))
         .withProject(projectKey,
           project -> project
             .withQualityProfile("qpKey")
             .withBranch(branchName,
               branch -> branch.withIssue(serverIssueKey, "java:S2094", "Remove this empty class, write its code or make it an \"interface\".",
                 "author", baseDir.relativize(filePath).toString(), "1356c67d7ad1638d816bfb822dd2c25d", Constants.Severity.MAJOR, RuleType.CODE_SMELL,
-                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16), Map.of(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW))
-            ))
+                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16), Map.of(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW))))
         .withPlugin(TestPlugin.JAVA)
         .start();
 
@@ -442,8 +456,7 @@ class IssueEventsMediumTests {
           "  \"impacts\": [ { \"softwareQuality\": \"MAINTAINABILITY\", \"severity\": \"BLOCKER\" } ]" +
           "}]," +
           "\"resolved\": \"true\"" +
-          "}\n\n"
-      );
+          "}\n\n");
       var backend = harness.newBackend()
         .withEnabledLanguageInStandaloneMode(JS)
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
@@ -451,7 +464,7 @@ class IssueEventsMediumTests {
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, serverWithIssues)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofMinutes(2)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
       analyzeFileAndGetIssue(fileUri, client, backend, CONFIG_SCOPE_ID);
@@ -469,8 +482,7 @@ class IssueEventsMediumTests {
         .extracting("softwareQuality", "impactSeverity")
         .containsOnly(
           org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality.MAINTAINABILITY,
-          org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.BLOCKER
-        );
+          org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.BLOCKER);
     }
 
     @SonarLintTest
@@ -490,16 +502,14 @@ class IssueEventsMediumTests {
       var introductionDate = Instant.now().truncatedTo(ChronoUnit.SECONDS);
       var serverWithIssues = harness.newFakeSonarQubeServer("10.4")
         .withQualityProfile("qpKey", qualityProfile -> qualityProfile.withLanguage("java").withActiveRule("java:S2094", activeRule -> activeRule
-          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)
-        ))
+          .withSeverity(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MAJOR)))
         .withProject(projectKey,
           project -> project
             .withQualityProfile("qpKey")
             .withBranch(branchName,
               branch -> branch.withIssue(serverIssueKey, "java:S2094", "Remove this empty class, write its code or make it an \"interface\".",
                 "author", baseDir.relativize(filePath).toString(), "1356c67d7ad1638d816bfb822dd2c25d", Constants.Severity.MAJOR, RuleType.CODE_SMELL,
-                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))
-            ))
+                "OPEN", null, introductionDate, new TextRange(1, 13, 1, 16))))
         .withPlugin(TestPlugin.JAVA)
         .start();
 
@@ -512,8 +522,7 @@ class IssueEventsMediumTests {
           "  \"branchName\": \"" + branchName + "\"" +
           "}]," +
           "\"userSeverity\": \"MINOR\"" +
-          "}\n\n"
-      );
+          "}\n\n");
       var backend = harness.newBackend()
         .withEnabledLanguageInStandaloneMode(JS)
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
@@ -521,7 +530,7 @@ class IssueEventsMediumTests {
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, serverWithIssues)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofMinutes(2)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
       analyzeFileAndGetIssue(fileUri, client, backend, CONFIG_SCOPE_ID);
@@ -534,8 +543,12 @@ class IssueEventsMediumTests {
       assertThat(raisedIssues).isNotEmpty();
       var raisedIssueDto = raisedIssues.get(0);
       assertThat(raisedIssueDto.getServerKey()).isEqualTo(serverIssueKey);
-      assertThat(raisedIssueDto.getSeverity()).isEqualTo(org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity.MINOR);
       assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
+      assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CLEAR);
+      assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
+        .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
+        .containsExactly(
+          tuple(org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality.MAINTAINABILITY, org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.LOW));
     }
 
   }
@@ -549,7 +562,6 @@ class IssueEventsMediumTests {
     var sseServerUrl = sseServer.getUrl();
     server.getMockServer().stubFor(get("/api/push/sonarlint_events?projectKeys=" + projectKey + "&languages=" + languages)
       .willReturn(aResponse().proxiedFrom(sseServerUrl + "/api/push/sonarlint_events?projectKeys=" + projectKey + "&languages=" + languages)
-        .withStatus(200)
-      ));
+        .withStatus(200)));
   }
 }

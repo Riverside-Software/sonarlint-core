@@ -30,6 +30,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.GetOrg
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.ListUserOrganizationsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.OrganizationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.UsernamePasswordDto;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarcloud.ws.Organizations;
@@ -60,12 +61,12 @@ class OrganizationMediumTests {
       .build();
     var backend = harness.newBackend()
       .withSonarCloudUrl(sonarcloudMock.baseUrl())
-      .build(fakeClient);
+      .start(fakeClient);
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?member=true&ps=500&p=1")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder()
         .build()))));
 
-    var details = backend.getConnectionService().listUserOrganizations(new ListUserOrganizationsParams(Either.forLeft(new TokenDto("token"))));
+    var details = backend.getConnectionService().listUserOrganizations(new ListUserOrganizationsParams(Either.forLeft(new TokenDto("token")), SonarCloudRegion.EU));
 
     assertThat(details.get().getUserOrganizations()).isEmpty();
   }
@@ -74,7 +75,7 @@ class OrganizationMediumTests {
   void it_should_list_user_organizations(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
     var backend = harness.newBackend()
       .withSonarCloudUrl(sonarcloudMock.baseUrl())
-      .build();
+      .start();
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?member=true&ps=500&p=1")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder()
         .addOrganizations(Organizations.Organization.newBuilder()
@@ -94,7 +95,7 @@ class OrganizationMediumTests {
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?member=true&ps=500&p=2")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder().build()))));
 
-    var details = backend.getConnectionService().listUserOrganizations(new ListUserOrganizationsParams(Either.forLeft(new TokenDto("token"))));
+    var details = backend.getConnectionService().listUserOrganizations(new ListUserOrganizationsParams(Either.forLeft(new TokenDto("token")), SonarCloudRegion.EU));
 
     assertThat(details.get().getUserOrganizations()).extracting(OrganizationDto::getKey, OrganizationDto::getName, OrganizationDto::getDescription)
       .containsExactlyInAnyOrder(
@@ -109,7 +110,7 @@ class OrganizationMediumTests {
   void it_should_get_organizations_by_key(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
     var backend = harness.newBackend()
       .withSonarCloudUrl(sonarcloudMock.baseUrl())
-      .build();
+      .start();
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?organizations=myCustomOrg&ps=500&p=1")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder()
         .addOrganizations(Organizations.Organization.newBuilder()
@@ -121,7 +122,7 @@ class OrganizationMediumTests {
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?organizations=myCustomOrg&ps=500&p=2")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder().build()))));
 
-    var details = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forRight(new UsernamePasswordDto("user", "pwd")), "myCustomOrg"));
+    var details = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forRight(new UsernamePasswordDto("user", "pwd")), "myCustomOrg", SonarCloudRegion.EU));
 
     var organization = details.get().getOrganization();
     assertThat(organization.getKey()).isEqualTo("myCustom");
@@ -136,7 +137,7 @@ class OrganizationMediumTests {
   void it_should_fuzzy_search_and_cache_organizations_on_sonarcloud(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(sonarcloudMock.baseUrl())
-      .build();
+      .start();
     sonarcloudMock.stubFor(get("/api/organizations/search.protobuf?member=true&ps=500&p=1")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder()
         .addOrganizations(Organizations.Organization.newBuilder()
@@ -159,11 +160,11 @@ class OrganizationMediumTests {
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder().build()))));
 
     var credentials = Either.<TokenDto, UsernamePasswordDto>forRight(new UsernamePasswordDto("user", "pwd"));
-    var emptySearch = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "")).join();
+    var emptySearch = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "", org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion.EU)).join();
     assertThat(emptySearch.getTopResults())
       .isEmpty();
 
-    var searchMy = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "My")).join();
+    var searchMy = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "My", org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion.EU)).join();
     assertThat(searchMy.getTopResults())
       .extracting(OrganizationDto::getKey, OrganizationDto::getName)
       .containsExactly(
@@ -171,14 +172,14 @@ class OrganizationMediumTests {
         Assertions.tuple("org-foo1", "My Company Org Foo 1"),
         Assertions.tuple("org-foo2", "My Company Org Foo 2"));
 
-    var searchFooByName = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "Foo")).join();
+    var searchFooByName = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "Foo", org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion.EU)).join();
     assertThat(searchFooByName.getTopResults())
       .extracting(OrganizationDto::getKey, OrganizationDto::getName)
       .containsExactly(
         Assertions.tuple("org-foo1", "My Company Org Foo 1"),
         Assertions.tuple("org-foo2", "My Company Org Foo 2"));
 
-    var searchBarByKey = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "org-bar")).join();
+    var searchBarByKey = backend.getConnectionService().fuzzySearchUserOrganizations(new FuzzySearchUserOrganizationsParams(credentials, "org-bar", org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion.EU)).join();
     assertThat(searchBarByKey.getTopResults())
       .extracting(OrganizationDto::getKey, OrganizationDto::getName)
       .containsExactly(

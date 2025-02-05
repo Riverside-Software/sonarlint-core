@@ -44,6 +44,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreat
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fix.FixSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
@@ -74,21 +75,23 @@ class OpenFixSuggestionInIdeMediumTests {
   private static final String CONFIG_SCOPE_ID = "configScopeId";
   private static final String BRANCH_NAME = "branchName";
   private static final String ORG_KEY = "orgKey";
-  private static final String FIX_PAYLOAD = "{\n" +
-    "\"fileEdit\": {\n" +
-    "\"path\": \"Main.java\",\n" +
-    "\"changes\": [{\n" +
-    "\"beforeLineRange\": {\n" +
-    "\"startLine\": 0,\n" +
-    "\"endLine\": 1\n" +
-    "},\n" +
-    "\"before\": \"\",\n" +
-    "\"after\": \"var fix = 1;\"\n" +
-    "}]\n" +
-    "},\n" +
-    "\"suggestionId\": \"eb93b2b4-f7b0-4b5c-9460-50893968c264\",\n" +
-    "\"explanation\": \"Modifying the variable name is good\"\n" +
-    "}\n";
+  private static final String FIX_PAYLOAD = """
+    {
+    "fileEdit": {
+    "path": "Main.java",
+    "changes": [{
+    "beforeLineRange": {
+    "startLine": 0,
+    "endLine": 1
+    },
+    "before": "",
+    "after": "var fix = 1;"
+    }]
+    },
+    "suggestionId": "eb93b2b4-f7b0-4b5c-9460-50893968c264",
+    "explanation": "Modifying the variable name is good"
+    }
+    """;
 
   @SonarLintTest
   void it_should_update_the_telemetry_on_show_issue(SonarLintTestHarness harness, @TempDir Path baseDir) throws Exception {
@@ -103,7 +106,7 @@ class OpenFixSuggestionInIdeMediumTests {
       .withEmbeddedServer()
       .withTelemetryEnabled()
       .withOpenFixSuggestion()
-      .build(fakeClient);
+      .start(fakeClient);
 
     assertThat(backend.telemetryFilePath())
       .content().asBase64Decoded().asString()
@@ -131,7 +134,7 @@ class OpenFixSuggestionInIdeMediumTests {
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY);
     assertThat(statusCode).isEqualTo(200);
@@ -167,9 +170,11 @@ class OpenFixSuggestionInIdeMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
-    mockAssistCreatingConnection(backend, fakeClient, CONNECTION_ID);
-    mockAssistBinding(backend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      .beforeInitialize(createdBackend -> {
+        mockAssistCreatingConnection(createdBackend, fakeClient, CONNECTION_ID);
+        mockAssistBinding(createdBackend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      })
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY);
     assertThat(statusCode).isEqualTo(200);
@@ -191,9 +196,11 @@ class OpenFixSuggestionInIdeMediumTests {
       .withUnboundConfigScope("configScopeB", PROJECT_KEY + " 2")
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
-    mockAssistCreatingConnection(backend, fakeClient, CONNECTION_ID);
-    mockAssistBinding(backend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      .beforeInitialize(createdBackend -> {
+        mockAssistCreatingConnection(createdBackend, fakeClient, CONNECTION_ID);
+        mockAssistBinding(createdBackend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      })
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY);
 
@@ -217,9 +224,11 @@ class OpenFixSuggestionInIdeMediumTests {
       .withUnboundConfigScope("configScopeChild", PROJECT_KEY, "configScopeParent")
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
-    mockAssistCreatingConnection(backend, fakeClient, CONNECTION_ID);
-    mockAssistBinding(backend, fakeClient, "configScopeParent", CONNECTION_ID, PROJECT_KEY);
+      .beforeInitialize(createdBackend -> {
+        mockAssistCreatingConnection(createdBackend, fakeClient, CONNECTION_ID);
+        mockAssistBinding(createdBackend, fakeClient, "configScopeParent", CONNECTION_ID, PROJECT_KEY);
+      })
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY);
 
@@ -241,9 +250,11 @@ class OpenFixSuggestionInIdeMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
-    mockAssistCreatingConnection(backend, fakeClient, CONNECTION_ID);
-    mockAssistBinding(backend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      .beforeInitialize(createdBackend -> {
+        mockAssistCreatingConnection(createdBackend, fakeClient, CONNECTION_ID);
+        mockAssistBinding(createdBackend, fakeClient, CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY);
+      })
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY, "token-name", "token-value");
     assertThat(statusCode).isEqualTo(200);
@@ -271,7 +282,7 @@ class OpenFixSuggestionInIdeMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
+      .start(fakeClient);
 
     var statusCode = executeOpenFixSuggestionRequestWithToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, "orgKey", "token-name", "token-value");
     assertThat(statusCode).isEqualTo(200);
@@ -288,7 +299,7 @@ class OpenFixSuggestionInIdeMediumTests {
     var backend = harness.newBackend()
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build();
+      .start();
     var scServer = buildSonarCloudServer(harness).start();
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, "", PROJECT_KEY, BRANCH_NAME, ORG_KEY);
@@ -300,7 +311,7 @@ class OpenFixSuggestionInIdeMediumTests {
   void it_should_fail_request_when_feature_not_enabled(SonarLintTestHarness harness) throws Exception {
     var backend = harness.newBackend()
       .withEmbeddedServer()
-      .build();
+      .start();
     var scServer = buildSonarCloudServer(harness).start();
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, FIX_PAYLOAD, ISSUE_KEY, PROJECT_KEY, BRANCH_NAME, ORG_KEY);
@@ -312,7 +323,7 @@ class OpenFixSuggestionInIdeMediumTests {
   void it_should_fail_request_when_project_parameter_missing(SonarLintTestHarness harness) throws IOException, InterruptedException {
     var backend = harness.newBackend()
       .withEmbeddedServer()
-      .build();
+      .start();
     var scServer = buildSonarCloudServer(harness).start();
 
     var statusCode = executeOpenFixSuggestionRequestWithoutToken(backend, scServer, ISSUE_KEY, "", "", "", "");
@@ -330,7 +341,7 @@ class OpenFixSuggestionInIdeMediumTests {
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
+      .start(fakeClient);
     HttpRequest request = HttpRequest.newBuilder()
       .uri(URI.create(
         "http://localhost:" + backend.getEmbeddedServerPort() + "/sonarlint/api/fix/show?server=" + scServer.baseUrl() + "&issue=" + ISSUE_KEY +
@@ -357,7 +368,7 @@ class OpenFixSuggestionInIdeMediumTests {
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
       .withEmbeddedServer()
       .withOpenFixSuggestion()
-      .build(fakeClient);
+      .start(fakeClient);
     HttpRequest request = HttpRequest.newBuilder()
       .uri(URI.create(
         "http://localhost:" + backend.getEmbeddedServerPort() + "/sonarlint/api/fix/show?server=" + scServer.baseUrl() + "&issue=" + ISSUE_KEY +
@@ -414,7 +425,7 @@ class OpenFixSuggestionInIdeMediumTests {
     doAnswer((Answer<AssistCreatingConnectionResponse>) invocation -> {
       backend.getConnectionService().didUpdateConnections(
         new DidUpdateConnectionsParams(Collections.emptyList(),
-          List.of(new SonarCloudConnectionConfigurationDto(connectionId, ORG_KEY, true))));
+          List.of(new SonarCloudConnectionConfigurationDto(connectionId, ORG_KEY, SonarCloudRegion.EU, true))));
       return new AssistCreatingConnectionResponse(connectionId);
     }).when(fakeClient).assistCreatingConnection(any(), any());
   }

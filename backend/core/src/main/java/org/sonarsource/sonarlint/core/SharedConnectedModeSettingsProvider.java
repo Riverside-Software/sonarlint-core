@@ -20,8 +20,6 @@
 package org.sonarsource.sonarlint.core;
 
 import java.util.Objects;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.ConnectionKind;
 import org.sonarsource.sonarlint.core.commons.SonarLintException;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -32,18 +30,19 @@ import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
 
 import static java.lang.String.format;
 
-@Named
-@Singleton
 public class SharedConnectedModeSettingsProvider {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
-  private static final String SONARCLOUD_CONNECTED_MODE_CONFIG = "{\n" +
-    "    \"sonarCloudOrganization\": \"%s\",\n" +
-    "    \"projectKey\": \"%s\"\n" +
-    "}";
-  private static final String SONARQUBE_CONNECTED_MODE_CONFIG = "{\n" +
-    "    \"sonarQubeUri\": \"%s\",\n" +
-    "    \"projectKey\": \"%s\"\n" +
-    "}";
+  private static final String SONARCLOUD_CONNECTED_MODE_CONFIG = """
+    {
+        "sonarCloudOrganization": "%s",
+        "projectKey": "%s",
+        "region": "%s"
+    }""";
+  private static final String SONARQUBE_CONNECTED_MODE_CONFIG = """
+    {
+        "sonarQubeUri": "%s",
+        "projectKey": "%s"
+    }""";
 
   private final ConfigurationRepository configurationRepository;
   private final ConnectionConfigurationRepository connectionRepository;
@@ -66,8 +65,9 @@ public class SharedConnectedModeSettingsProvider {
       telemetryService.exportedConnectedMode();
       if (connection.getKind() == ConnectionKind.SONARCLOUD) {
         var organization = ((SonarCloudConnectionConfiguration) connection).getOrganization();
+        var region = ((SonarCloudConnectionConfiguration) connection).getRegion();
 
-        return format(SONARCLOUD_CONNECTED_MODE_CONFIG, organization, projectKey);
+        return format(SONARCLOUD_CONNECTED_MODE_CONFIG, organization, projectKey, region);
       } else {
         return format(SONARQUBE_CONNECTED_MODE_CONFIG, connection.getEndpointParams().getBaseUrl(), projectKey);
       }

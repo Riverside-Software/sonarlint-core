@@ -21,15 +21,11 @@ package org.sonarsource.sonarlint.core.telemetry;
 
 import java.time.LocalDateTime;
 import java.util.function.Consumer;
-import javax.inject.Named;
-import javax.inject.Singleton;
 
 /**
  * Manage telemetry data and persistent storage, and stateful telemetry actions.
  * The single central point for clients to manage telemetry.
  */
-@Named
-@Singleton
 public class TelemetryManager {
 
   static final int MIN_HOURS_BETWEEN_UPLOAD = 5;

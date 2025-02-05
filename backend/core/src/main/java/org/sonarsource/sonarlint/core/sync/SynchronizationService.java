@@ -20,11 +20,14 @@
 package org.sonarsource.sonarlint.core.sync;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -33,16 +36,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import org.jetbrains.annotations.NotNull;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import java.util.stream.Collectors;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.branch.MatchedSonarProjectBranchChangedEvent;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
+import org.sonarsource.sonarlint.core.commons.Version;
+import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.ExecutorServiceShutdownWatchable;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
@@ -59,7 +60,10 @@ import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.sync.DidSynchronizeConfigurationScopeParams;
 import org.sonarsource.sonarlint.core.serverapi.ServerApi;
-import org.sonarsource.sonarlint.core.serverconnection.ServerConnection;
+import org.sonarsource.sonarlint.core.serverapi.exception.ForbiddenException;
+import org.sonarsource.sonarlint.core.serverapi.exception.UnauthorizedException;
+import org.sonarsource.sonarlint.core.serverconnection.LocalStorageSynchronizer;
+import org.sonarsource.sonarlint.core.serverconnection.ServerInfoSynchronizer;
 import org.sonarsource.sonarlint.core.serverconnection.SonarServerSettingsChangedEvent;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.springframework.context.ApplicationEventPublisher;
@@ -69,18 +73,15 @@ import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toCollection;
-import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
 
-@Named
-@Singleton
 public class SynchronizationService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
   private final SonarLintRpcClient client;
   private final ConfigurationRepository configurationRepository;
   private final LanguageSupportRepository languageSupportRepository;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final TaskManager taskManager;
   private final StorageService storageService;
   private final Set<String> connectedModeEmbeddedPluginKeys;
@@ -101,14 +102,14 @@ public class SynchronizationService {
   private final Set<String> ignoreBranchEventForScopes = ConcurrentHashMap.newKeySet();
 
   public SynchronizationService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, LanguageSupportRepository languageSupportRepository,
-    ServerApiProvider serverApiProvider, StorageService storageService, InitializeParams params, TaintSynchronizationService taintSynchronizationService,
+    ConnectionManager connectionManager, StorageService storageService, InitializeParams params, TaintSynchronizationService taintSynchronizationService,
     IssueSynchronizationService issueSynchronizationService, HotspotSynchronizationService hotspotSynchronizationService,
     SonarProjectBranchesSynchronizationService sonarProjectBranchesSynchronizationService, SonarProjectBranchTrackingService sonarProjectBranchTrackingService,
     PluginsRepository pluginsRepository, ApplicationEventPublisher applicationEventPublisher) {
     this.client = client;
     this.configurationRepository = configurationRepository;
     this.languageSupportRepository = languageSupportRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.taskManager = new TaskManager(client);
     this.storageService = storageService;
     this.connectedModeEmbeddedPluginKeys = params.getConnectedModeEmbeddedPluginPathsByKey().keySet();
@@ -178,7 +179,7 @@ public class SynchronizationService {
     if (boundScopeBySonarProject.isEmpty()) {
       return;
     }
-    serverApiProvider.getServerApi(connectionId).ifPresent(serverApi -> {
+    connectionManager.withValidConnection(connectionId, serverApi -> {
       var subProgressGap = progressGap / boundScopeBySonarProject.size();
       var subProgress = progress;
       for (var entry : boundScopeBySonarProject.entrySet()) {
@@ -207,10 +208,9 @@ public class SynchronizationService {
       }));
   }
 
-  @NotNull
-  public ServerConnection getServerConnection(String connectionId, ServerApi serverApi) {
-    return new ServerConnection(storageService.getStorageFacade(), connectionId, serverApi.isSonarCloud(),
-      languageSupportRepository.getEnabledLanguagesInConnectedMode(), connectedModeEmbeddedPluginKeys);
+  public Version readOrSynchronizeServerVersion(String connectionId, ServerApi serverApi, SonarLintCancelMonitor cancelMonitor) {
+    var serverInfoSynchronizer = new ServerInfoSynchronizer(storageService.connection(connectionId));
+    return serverInfoSynchronizer.readOrSynchronizeServerInfo(serverApi, cancelMonitor).getVersion();
   }
 
   @EventListener
@@ -291,35 +291,39 @@ public class SynchronizationService {
   private void synchronizeConnectionAndProjectsIfNeededAsync(String connectionId, Collection<BoundScope> boundScopes) {
     var cancelMonitor = new SonarLintCancelMonitor();
     cancelMonitor.watchForShutdown(scheduledSynchronizer);
-    scheduledSynchronizer.submit(() -> serverApiProvider.getServerApi(connectionId)
-      .ifPresent(serverApi -> synchronizeConnectionAndProjectsIfNeededSync(connectionId, serverApi, boundScopes, cancelMonitor)));
+    scheduledSynchronizer.submit(() -> connectionManager.withValidConnection(connectionId, serverApi ->
+      synchronizeConnectionAndProjectsIfNeededSync(connectionId, serverApi, boundScopes, cancelMonitor)));
   }
 
   private void synchronizeConnectionAndProjectsIfNeededSync(String connectionId, ServerApi serverApi, Collection<BoundScope> boundScopes, SonarLintCancelMonitor cancelMonitor) {
-    var scopesToSync = boundScopes.stream().filter(this::shouldSynchronizeScope).collect(toList());
+    var scopesToSync = boundScopes.stream().filter(this::shouldSynchronizeScope).toList();
     if (scopesToSync.isEmpty()) {
       return;
     }
     scopesToSync.forEach(scope -> scopeSynchronizationTimestampRepository.setLastSynchronizationTimestampToNow(scope.getConfigScopeId()));
     // We will already trigger a sync of the project storage so we can temporarily ignore branch changed event for these config scopes
     ignoreBranchEventForScopes.addAll(scopesToSync.stream().map(BoundScope::getConfigScopeId).collect(toSet()));
-    var serverConnection = getServerConnection(connectionId, serverApi);
+    var enabledLanguagesToSync = languageSupportRepository.getEnabledLanguagesInConnectedMode().stream()
+      .filter(SonarLanguage::shouldSyncInConnectedMode).collect(Collectors.toCollection(LinkedHashSet::new));
+    var storage = storageService.connection(connectionId);
+    var serverInfoSynchronizer = new ServerInfoSynchronizer(storage);
+    var storageSynchronizer = new LocalStorageSynchronizer(enabledLanguagesToSync, connectedModeEmbeddedPluginKeys, serverInfoSynchronizer, storage);
     try {
       LOG.debug("Synchronizing storage of connection '{}'", connectionId);
-      var summary = serverConnection.sync(serverApi, cancelMonitor);
+      var summary = storageSynchronizer.synchronizeServerInfosAndPlugins(serverApi, cancelMonitor);
       if (summary.anyPluginSynchronized()) {
         // TODO re-review this solution before merging
         pluginsRepository.unload(connectionId);
         applicationEventPublisher.publishEvent(new PluginsSynchronizedEvent(connectionId));
       }
       scopesToSync = scopesToSync.stream()
-        .filter(boundScope -> shouldSynchronizeBinding(new Binding(connectionId, boundScope.getSonarProjectKey()))).collect(toList());
+        .filter(boundScope -> shouldSynchronizeBinding(new Binding(connectionId, boundScope.getSonarProjectKey()))).toList();
       var scopesPerProjectKey = scopesToSync.stream()
         .collect(groupingBy(BoundScope::getSonarProjectKey, mapping(BoundScope::getConfigScopeId, toSet())));
       scopesPerProjectKey.forEach((projectKey, configScopeIds) -> {
         bindingSynchronizationTimestampRepository.setLastSynchronizationTimestampToNow(new Binding(connectionId, projectKey));
         LOG.debug("Synchronizing storage of Sonar project '{}' for connection '{}'", projectKey, connectionId);
-        var analyzerConfigUpdateSummary = serverConnection.sync(serverApi, projectKey, cancelMonitor);
+        var analyzerConfigUpdateSummary = storageSynchronizer.synchronizeAnalyzerConfig(serverApi, projectKey, cancelMonitor);
         // XXX we might want to group those 2 events under one
         if (!analyzerConfigUpdateSummary.getUpdatedSettingsValueByKey().isEmpty()) {
           applicationEventPublisher.publishEvent(
@@ -334,6 +338,9 @@ public class SynchronizationService {
         cancelMonitor);
     } catch (Exception e) {
       LOG.error("Error during synchronization", e);
+      if (e instanceof UnauthorizedException || e instanceof ForbiddenException) {
+        throw e;
+      }
     } finally {
       ignoreBranchEventForScopes.removeAll(scopesToSync.stream().map(BoundScope::getConfigScopeId).collect(toSet()));
     }

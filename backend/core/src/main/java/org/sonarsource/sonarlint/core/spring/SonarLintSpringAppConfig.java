@@ -19,37 +19,32 @@
  */
 package org.sonarsource.sonarlint.core.spring;
 
-import java.io.IOException;
 import java.net.ProxySelector;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
-import java.util.Optional;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.inject.Named;
 import org.apache.hc.client5.http.auth.CredentialsProvider;
 import org.apache.hc.core5.util.Timeout;
 import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingClueProvider;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
 import org.sonarsource.sonarlint.core.ConfigurationService;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.ConnectionService;
 import org.sonarsource.sonarlint.core.ConnectionSuggestionProvider;
 import org.sonarsource.sonarlint.core.OrganizationsCache;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
 import org.sonarsource.sonarlint.core.SharedConnectedModeSettingsProvider;
 import org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment;
 import org.sonarsource.sonarlint.core.SonarProjectsCache;
 import org.sonarsource.sonarlint.core.TokenGeneratorHelper;
+import org.sonarsource.sonarlint.core.UserPaths;
 import org.sonarsource.sonarlint.core.VersionSoonUnsupportedHelper;
 import org.sonarsource.sonarlint.core.analysis.AnalysisEngineCache;
 import org.sonarsource.sonarlint.core.analysis.AnalysisService;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
 import org.sonarsource.sonarlint.core.analysis.UserAnalysisPropertiesRepository;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
-import org.sonarsource.sonarlint.core.commons.SonarLintUserHome;
 import org.sonarsource.sonarlint.core.commons.monitoring.DogfoodEnvironmentDetectionService;
 import org.sonarsource.sonarlint.core.commons.monitoring.MonitoringInitializationParams;
 import org.sonarsource.sonarlint.core.commons.monitoring.MonitoringService;
@@ -104,10 +99,8 @@ import org.sonarsource.sonarlint.core.sync.IssueSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SonarProjectBranchesSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SynchronizationService;
 import org.sonarsource.sonarlint.core.sync.TaintSynchronizationService;
-import org.sonarsource.sonarlint.core.tracking.IssueMatchingService;
 import org.sonarsource.sonarlint.core.tracking.KnownFindingsStorageService;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
-import org.sonarsource.sonarlint.core.tracking.SecurityHotspotMatchingService;
 import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TrackingService;
 import org.sonarsource.sonarlint.core.usertoken.UserTokenService;
@@ -133,7 +126,7 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   ConfigurationService.class,
   ConfigurationRepository.class,
   RulesService.class,
-  ServerApiProvider.class,
+  ConnectionManager.class,
   ConnectionConfigurationRepository.class,
   RulesRepository.class,
   RulesExtractionHelper.class,
@@ -161,7 +154,6 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   IssueService.class,
   AnalysisService.class,
   SmartNotifications.class,
-  IssueMatchingService.class,
   LocalOnlyIssueRepository.class,
   WebSocketService.class,
   ServerEventsService.class,
@@ -170,7 +162,6 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   StorageService.class,
   SeverityModeService.class,
   NewCodeService.class,
-  SecurityHotspotMatchingService.class,
   UserTokenService.class,
   RequestHandlerBindingAssistant.class,
   TaintVulnerabilityTrackingService.class,
@@ -207,25 +198,9 @@ public class SonarLintSpringAppConfig {
     return eventMulticaster;
   }
 
-  @Bean(name = "userHome")
-  Path provideSonarLintUserHome(InitializeParams params) {
-    var sonarlintUserHome = Optional.ofNullable(params.getSonarlintUserHome()).map(Paths::get).orElse(SonarLintUserHome.get());
-    createFolderIfNeeded(sonarlintUserHome);
-    return sonarlintUserHome;
-  }
-
-  @Bean(name = "workDir")
-  Path provideSonarLintWorkDir(InitializeParams params, @Named("userHome") Path sonarlintUserHome) {
-    var workDir = Optional.ofNullable(params.getWorkDir()).orElse(sonarlintUserHome.resolve("work"));
-    createFolderIfNeeded(workDir);
-    return workDir;
-  }
-
-  @Bean(name = "storageRoot")
-  Path provideSonarLintStorageRoot(InitializeParams params, @Named("userHome") Path sonarlintUserHome) {
-    var storageRoot = Optional.ofNullable(params.getStorageRoot()).orElse(sonarlintUserHome.resolve("storage"));
-    createFolderIfNeeded(storageRoot);
-    return storageRoot;
+  @Bean
+  UserPaths provideClientPaths(InitializeParams initializeParams) {
+    return UserPaths.from(initializeParams);
   }
 
   @Bean
@@ -236,9 +211,9 @@ public class SonarLintSpringAppConfig {
   }
 
   @Bean
-  HttpClientProvider provideHttpClientProvider(InitializeParams params, @Named("userHome") Path sonarlintUserHome, AskClientCertificatePredicate askClientCertificatePredicate,
+  HttpClientProvider provideHttpClientProvider(InitializeParams params, UserPaths userPaths, AskClientCertificatePredicate askClientCertificatePredicate,
     ProxySelector proxySelector, CredentialsProvider proxyCredentialsProvider) {
-    return new HttpClientProvider(params.getClientConstantInfo().getUserAgent(), adapt(params.getHttpConfiguration(), sonarlintUserHome), askClientCertificatePredicate,
+    return new HttpClientProvider(params.getClientConstantInfo().getUserAgent(), adapt(params.getHttpConfiguration(), userPaths.getUserHome()), askClientCertificatePredicate,
       proxySelector, proxyCredentialsProvider);
   }
 
@@ -279,13 +254,5 @@ public class SonarLintSpringAppConfig {
   @CheckForNull
   private static Timeout toTimeout(@Nullable Duration duration) {
     return duration == null ? null : Timeout.of(duration);
-  }
-
-  private static void createFolderIfNeeded(Path path) {
-    try {
-      Files.createDirectories(path);
-    } catch (IOException e) {
-      throw new IllegalStateException("Cannot create directory '" + path + "'", e);
-    }
   }
 }

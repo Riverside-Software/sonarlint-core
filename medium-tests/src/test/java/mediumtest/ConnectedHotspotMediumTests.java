@@ -42,12 +42,13 @@ class ConnectedHotspotMediumTests {
 
   @SonarLintTest
   void should_locally_detect_hotspots_when_connected_to_sonarqube(SonarLintTestHarness harness, @TempDir Path baseDir) {
-    var inputFile = createFile(baseDir, "Foo.java", "public class Foo {\n" +
-      "\n" +
-      "  void foo() {\n" +
-      "    String password = \"blue\";\n" +
-      "  }\n" +
-      "}\n");
+    var inputFile = createFile(baseDir, "Foo.java", """
+      public class Foo {
+        void foo() {
+          String password = "blue";
+        }
+      }
+      """);
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, List.of(
         new ClientFileDto(inputFile.toUri(), baseDir.relativize(inputFile), CONFIG_SCOPE_ID, false, null, inputFile, null, null, true)))
@@ -70,7 +71,7 @@ class ConnectedHotspotMediumTests {
       .withSonarQubeConnection(CONNECTION_ID, server)
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, projectKey)
       .withExtraEnabledLanguagesInConnectedMode(JAVA)
-      .build(client);
+      .start(client);
     client.waitForSynchronization();
 
     var analysisId = UUID.randomUUID();
@@ -82,7 +83,8 @@ class ConnectedHotspotMediumTests {
 
     var hotspot = client.getRaisedHotspotsForScopeIdAsList(CONFIG_SCOPE_ID).get(0);
     assertThat(hotspot.getRuleKey()).isEqualTo("java:S2068");
-    assertThat(hotspot.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
+    assertThat(hotspot.getSeverityMode().isLeft()).isTrue();
+    assertThat(hotspot.getSeverityMode().getLeft().getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
   }
 
   private static final String CONNECTION_ID = StringUtils.repeat("very-long-id", 30);

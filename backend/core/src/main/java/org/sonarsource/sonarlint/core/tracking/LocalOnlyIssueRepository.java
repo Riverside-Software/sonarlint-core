@@ -25,12 +25,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
 
-@Named
-@Singleton
 public class LocalOnlyIssueRepository {
   private final Map<Path, List<LocalOnlyIssue>> localOnlyIssuesByRelativePath = new ConcurrentHashMap<>();
 

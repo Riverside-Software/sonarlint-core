@@ -24,8 +24,6 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Optional;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.HttpException;
@@ -35,7 +33,7 @@ import org.apache.hc.core5.http.io.HttpRequestHandler;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.net.URIBuilder;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.commons.api.TextRange;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.file.FilePathTranslation;
@@ -53,19 +51,17 @@ import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
 
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 
-@Named
-@Singleton
 public class ShowHotspotRequestHandler implements HttpRequestHandler {
   private final SonarLintRpcClient client;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final TelemetryService telemetryService;
   private final RequestHandlerBindingAssistant requestHandlerBindingAssistant;
   private final PathTranslationService pathTranslationService;
 
-  public ShowHotspotRequestHandler(SonarLintRpcClient client, ServerApiProvider serverApiProvider, TelemetryService telemetryService,
+  public ShowHotspotRequestHandler(SonarLintRpcClient client, ConnectionManager connectionManager, TelemetryService telemetryService,
     RequestHandlerBindingAssistant requestHandlerBindingAssistant, PathTranslationService pathTranslationService) {
     this.client = client;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.telemetryService = telemetryService;
     this.requestHandlerBindingAssistant = requestHandlerBindingAssistant;
     this.pathTranslationService = pathTranslationService;
@@ -94,23 +90,21 @@ public class ShowHotspotRequestHandler implements HttpRequestHandler {
     response.setEntity(new StringEntity("OK"));
   }
 
-  private void showHotspotForScope(String connectionId, String configurationScopeId, String hotspotKey, SonarLintCancelMonitor cancelMonitor) {
+  private void showHotspotForScope(String connectionId, String configurationScopeId, String hotspotKey,
+    SonarLintCancelMonitor cancelMonitor) {
     var hotspotOpt = tryFetchHotspot(connectionId, hotspotKey, cancelMonitor);
     if (hotspotOpt.isPresent()) {
       pathTranslationService.getOrComputePathTranslation(configurationScopeId)
-        .ifPresent(translation -> client.showHotspot(new ShowHotspotParams(configurationScopeId, adapt(hotspotKey, hotspotOpt.get(), translation))));
+        .ifPresent(translation -> client.showHotspot(new ShowHotspotParams(configurationScopeId, adapt(hotspotKey, hotspotOpt.get(),
+          translation))));
     } else {
       client.showMessage(new ShowMessageParams(MessageType.ERROR, "Could not show the hotspot. See logs for more details"));
     }
   }
 
   private Optional<ServerHotspotDetails> tryFetchHotspot(String connectionId, String hotspotKey, SonarLintCancelMonitor cancelMonitor) {
-    var serverApi = serverApiProvider.getServerApi(connectionId);
-    if (serverApi.isEmpty()) {
-      // should not happen since we found the connection just before, improve the design ?
-      return Optional.empty();
-    }
-    return serverApi.get().hotspot().fetch(hotspotKey, cancelMonitor);
+    return connectionManager.withValidConnectionFlatMapOptionalAndReturn(connectionId, api -> api.hotspot().fetch(hotspotKey,
+      cancelMonitor));
   }
 
   private static HotspotDetailsDto adapt(String hotspotKey, ServerHotspotDetails hotspot, FilePathTranslation translation) {
@@ -153,20 +147,12 @@ public class ShowHotspotRequestHandler implements HttpRequestHandler {
     return new ShowHotspotQuery(params.get("server"), params.get("project"), params.get("hotspot"));
   }
 
-  private static class ShowHotspotQuery {
-    private final String serverUrl;
-    private final String projectKey;
-    private final String hotspotKey;
-
-    private ShowHotspotQuery(String serverUrl, String projectKey, String hotspotKey) {
-      this.serverUrl = serverUrl;
-      this.projectKey = projectKey;
-      this.hotspotKey = hotspotKey;
-    }
+  private record ShowHotspotQuery(String serverUrl, String projectKey, String hotspotKey) {
 
     public boolean isValid() {
       return isNotBlank(serverUrl) && isNotBlank(projectKey) && isNotBlank(hotspotKey);
     }
+
   }
 
 }

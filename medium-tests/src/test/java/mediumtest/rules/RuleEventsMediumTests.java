@@ -24,7 +24,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -75,21 +74,24 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"deactivatedRules\": []," +
-        "\"activatedRules\": [{" +
-        "\"key\": \"java:S0000\"," +
-        "\"language\": \"java\"," +
-        "\"severity\": \"MAJOR\"," +
-        "\"params\": [{" +
-        "\"key\": \"key1\"," +
-        "\"value\": \"value1\"" +
-        "}]" +
-        "}]," +
-        "\"deactivatedRules\": [\"java:S4321\"]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "deactivatedRules": [],\
+          "activatedRules": [{\
+            "key": "java:S0000",\
+            "language": "java",\
+            "severity": "MAJOR",\
+            "params": [{\
+              "key": "key1",\
+              "value": "value1"\
+            }]\
+          }],\
+          "deactivatedRules": ["java:S4321"]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -97,7 +99,7 @@ class RuleEventsMediumTests {
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -112,24 +114,27 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"deactivatedRules\": []," +
-        "\"activatedRules\": [{" +
-        "\"key\": \"java:S0000\"," +
-        "\"language\": \"java\"," +
-        "\"severity\": \"MAJOR\"," +
-        "\"params\": [{" +
-        "\"key\": \"key1\"," +
-        "\"value\": \"value1\"" +
-        "}]," +
-        "\"impacts\": [{" +
-        "\"softwareQuality\": \"SECURITY\"," +
-        "\"severity\": \"HIGH\"" +
-        "}]" +
-        "}]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "deactivatedRules": [],\
+          "activatedRules": [{\
+            "key": "java:S0000",\
+            "language": "java",\
+            "severity": "MAJOR",\
+            "params": [{\
+              "key": "key1",\
+              "value": "value1"\
+            }],\
+            "impacts": [{\
+              "softwareQuality": "SECURITY",\
+              "severity": "HIGH"\
+            }]\
+          }]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -137,7 +142,7 @@ class RuleEventsMediumTests {
         .withServerSentEventsEnabled()
         .withSonarQubeConnection("connectionId", server)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -161,20 +166,23 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"deactivatedRules\": []," +
-        "\"activatedRules\": [{" +
-        "\"key\": \"java:S0000\"," +
-        "\"language\": \"java\"," +
-        "\"severity\": \"MAJOR\"," +
-        "\"params\": [{" +
-        "\"key\": \"key1\"," +
-        "\"value\": \"value1\"" +
-        "}]" +
-        "}]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "deactivatedRules": [],\
+          "activatedRules": [{\
+            "key": "java:S0000",\
+            "language": "java",\
+            "severity": "MAJOR",\
+            "params": [{\
+              "key": "key1",\
+              "value": "value1"\
+            }]\
+          }]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -184,7 +192,7 @@ class RuleEventsMediumTests {
           project -> project.withRuleSet("java",
             ruleSet -> ruleSet.withActiveRule("java:S0000", "INFO"))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -199,20 +207,23 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"deactivatedRules\": []," +
-        "\"activatedRules\": [{" +
-        "\"key\": \"java:S0001\"," +
-        "\"language\": \"java\"," +
-        "\"severity\": \"MAJOR\"," +
-        "\"params\": [{" +
-        "\"key\": \"key1\"," +
-        "\"value\": \"value1\"" +
-        "}]" +
-        "}]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "deactivatedRules": [],\
+          "activatedRules": [{\
+            "key": "java:S0001",\
+            "language": "java",\
+            "severity": "MAJOR",\
+            "params": [{\
+              "key": "key1",\
+              "value": "value1"\
+            }]\
+          }]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -222,7 +233,7 @@ class RuleEventsMediumTests {
           project -> project.withRuleSet("java",
             ruleSet -> ruleSet.withActiveRule("java:S0000", "INFO"))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -235,13 +246,14 @@ class RuleEventsMediumTests {
     @SonarLintTest
     void it_should_reanalyze_open_files_on_new_rules_enabled(SonarLintTestHarness harness, @TempDir Path baseDir) {
       var filePath = createFile(baseDir, "Foo.java",
-        "public class Foo {\n" +
-          "\n" +
-          "  void foo() {\n" +
-          "    // TODO foo\n" +
-          "    int i = 0;\n" +
-          "  }\n" +
-          "}\n");
+        """
+          public class Foo {
+            void foo() {
+              // TODO foo
+              int i = 0;
+            }
+          }
+          """);
       var fileUri = filePath.toUri();
       var connectionId = "connectionId";
       var branchName = "branchName";
@@ -259,24 +271,27 @@ class RuleEventsMediumTests {
         .withPlugin(TestPlugin.JAVA)
         .start();
       mockEvent(server, projectKey,
-        "event: RuleSetChanged\n" +
-          "data: {" +
-          "\"projects\": [\"projectKey\"]," +
-          "\"deactivatedRules\": []," +
-          "\"activatedRules\": [{" +
-          "\"key\": \"java:S1135\"," +
-          "\"language\": \"java\"," +
-          "\"severity\": \"MAJOR\"," +
-          "\"params\": []" +
-          "}]" +
-          "}\n\n");
+        """
+          event: RuleSetChanged
+          data: {\
+            "projects": ["projectKey"],\
+            "deactivatedRules": [],\
+            "activatedRules": [{\
+              "key": "java:S1135",\
+              "language": "java",\
+              "severity": "MAJOR",\
+              "params": []\
+            }]\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, server)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
@@ -289,7 +304,7 @@ class RuleEventsMediumTests {
       raisedIssues = client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(fileUri);
 
       assertThat(raisedIssues).hasSize(2);
-      assertThat(raisedIssues.stream().map(RaisedFindingDto::getRuleKey).collect(Collectors.toList()))
+      assertThat(raisedIssues.stream().map(RaisedFindingDto::getRuleKey).toList())
         .containsExactlyInAnyOrder("java:S1135", "java:S1481");
     }
 
@@ -299,20 +314,23 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"deactivatedRules\": []," +
-        "\"activatedRules\": [{" +
-        "\"key\": \"cs:S0000\"," +
-        "\"language\": \"cs\"," +
-        "\"severity\": \"MAJOR\"," +
-        "\"params\": [{" +
-        "\"key\": \"key1\"," +
-        "\"value\": \"value1\"" +
-        "}]" +
-        "}]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "deactivatedRules": [],\
+          "activatedRules": [{\
+            "key": "cs:S0000",\
+            "language": "cs",\
+            "severity": "MAJOR",\
+            "params": [{\
+              "key": "key1",\
+              "value": "value1"\
+            }]\
+          }]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -322,7 +340,7 @@ class RuleEventsMediumTests {
           project -> project.withRuleSet("java",
             ruleSet -> ruleSet.withActiveRule("java:S0000", "INFO"))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -337,12 +355,15 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"activatedRules\": []," +
-        "\"deactivatedRules\": [\"java:S0000\"]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "activatedRules": [],\
+          "deactivatedRules": ["java:S0000"]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -352,7 +373,7 @@ class RuleEventsMediumTests {
           project -> project.withRuleSet("java",
             ruleSet -> ruleSet.withActiveRule("java:S0000", "INFO").withActiveRule("java:S0001", "INFO"))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -366,12 +387,15 @@ class RuleEventsMediumTests {
         .withProject("projectKey",
           project -> project.withBranch("branchName"))
         .start();
-      mockEvent(server, "projectKey", "event: RuleSetChanged\n" +
-        "data: {" +
-        "\"projects\": [\"projectKey\", \"projectKey2\"]," +
-        "\"activatedRules\": []," +
-        "\"deactivatedRules\": [\"java:S0000\"]" +
-        "}\n\n");
+      mockEvent(server, "projectKey", """
+        event: RuleSetChanged
+        data: {\
+          "projects": ["projectKey", "projectKey2"],\
+          "activatedRules": [],\
+          "deactivatedRules": ["java:S0000"]\
+        }
+        
+        """);
       var client = harness.newFakeClient().build();
       when(client.matchSonarProjectBranch(eq("configScope"), any(), any(), any())).thenReturn("branchName");
       var backend = harness.newBackend()
@@ -381,7 +405,7 @@ class RuleEventsMediumTests {
           project -> project.withRuleSet("java",
             ruleSet -> ruleSet.withActiveRule("java:S0000", "INFO"))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build();
+        .start();
       sseServer.shouldSendServerEventOnce();
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(readRuleSets(backend, "connectionId", "projectKey"))
@@ -391,15 +415,16 @@ class RuleEventsMediumTests {
     @SonarLintTest
     void it_should_re_raise_issues_without_deactivated_rules(SonarLintTestHarness harness, @TempDir Path baseDir) {
       var filePath = createFile(baseDir, "Foo.java",
-        "public class Foo {\n" +
-          "\n" +
-          "  void foo() {\n" +
-          "    // TODO foo\n" +
-          "    int i = 0;\n" +
-          "    String password = \"blue\";\n" +
-          "    String ip = \"192.168.12.42\";\n" +
-          "  }\n" +
-          "}\n");
+        """
+          public class Foo {
+            void foo() {
+              // TODO foo
+              int i = 0;
+              String password = "blue";
+              String ip = "192.168.12.42";
+            }
+          }
+          """);
       var fileUri = filePath.toUri();
       var connectionId = "connectionId";
       var branchName = "branchName";
@@ -421,12 +446,15 @@ class RuleEventsMediumTests {
         .start();
 
       mockEvent(server, projectKey,
-        "event: RuleSetChanged\n" +
-          "data: {" +
-          "\"projects\": [\"projectKey\"]," +
-          "\"activatedRules\": []," +
-          "\"deactivatedRules\": [\"java:S1481\", \"java:S1313\"]" +
-          "}\n\n");
+        """
+          event: RuleSetChanged
+          data: {\
+            "projects": ["projectKey"],\
+            "activatedRules": [],\
+            "deactivatedRules": ["java:S1481", "java:S1313"]\
+          }
+          
+          """);
       var backend = harness.newBackend()
         .withExtraEnabledLanguagesInConnectedMode(JAVA)
         .withServerSentEventsEnabled()
@@ -434,7 +462,7 @@ class RuleEventsMediumTests {
         .withFullSynchronization()
         .withSonarQubeConnection(connectionId, server)
         .withBoundConfigScope(CONFIG_SCOPE_ID, connectionId, projectKey)
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(client.getSynchronizedConfigScopeIds()).contains(CONFIG_SCOPE_ID));
       var raisedIssues = analyzeFileAndGetIssues(fileUri, client, backend, CONFIG_SCOPE_ID);

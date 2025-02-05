@@ -40,18 +40,18 @@ import static utils.AnalysisUtils.createFile;
 
 class ConnectedStorageProblemsMediumTests {
   private static final String CONNECTION_ID = "localhost";
-  private final String CONFIG_SCOPE_ID = "myProject";
+  private static final String CONFIG_SCOPE_ID = "myProject";
 
   @SonarLintTest
   void corrupted_plugin_should_not_prevent_startup(SonarLintTestHarness harness, @TempDir Path baseDir) throws Exception {
-    var inputFile = createFile(baseDir, "Foo.java",
-      "public class Foo {\n"
-        + "  public void foo() {\n"
-        + "    int x;\n"
-        + "    System.out.println(\"Foo\");\n"
-        + "    System.out.println(\"Foo\"); //NOSONAR\n"
-        + "  }\n"
-        + "}");
+    var inputFile = createFile(baseDir, "Foo.java", """
+      public class Foo {
+        public void foo() {
+          int x;
+          System.out.println("Foo");
+          System.out.println("Foo"); //NOSONAR
+        }
+      }""");
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, List.of(
         new ClientFileDto(inputFile.toUri(), baseDir.relativize(inputFile), CONFIG_SCOPE_ID, false, null, inputFile, null, null, true)
@@ -67,8 +67,7 @@ class ConnectedStorageProblemsMediumTests {
             ruleSet -> ruleSet.withActiveRule("java:S106", "BLOCKER"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, CONFIG_SCOPE_ID)
       .withEnabledLanguageInStandaloneMode(org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA)
-      .withEnabledLanguageInStandaloneMode(org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JS).build(client);
-
+      .withEnabledLanguageInStandaloneMode(org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JS).start(client);
 
     backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(),
       List.of(inputFile.toUri()), Map.of(), false, Instant.now().toEpochMilli())).get();

@@ -23,11 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
 
-@Named
-@Singleton
 public class UserAnalysisPropertiesRepository {
 
   private static final String PATH_TO_COMPILE_COMMANDS_ANALYZER_PROPERTY = "sonar.cfamily.compile-commands";

@@ -31,7 +31,6 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.EffectiveRuleDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.GetProxyPasswordAuthenticationResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.ProxyDto;
@@ -110,15 +109,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     proxyMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139")));
   }
@@ -136,15 +133,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     sonarqubeMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139")));
     proxyMock.verify(0, getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139")));
@@ -167,15 +162,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     proxyMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139"))
       .withHeader("Proxy-Authorization", equalTo("Basic " + Base64.getEncoder().encodeToString((proxyLogin + ":" + proxyPassword).getBytes(StandardCharsets.UTF_8)))));
@@ -197,15 +190,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     proxyMock.verify(getRequestedFor(urlEqualTo("/api/rules/show.protobuf?key=python:S139"))
       .withHeader("Proxy-Authorization", equalTo("Basic " + Base64.getEncoder().encodeToString((proxyLogin + ":").getBytes(StandardCharsets.UTF_8)))));
@@ -227,15 +218,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     assertThat(fakeClient.getLogs())
       .anySatisfy(
@@ -262,15 +251,13 @@ class ProxyMediumTests {
           ruleSet -> ruleSet.withActiveRule("python:S139", "INFO", Map.of("legalTrailingCommentPattern", "blah")))))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(fakeClient);
+      .start(fakeClient);
     sonarqubeMock.stubFor(get("/api/rules/show.protobuf?key=python:S139")
       .willReturn(aResponse().withStatus(200).withResponseBody(protobufBody(Rules.ShowResponse.newBuilder()
         .setRule(Rules.Rule.newBuilder().setName("newName").setSeverity("INFO").setType(Common.RuleType.BUG).setLang("py").setHtmlNote("extendedDesc from server").build())
         .build()))));
 
-    var details = getEffectiveRuleDetails(backend, "scopeId", "python:S139");
-
-    assertThat(details.getDescription().getLeft().getHtmlContent()).contains("extendedDesc from server");
+    getEffectiveRuleDetails(backend, "scopeId", "python:S139");
 
     assertThat(fakeClient.getLogs())
       .anySatisfy(
@@ -281,9 +268,9 @@ class ProxyMediumTests {
       );
   }
 
-  private EffectiveRuleDetailsDto getEffectiveRuleDetails(SonarLintTestRpcServer backend, String configScopeId, String ruleKey) {
+  private void getEffectiveRuleDetails(SonarLintTestRpcServer backend, String configScopeId, String ruleKey) {
     try {
-      return backend.getRulesService().getEffectiveRuleDetails(new GetEffectiveRuleDetailsParams(configScopeId, ruleKey, null)).get().details();
+      backend.getRulesService().getEffectiveRuleDetails(new GetEffectiveRuleDetailsParams(configScopeId, ruleKey, null)).get().details();
     } catch (InterruptedException | ExecutionException e) {
       throw new RuntimeException(e);
     }

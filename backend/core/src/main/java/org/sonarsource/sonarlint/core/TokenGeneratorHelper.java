@@ -20,8 +20,6 @@
 package org.sonarsource.sonarlint.core;
 
 import java.util.concurrent.CompletableFuture;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.embedded.server.AwaitingUserTokenFutureRepository;
 import org.sonarsource.sonarlint.core.embedded.server.EmbeddedServer;
@@ -33,8 +31,6 @@ import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 
 import static org.sonarsource.sonarlint.core.serverapi.UrlUtils.urlEncode;
 
-@Named
-@Singleton
 public class TokenGeneratorHelper {
 
   private final SonarLintRpcClient client;

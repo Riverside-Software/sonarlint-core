@@ -27,15 +27,10 @@ import java.net.SocketAddress;
 import java.net.URI;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
+import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.SelectProxiesParams;
-import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 
-@Named
-@Singleton
 public class ClientProxySelector extends ProxySelector {
 
   private final SonarLintLogger logger = SonarLintLogger.get();
@@ -59,7 +54,7 @@ public class ClientProxySelector extends ProxySelector {
             return new Proxy(p.getType(), new InetSocketAddress(p.getHostname(), p.getPort()));
           }
         })
-        .collect(Collectors.toList());
+        .toList();
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       logger.warn("Interrupted!", e);

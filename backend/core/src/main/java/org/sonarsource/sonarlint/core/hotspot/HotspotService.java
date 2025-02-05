@@ -20,17 +20,16 @@
 package org.sonarsource.sonarlint.core.hotspot;
 
 import java.util.List;
-import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.HotspotReviewStatus;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
+import org.sonarsource.sonarlint.core.event.SonarServerEventReceivedEvent;
+import org.sonarsource.sonarlint.core.reporting.FindingReportingService;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
@@ -39,14 +38,19 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.CheckLocalDet
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.CheckStatusChangePermittedResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.HotspotStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.OpenUrlInBrowserParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaisedHotspotDto;
 import org.sonarsource.sonarlint.core.serverapi.EndpointParams;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 import org.sonarsource.sonarlint.core.serverapi.UrlUtils;
+import org.sonarsource.sonarlint.core.serverapi.hotspot.ServerHotspot;
+import org.sonarsource.sonarlint.core.serverapi.push.SecurityHotspotChangedEvent;
+import org.sonarsource.sonarlint.core.serverapi.push.SecurityHotspotClosedEvent;
+import org.sonarsource.sonarlint.core.serverapi.push.SecurityHotspotRaisedEvent;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
+import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
+import org.springframework.context.event.EventListener;
 
-@Named
-@Singleton
 public class HotspotService {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -57,21 +61,23 @@ public class HotspotService {
   private final ConfigurationRepository configurationRepository;
   private final ConnectionConfigurationRepository connectionRepository;
 
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final TelemetryService telemetryService;
   private final SonarProjectBranchTrackingService branchTrackingService;
+  private final FindingReportingService findingReportingService;
   private final StorageService storageService;
 
   public HotspotService(SonarLintRpcClient client, StorageService storageService, ConfigurationRepository configurationRepository,
-    ConnectionConfigurationRepository connectionRepository, ServerApiProvider serverApiProvider, TelemetryService telemetryService,
-    SonarProjectBranchTrackingService branchTrackingService) {
+    ConnectionConfigurationRepository connectionRepository, ConnectionManager connectionManager, TelemetryService telemetryService,
+    SonarProjectBranchTrackingService branchTrackingService, FindingReportingService findingReportingService) {
     this.client = client;
     this.storageService = storageService;
     this.configurationRepository = configurationRepository;
     this.connectionRepository = connectionRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.telemetryService = telemetryService;
     this.branchTrackingService = branchTrackingService;
+    this.findingReportingService = findingReportingService;
   }
 
   public void openHotspotInBrowser(String configScopeId, String hotspotKey) {
@@ -117,8 +123,8 @@ public class HotspotService {
   public CheckStatusChangePermittedResponse checkStatusChangePermitted(String connectionId, String hotspotKey, SonarLintCancelMonitor cancelMonitor) {
     // fixme add getConnectionByIdOrThrow
     var connection = connectionRepository.getConnectionById(connectionId);
-    var serverApi = serverApiProvider.getServerApiOrThrow(connectionId);
-    var r = serverApi.hotspot().show(hotspotKey, cancelMonitor);
+    var r = connectionManager.getConnectionOrThrow(connectionId)
+      .withClientApiAndReturn(serverApi -> serverApi.hotspot().show(hotspotKey, cancelMonitor));
     var allowedStatuses = HotspotReviewStatus.allowedStatusesOn(connection.getKind());
     // canChangeStatus is false when the 'Administer Hotspots' permission is missing
     // normally the 'Browse' permission is also required, but we assume it's present as the client knows the hotspot key
@@ -131,7 +137,7 @@ public class HotspotService {
       coreStatuses.stream().map(s -> HotspotStatus.valueOf(s.name()))
         // respect ordering of the client-api enum for the UI
         .sorted()
-        .collect(Collectors.toList()));
+        .toList());
   }
 
   public void changeStatus(String configurationScopeId, String hotspotKey, HotspotReviewStatus newStatus, SonarLintCancelMonitor cancelMonitor) {
@@ -140,24 +146,17 @@ public class HotspotService {
       LOG.debug("No binding for config scope {}", configurationScopeId);
       return;
     }
-    var connectionOpt = serverApiProvider.getServerApi(effectiveBindingOpt.get().getConnectionId());
-    if (connectionOpt.isEmpty()) {
-      LOG.debug("Connection {} is gone", effectiveBindingOpt.get().getConnectionId());
-      return;
-    }
-    connectionOpt.get().hotspot().changeStatus(hotspotKey, newStatus, cancelMonitor);
-    saveStatusInStorage(effectiveBindingOpt.get(), hotspotKey, newStatus);
-    telemetryService.hotspotStatusChanged();
+    connectionManager.withValidConnection(effectiveBindingOpt.get().getConnectionId(), serverApi -> {
+      serverApi.hotspot().changeStatus(hotspotKey, newStatus, cancelMonitor);
+      saveStatusInStorage(effectiveBindingOpt.get(), hotspotKey, newStatus);
+      telemetryService.hotspotStatusChanged();
+    });
   }
 
   private void saveStatusInStorage(Binding binding, String hotspotKey, HotspotReviewStatus newStatus) {
     storageService.binding(binding)
       .findings()
       .changeHotspotStatus(hotspotKey, newStatus);
-  }
-
-  private boolean isLocalDetectionSupported(boolean isSonarCloud, String connectionId) {
-    return isSonarCloud || storageService.connection(connectionId).serverInfo().read().isPresent();
   }
 
   static String buildHotspotUrl(String projectKey, String branch, String hotspotKey, EndpointParams endpointParams) {
@@ -169,5 +168,87 @@ public class HotspotService {
       + UrlUtils.urlEncode(hotspotKey);
 
     return ServerApiHelper.concat(endpointParams.getBaseUrl(), relativePath);
+  }
+
+  @EventListener
+  public void onServerEventReceived(SonarServerEventReceivedEvent event) {
+    var connectionId = event.getConnectionId();
+    var serverEvent = event.getEvent();
+    if (serverEvent instanceof SecurityHotspotChangedEvent hotspotChangedEvent) {
+      updateStorage(connectionId, hotspotChangedEvent);
+      republishPreviouslyRaisedHotspots(connectionId, hotspotChangedEvent);
+    } else if (serverEvent instanceof SecurityHotspotClosedEvent hotspotClosedEvent) {
+      updateStorage(connectionId, hotspotClosedEvent);
+      republishPreviouslyRaisedHotspots(connectionId, hotspotClosedEvent);
+    } else if (serverEvent instanceof SecurityHotspotRaisedEvent hotspotRaisedEvent) {
+      // We could try to match with an existing hotspot. But we don't do it because we don't invest in hotspots right now.
+      updateStorage(connectionId, hotspotRaisedEvent);
+    }
+  }
+
+  private void updateStorage(String connectionId, SecurityHotspotRaisedEvent event) {
+    var hotspot = new ServerHotspot(
+      event.getHotspotKey(),
+      event.getRuleKey(),
+      event.getMainLocation().getMessage(),
+      event.getMainLocation().getFilePath(),
+      TaintVulnerabilityTrackingService.adapt(event.getMainLocation().getTextRange()),
+      event.getCreationDate(),
+      event.getStatus(),
+      event.getVulnerabilityProbability(),
+      null);
+    var projectKey = event.getProjectKey();
+    storageService.connection(connectionId).project(projectKey).findings().insert(event.getBranch(), hotspot);
+  }
+
+  private void updateStorage(String connectionId, SecurityHotspotClosedEvent event) {
+    var projectKey = event.getProjectKey();
+    storageService.connection(connectionId).project(projectKey).findings().deleteHotspot(event.getHotspotKey());
+  }
+
+  private void updateStorage(String connectionId, SecurityHotspotChangedEvent event) {
+    var projectKey = event.getProjectKey();
+    storageService.connection(connectionId).project(projectKey).findings().updateHotspot(event.getHotspotKey(), hotspot -> {
+      var status = event.getStatus();
+      if (status != null) {
+        hotspot.setStatus(status);
+      }
+      var assignee = event.getAssignee();
+      if (assignee != null) {
+        hotspot.setAssignee(assignee);
+      }
+    });
+  }
+
+  private void republishPreviouslyRaisedHotspots(String connectionId, SecurityHotspotChangedEvent event) {
+    var boundScopes = configurationRepository.getBoundScopesToConnectionAndSonarProject(connectionId, event.getProjectKey());
+    boundScopes.forEach(scope -> {
+      var scopeId = scope.getConfigScopeId();
+      findingReportingService.updateAndReportHotspots(scopeId,
+        raisedHotspotDto -> changedHotspotUpdater(raisedHotspotDto, event));
+    });
+  }
+
+  private static RaisedHotspotDto changedHotspotUpdater(RaisedHotspotDto raisedHotspotDto, SecurityHotspotChangedEvent event) {
+    if (event.getHotspotKey().equals(raisedHotspotDto.getServerKey())) {
+      return raisedHotspotDto.builder().withHotspotStatus(HotspotStatus.valueOf(event.getStatus().name())).buildHotspot();
+    }
+    return raisedHotspotDto;
+  }
+
+  private void republishPreviouslyRaisedHotspots(String connectionId, SecurityHotspotClosedEvent event) {
+    var boundScopes = configurationRepository.getBoundScopesToConnectionAndSonarProject(connectionId, event.getProjectKey());
+    boundScopes.forEach(scope -> {
+      var scopeId = scope.getConfigScopeId();
+      findingReportingService.updateAndReportHotspots(scopeId,
+        raisedHotspotDto -> closedHotspotUpdater(raisedHotspotDto, event));
+    });
+  }
+
+  private static RaisedHotspotDto closedHotspotUpdater(RaisedHotspotDto raisedHotspotDto, SecurityHotspotClosedEvent event) {
+    if (event.getHotspotKey().equals(raisedHotspotDto.getServerKey())) {
+      return null;
+    }
+    return raisedHotspotDto;
   }
 }

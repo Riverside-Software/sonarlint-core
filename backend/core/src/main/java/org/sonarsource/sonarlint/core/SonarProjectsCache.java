@@ -28,9 +28,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.event.ConnectionConfigurationRemovedEvent;
@@ -41,12 +38,10 @@ import org.springframework.context.event.EventListener;
 
 import static org.sonarsource.sonarlint.core.commons.log.SonarLintLogger.singlePlural;
 
-@Named
-@Singleton
 public class SonarProjectsCache {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
 
   private final Cache<String, TextSearchIndex<ServerProject>> textSearchIndexCacheByConnectionId = CacheBuilder.newBuilder()
     .expireAfterWrite(1, TimeUnit.HOURS)
@@ -64,7 +59,7 @@ public class SonarProjectsCache {
         .thenComparing(Comparator.comparing(e -> e.getKey().getName(), String.CASE_INSENSITIVE_ORDER)))
       .limit(10)
       .map(e -> new SonarProjectDto(e.getKey().getKey(), e.getKey().getName()))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   private static class SonarProjectKey {
@@ -94,8 +89,8 @@ public class SonarProjectsCache {
     }
   }
 
-  public SonarProjectsCache(ServerApiProvider serverApiProvider) {
-    this.serverApiProvider = serverApiProvider;
+  public SonarProjectsCache(ConnectionManager connectionManager) {
+    this.connectionManager = connectionManager;
   }
 
   @EventListener
@@ -120,7 +115,8 @@ public class SonarProjectsCache {
       return singleProjectsCache.get(new SonarProjectKey(connectionId, sonarProjectKey), () -> {
         LOG.debug("Query project '{}' on connection '{}'...", sonarProjectKey, connectionId);
         try {
-          return serverApiProvider.getServerApi(connectionId).flatMap(s -> s.component().getProject(sonarProjectKey, cancelMonitor));
+          return connectionManager.withValidConnectionAndReturn(connectionId,
+            s -> s.component().getProject(sonarProjectKey, cancelMonitor)).orElse(Optional.empty());
         } catch (Exception e) {
           LOG.error("Error while querying project '{}' from connection '{}'", sonarProjectKey, connectionId, e);
           return Optional.empty();
@@ -137,7 +133,9 @@ public class SonarProjectsCache {
         LOG.debug("Load projects from connection '{}'...", connectionId);
         List<ServerProject> projects;
         try {
-          projects = serverApiProvider.getServerApi(connectionId).map(s -> s.component().getAllProjects(cancelMonitor)).orElse(List.of());
+          projects = connectionManager.withValidConnectionAndReturn(connectionId,
+              s -> s.component().getAllProjects(cancelMonitor))
+            .orElse(List.of());
         } catch (Exception e) {
           LOG.error("Error while querying projects from connection '{}'", connectionId, e);
           return new TextSearchIndex<>();

@@ -37,7 +37,7 @@ class SharedConnectedModeSettingsMediumTests {
   void should_throw_when_not_bound(SonarLintTestHarness harness) {
     var configScopeId = "file:///my/folder";
     var backend = harness.newBackend()
-      .build();
+      .start();
 
     var fileContents = getFileContents(backend, configScopeId);
 
@@ -51,10 +51,12 @@ class SharedConnectedModeSettingsMediumTests {
     var organizationKey = "myOrg";
     var projectKey = "projectKey";
 
-    var expectedFileContent = String.format("{\n" +
-      "    \"sonarCloudOrganization\": \"%s\",\n" +
-      "    \"projectKey\": \"%s\"\n" +
-      "}", organizationKey, projectKey);
+    var expectedFileContent = String.format("""
+      {
+          "sonarCloudOrganization": "%s",
+          "projectKey": "%s",
+          "region": "EU"
+      }""", organizationKey, projectKey);
 
     var server = harness.newFakeSonarCloudServer(organizationKey).start();
 
@@ -63,7 +65,7 @@ class SharedConnectedModeSettingsMediumTests {
       .withSonarCloudConnection(connectionId, organizationKey)
       .withBoundConfigScope(configScopeId, connectionId, projectKey)
       .withTelemetryEnabled()
-      .build();
+      .start();
 
     var result = getFileContents(backend, configScopeId);
 
@@ -82,16 +84,17 @@ class SharedConnectedModeSettingsMediumTests {
 
     var server = harness.newFakeSonarQubeServer().start();
 
-    var expectedFileContent = String.format("{\n" +
-      "    \"sonarQubeUri\": \"%s\",\n" +
-      "    \"projectKey\": \"%s\"\n" +
-      "}", removeEnd(server.baseUrl(), "/"), projectKey);
+    var expectedFileContent = String.format("""
+      {
+          "sonarQubeUri": "%s",
+          "projectKey": "%s"
+      }""", removeEnd(server.baseUrl(), "/"), projectKey);
 
     var backend = harness.newBackend()
       .withSonarQubeConnection(connectionId, server)
       .withBoundConfigScope(configScopeId, connectionId, projectKey)
       .withTelemetryEnabled()
-      .build();
+      .start();
 
     var result = getFileContents(backend, configScopeId);
 

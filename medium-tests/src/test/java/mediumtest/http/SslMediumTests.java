@@ -44,6 +44,7 @@ import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.GetOrganizationParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.http.X509CertificateDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarcloud.ws.Organizations;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Common;
@@ -109,9 +110,9 @@ class SslMediumTests {
       var fakeClient = harness.newFakeClient().build();
       var backend = harness.newBackend()
         .withSonarCloudUrl(sonarcloudMock.baseUrl())
-        .build(fakeClient);
+        .start(fakeClient);
 
-      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg"));
+      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg", SonarCloudRegion.EU));
       var thrown = assertThrows(CompletionException.class, future::join);
       assertThat(thrown).hasRootCauseInstanceOf(ResponseErrorException.class).hasRootCauseMessage("Internal error.");
       assertThat(future).isCompletedExceptionally();
@@ -123,14 +124,14 @@ class SslMediumTests {
 
       var backend = harness.newBackend()
         .withSonarCloudUrl(sonarcloudMock.baseUrl())
-        .build(fakeClient);
+        .start(fakeClient);
 
       when(fakeClient.checkServerTrusted(any(), any()))
         .thenReturn(true);
 
       // Two concurrent requests should only trigger checkServerTrusted once
-      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg"));
-      var future2 = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg"));
+      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg", SonarCloudRegion.EU));
+      var future2 = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg", SonarCloudRegion.EU));
 
       future.get();
       future2.get();
@@ -195,12 +196,12 @@ class SslMediumTests {
       var fakeClient = harness.newFakeClient().build();
       var backend = harness.newBackend()
         .withSonarCloudUrl(sonarcloudMock.baseUrl())
-        .build(fakeClient);
+        .start(fakeClient);
 
       when(fakeClient.checkServerTrusted(any(), any()))
         .thenReturn(true);
 
-      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg"));
+      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg", SonarCloudRegion.EU));
 
       var thrown = assertThrows(CompletionException.class, future::join);
       assertThat(thrown).hasRootCauseInstanceOf(ResponseErrorException.class).hasRootCauseMessage("Internal error.");
@@ -214,12 +215,12 @@ class SslMediumTests {
       var backend = harness.newBackend()
         .withKeyStore(toPath(Objects.requireNonNull(SslMediumTests.class.getResource("/ssl/client.p12"))), "pwdClientCertP12", null)
         .withSonarCloudUrl(sonarcloudMock.baseUrl())
-        .build(fakeClient);
+        .start(fakeClient);
 
       when(fakeClient.checkServerTrusted(any(), any()))
         .thenReturn(true);
 
-      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg"));
+      var future = backend.getConnectionService().getOrganization(new GetOrganizationParams(Either.forLeft(new TokenDto("token")), "myOrg", SonarCloudRegion.EU));
 
       assertThat(future).succeedsWithin(1, TimeUnit.MINUTES);
     }

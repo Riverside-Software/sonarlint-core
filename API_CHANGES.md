@@ -1,3 +1,49 @@
+# 10.14
+
+## Breaking changes
+
+* Add new method `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#invalidToken` to notify client that WebAPI calls to SQS/SQC fails due to wrong token
+    * Client can implement this method to offer user to change credentials for the connection to fix the problem
+    * For now notification is being sent only for 401 Unauthorized HTTP response code since it's corresponds to malformed/wrong token and ignores 403 Forbidden response code since it's a user permissions problem that has to be addressed on the server
+    * Also once notification sent, backend doesn't attempt to send any requests to server anymore until credentials changed
+* Add `region` to `org.sonarsource.sonarlint.core.rpc.protocol.client.connection.SonarCloudConnectionParams` and `org.sonarsource.sonarlint.core.rpc.protocol.client.connection.SonarCloudConnectionSuggestionDto` to support multi-region SQC connection configuration
+    * Constructor without region parameter is removed
+
+* Removed `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#didRaiseIssue` and associated types. See `raiseIssues` and `raiseHotspots` instead.
+* Removed `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcServer#getIssueTrackingService` and associated types. Tracking is managed by the backend.
+* Removed `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcServer#getSecurityHotspotMatchingService` and associated types. Tracking is managed by the backend.
+* Removed `org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionParams#getServerUrl()`. Use `getConnectionParams` instead.
+* Removed `org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService#analyzeFiles`. Use `analyzeFilesAndTrack` instead.
+* Removed deprecated methods in `org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto`:
+  * `getSeverity`
+  * `getType`
+  * `getCleanCodeAttribute`
+  * `getImpacts`
+  * Use `getSeverityMode` instead.
+* Removed deprecated methods in `org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityDto`:
+  * `getSeverity`
+  * `getType`
+  * `getCleanCodeAttribute`
+  * `getImpacts`
+  * Use `getSeverityMode` instead.
+
+## New features
+
+* Add SonarCloud region parameter to 
+  * `org.sonarsource.sonarlint.core.rpc.protocol.client.connection.SonarCloudConnectionParams` 
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarCloudConnectionDto`
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.SonarCloudConnectionConfigurationDto`
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.FuzzySearchUserOrganizationsParams`
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.GetOrganizationParams`
+  * `org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.ListUserOrganizationsParams` 
+  * This is in order to support multi-region SQC connection configuration. Constructors without region parameter are deprecated
+* `org.sonarsource.sonarlint.core.commons.monitoring.MonitoringService#newTrace(String, String)` can be used internally
+  to initialize a manual trace in Sentry
+* When monitoring is enabled, 1% of all analysis requests are sent to Sentry's performance tracing feature 
+* Two new system properties can be used to tune the behavior of the Sentry integration:
+  * `sonarlint.internal.monitoring.dsn` overrides the default [DSN](https://docs.sentry.io/concepts/key-terms/dsn-explainer/) (e.g. for tests)
+  * `sonarlint.internal.monitoring.tracesSampleRate`, parsed as a `java.lang.Double`, overrides the default sampling rate of analysis requests
+
 # 10.13
 
 ## Breaking changes

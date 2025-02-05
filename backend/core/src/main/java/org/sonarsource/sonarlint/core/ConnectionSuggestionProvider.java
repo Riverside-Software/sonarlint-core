@@ -19,6 +19,7 @@
  */
 package org.sonarsource.sonarlint.core;
 
+import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -30,9 +31,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.ExecutorServiceShutdownWatchable;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
@@ -53,8 +51,6 @@ import org.springframework.context.event.EventListener;
 import static org.apache.commons.lang.StringUtils.removeEnd;
 import static org.sonarsource.sonarlint.core.BindingClueProvider.ALL_BINDING_CLUE_FILENAMES;
 
-@Named
-@Singleton
 public class ConnectionSuggestionProvider {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -135,7 +131,8 @@ public class ConnectionSuggestionProvider {
               .add(new ConnectionSuggestionDto(new SonarQubeConnectionSuggestionDto(serverUrl, projectKey),
                 bindingClue.isFromSharedConfiguration())),
             organization -> connectionSuggestionsByConfigScopeIds.computeIfAbsent(configScopeId, s -> new ArrayList<>())
-              .add(new ConnectionSuggestionDto(new SonarCloudConnectionSuggestionDto(organization, projectKey),
+              .add(new ConnectionSuggestionDto(new SonarCloudConnectionSuggestionDto(organization, projectKey,
+                ((BindingClueProvider.SonarCloudBindingClue) bindingClue).getRegion()),
                 bindingClue.isFromSharedConfiguration()))
           ), () -> bindingSuggestionsForConfigScopeIds.add(configScopeId));
         }
@@ -147,16 +144,16 @@ public class ConnectionSuggestionProvider {
   }
 
   private Optional<Either<String, String>> handleBindingClue(BindingClueProvider.BindingClue bindingClue) {
-    if (bindingClue instanceof BindingClueProvider.SonarCloudBindingClue) {
+    if (bindingClue instanceof BindingClueProvider.SonarCloudBindingClue sonarCloudBindingClue) {
       LOG.debug("Found a SonarCloud binding clue");
-      var organization = ((BindingClueProvider.SonarCloudBindingClue) bindingClue).getOrganization();
+      var organization = sonarCloudBindingClue.getOrganization();
       var connection = connectionRepository.findByOrganization(organization);
       if (connection.isEmpty()) {
         return Optional.of(Either.forRight(organization));
       }
-    } else if (bindingClue instanceof BindingClueProvider.SonarQubeBindingClue) {
+    } else if (bindingClue instanceof BindingClueProvider.SonarQubeBindingClue sonarQubeBindingClue) {
       LOG.debug("Found a SonarQube binding clue");
-      var serverUrl = ((BindingClueProvider.SonarQubeBindingClue) bindingClue).getServerUrl();
+      var serverUrl = sonarQubeBindingClue.getServerUrl();
       var connection = connectionRepository.findByUrl(serverUrl);
       if (connection.isEmpty()) {
         return Optional.of(Either.forLeft(removeEnd(serverUrl, "/")));

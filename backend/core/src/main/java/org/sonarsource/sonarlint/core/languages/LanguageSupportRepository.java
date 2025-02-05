@@ -23,16 +23,11 @@ import java.util.Collection;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 
-@Named
-@Singleton
 public class LanguageSupportRepository {
   private static final EnumSet<SonarLanguage> LANGUAGES_RAISING_TAINT_VULNERABILITIES =
     EnumSet.of(SonarLanguage.CS, SonarLanguage.JAVA, SonarLanguage.JS, SonarLanguage.TS, SonarLanguage.PHP, SonarLanguage.PYTHON);
@@ -48,7 +43,7 @@ public class LanguageSupportRepository {
 
   @NotNull
   private static List<SonarLanguage> adaptLanguage(Set<Language> languagesDto) {
-    return languagesDto.stream().map(e -> SonarLanguage.valueOf(e.name())).collect(Collectors.toList());
+    return languagesDto.stream().map(e -> SonarLanguage.valueOf(e.name())).toList();
   }
 
   private static <T extends Enum<T>> EnumSet<T> toEnumSet(Collection<T> collection, Class<T> clazz) {

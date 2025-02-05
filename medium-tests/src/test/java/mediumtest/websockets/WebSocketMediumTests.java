@@ -40,6 +40,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.Did
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.SonarCloudConnectionConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.SonarQubeConnectionConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.smartnotification.ShowSmartNotificationParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
@@ -86,7 +87,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
@@ -101,7 +102,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
@@ -118,7 +119,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarQubeConnection("connectionId")
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
@@ -133,7 +134,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
@@ -153,7 +154,7 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope1", "connectionId", "projectKey1")
         .withBoundConfigScope("configScope2", "connectionId", "projectKey2")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey2", "projectKey1");
 
       bind(backend, "configScope1", "connectionId", "projectKey2");
@@ -172,7 +173,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnection("connectionId", "orgKey", true, null)
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
 
@@ -187,7 +188,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnection("connectionId", "orgKey", true, null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
 
@@ -210,7 +211,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       unbind(backend, "configScope");
@@ -232,7 +233,7 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope1", "connectionId", "projectKey")
         .withBoundConfigScope("configScope2", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       unbind(backend, "configScope1");
 
@@ -249,7 +250,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnection("connectionId", "orgKey", true, null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       unbind(backend, "configScope");
 
@@ -272,7 +273,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
         assertThat(webSocketServer.getConnections())
@@ -289,7 +290,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
     }
@@ -302,7 +303,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarQubeConnection("connectionId")
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
     }
@@ -315,7 +316,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnection("connectionId", "orgKey", true, null)
         .withUnboundConfigScope("configScope")
-        .build(client);
+        .start(client);
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
     }
@@ -331,7 +332,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope"));
@@ -355,7 +356,7 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId2", "orgKey2", null)
         .withBoundConfigScope("configScope1", "connectionId1", "projectKey")
         .withBoundConfigScope("configScope2", "connectionId2", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope1"));
@@ -373,10 +374,10 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
       backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(emptyList(),
-        List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", true))));
+        List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, true))));
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).extracting(WebSocketConnection::isOpened).containsExactly(false));
 
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope"));
@@ -395,7 +396,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
       client.setToken("connectionId", "secondToken");
 
@@ -414,7 +415,7 @@ class WebSocketMediumTests {
         .build();
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
-        .build(client);
+        .start(client);
 
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
@@ -429,7 +430,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarQubeConnection("connectionId")
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
@@ -447,10 +448,10 @@ class WebSocketMediumTests {
         .build();
       var backend = newBackendWithWebSockets(harness)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", false))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, false))));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
@@ -465,10 +466,10 @@ class WebSocketMediumTests {
       webSocketServer.stop();
       var backend = newBackendWithWebSockets(harness)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", false))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, false))));
 
       await().untilAsserted(() -> assertThat(client.getLogMessages()).contains("Error while trying to create websocket connection for ws://localhost:54321/endpoint"));
 
@@ -492,7 +493,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), emptyList()));
@@ -513,11 +514,11 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId2", "orgKey2", null)
         .withBoundConfigScope("configScope1", "connectionId1", "projectKey1")
         .withBoundConfigScope("configScope2", "connectionId2", "projectKey2")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey2", "projectKey1");
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId2", "orgKey2", false))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId2", "orgKey2", SonarCloudRegion.EU, false))));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
@@ -536,7 +537,7 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarQubeConnection("connectionId")
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(List.of(new SonarQubeConnectionConfigurationDto("connectionid", "url",
@@ -552,10 +553,10 @@ class WebSocketMediumTests {
         .build();
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
-        .build(client);
+        .start(client);
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey2", false))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey2", SonarCloudRegion.EU, false))));
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
     }
@@ -568,11 +569,11 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", true))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, true))));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
@@ -590,12 +591,12 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId2", "orgKey2", null)
         .withBoundConfigScope("configScope1", "connectionId1", "projectKey1")
         .withBoundConfigScope("configScope2", "connectionId2", "projectKey2")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey2", "projectKey1");
 
       backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(emptyList(),
-        List.of(new SonarCloudConnectionConfigurationDto("connectionId1", "orgKey1", false), new SonarCloudConnectionConfigurationDto(
-          "connectionId2", "orgKey2", true))));
+        List.of(new SonarCloudConnectionConfigurationDto("connectionId1", "orgKey1", SonarCloudRegion.EU, false), new SonarCloudConnectionConfigurationDto(
+          "connectionId2", "orgKey2", SonarCloudRegion.EU, true))));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
@@ -611,10 +612,10 @@ class WebSocketMediumTests {
       var backend = newBackendWithWebSockets(harness)
         .withSonarCloudConnection("connectionId", "orgKey", true, null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
 
       backend.getConnectionService()
-        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", false))));
+        .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, false))));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
@@ -633,7 +634,7 @@ class WebSocketMediumTests {
         .withSmartNotifications()
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage(
@@ -656,7 +657,7 @@ class WebSocketMediumTests {
         .withSmartNotifications()
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage(
@@ -679,7 +680,7 @@ class WebSocketMediumTests {
         .withSmartNotifications()
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage("{\"event\": [\"QualityGateChanged\"], \"data\": {\"message\": 0}}");
@@ -719,7 +720,7 @@ class WebSocketMediumTests {
         .withSmartNotifications()
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage(payload);
@@ -741,26 +742,27 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch("master", branch -> branch.withIssue(serverIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"IssueChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"issues\": [\n" +
-          "      {\n" +
-          "        \"issueKey\": \"myIssueKey\",\n" +
-          "        \"branchName\": \"master\"\n" +
-          "      }\n" +
-          "    ],\n" +
-          "    \"resolved\": true\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "IssueChanged",
+            "data": {
+              "projectKey": "projectKey",
+              "issues": [
+                {
+                  "issueKey": "myIssueKey",
+                  "branchName": "master"
+                }
+              ],
+              "resolved": true
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isTrue());
     }
@@ -776,26 +778,27 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch("master", branch -> branch.withIssue(serverIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"IssueChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"invalid\": [\n" +
-          "      {\n" +
-          "        \"issueKey\": myIssueKey,\n" +
-          "        \"branchName\": \"master\"\n" +
-          "      }\n" +
-          "    ],\n" +
-          "    \"resolved\": true\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "IssueChanged",
+            "data": {
+              "projectKey": "projectKey",
+              "invalid": [
+                {
+                  "issueKey": myIssueKey,
+                  "branchName": "master"
+                }
+              ],
+              "resolved": true
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(1)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
     }
@@ -811,25 +814,26 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch("master", branch -> branch.withIssue(serverIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"IssueChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"invalid\": [\n" +
-          "      {\n" +
-          "        \"branchName\": \"master\"\n" +
-          "      }\n" +
-          "    ],\n" +
-          "    \"resolved\": true\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "IssueChanged",
+            "data": {
+              "projectKey": "projectKey",
+              "invalid": [
+                {
+                  "branchName": "master"
+                }
+              ],
+              "resolved": true
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(1)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
     }
@@ -845,25 +849,26 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch("master", branch -> branch.withIssue(serverIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"IssueChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"invalid\": [\n" +
-          "      {\n" +
-          "        \"issueKey\": myIssueKey,\n" +
-          "        \"branchName\": \"master\"\n" +
-          "      }\n" +
-          "    ]\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "IssueChanged",
+            "data": {
+              "projectKey": "projectKey",
+              "invalid": [
+                {
+                  "issueKey": myIssueKey,
+                  "branchName": "master"
+                }
+              ]
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(1)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
     }
@@ -879,25 +884,26 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch("master", branch -> branch.withIssue(serverIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"IssueChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"invalid\": [\n" +
-          "      {\n" +
-          "        \"issueKey\": myIssueKey,\n" +
-          "        \"branchName\": \"master\"\n" +
-          "      }\n" +
-          "    ],\n" +
-          "    \"resolved\": true\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "IssueChanged",
+            "data": {
+              "invalid": [
+                {
+                  "issueKey": myIssueKey,
+                  "branchName": "master"
+                }
+              ],
+              "resolved": true
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(1)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
     }
@@ -914,63 +920,64 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey"))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"TaintVulnerabilityRaised\",\n" +
-          "  \"data\": {\n" +
-          "    \"key\": \"taintKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"branch\": \"branch\",\n" +
-          "    \"creationDate\": 123456789,\n" +
-          "    \"ruleKey\": \"javasecurity:S123\",\n" +
-          "    \"severity\": \"MAJOR\",\n" +
-          "    \"type\": \"VULNERABILITY\",\n" +
-          "    \"mainLocation\": {\n" +
-          "      \"filePath\": \"functions/taint.js\",\n" +
-          "      \"message\": \"blah blah\",\n" +
-          "      \"textRange\": {\n" +
-          "        \"startLine\": 17,\n" +
-          "        \"startLineOffset\": 10,\n" +
-          "        \"endLine\": 3,\n" +
-          "        \"endLineOffset\": 2,\n" +
-          "        \"hash\": \"hash\"\n" +
-          "      }\n" +
-          "    },\n" +
-          "    \"flows\": [\n" +
-          "      {\n" +
-          "        \"locations\": [\n" +
-          "          {\n" +
-          "            \"filePath\": \"functions/taint.js\",\n" +
-          "            \"message\": \"sink: tainted value is used to perform a security-sensitive operation\",\n" +
-          "            \"textRange\": {\n" +
-          "              \"startLine\": 17,\n" +
-          "              \"startLineOffset\": 10,\n" +
-          "              \"endLine\": 3,\n" +
-          "              \"endLineOffset\": 2,\n" +
-          "              \"hash\": \"hash1\"\n" +
-          "            }\n" +
-          "          },\n" +
-          "          {\n" +
-          "            \"filePath\": \"functions/taint2.js\",\n" +
-          "            \"message\": \"sink: tainted value is used to perform a security-sensitive operation\",\n" +
-          "            \"textRange\": {\n" +
-          "              \"startLine\": 18,\n" +
-          "              \"startLineOffset\": 11,\n" +
-          "              \"endLine\": 4,\n" +
-          "              \"endLineOffset\": 3,\n" +
-          "              \"hash\": \"hash2\"\n" +
-          "            }\n" +
-          "          }\n" +
-          "        ]\n" +
-          "      }\n" +
-          "    ]\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "TaintVulnerabilityRaised",
+            "data": {
+              "key": "taintKey",
+              "projectKey": "projectKey",
+              "branch": "branch",
+              "creationDate": 123456789,
+              "ruleKey": "javasecurity:S123",
+              "severity": "MAJOR",
+              "type": "VULNERABILITY",
+              "mainLocation": {
+                "filePath": "functions/taint.js",
+                "message": "blah blah",
+                "textRange": {
+                  "startLine": 17,
+                  "startLineOffset": 10,
+                  "endLine": 3,
+                  "endLineOffset": 2,
+                  "hash": "hash"
+                }
+              },
+              "flows": [
+                {
+                  "locations": [
+                    {
+                      "filePath": "functions/taint.js",
+                      "message": "sink: tainted value is used to perform a security-sensitive operation",
+                      "textRange": {
+                        "startLine": 17,
+                        "startLineOffset": 10,
+                        "endLine": 3,
+                        "endLineOffset": 2,
+                        "hash": "hash1"
+                      }
+                    },
+                    {
+                      "filePath": "functions/taint2.js",
+                      "message": "sink: tainted value is used to perform a security-sensitive operation",
+                      "textRange": {
+                        "startLine": 18,
+                        "startLineOffset": 11,
+                        "endLine": 4,
+                        "endLineOffset": 3,
+                        "hash": "hash2"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
     }
@@ -984,63 +991,64 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey"))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"TaintVulnerabilityRaised\",\n" +
-          "  \"data\": {\n" +
-          "    \"invalidKey\": \"taintKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"branch\": \"branch\",\n" +
-          "    \"creationDate\": 123456789,\n" +
-          "    \"ruleKey\": \"javasecurity:S123\",\n" +
-          "    \"severity\": \"MAJOR\",\n" +
-          "    \"type\": \"VULNERABILITY\",\n" +
-          "    \"mainLocation\": {\n" +
-          "      \"filePath\": \"functions/taint.js\",\n" +
-          "      \"message\": \"blah blah\",\n" +
-          "      \"textRange\": {\n" +
-          "        \"startLine\": 17,\n" +
-          "        \"startLineOffset\": 10,\n" +
-          "        \"endLine\": 3,\n" +
-          "        \"endLineOffset\": 2,\n" +
-          "        \"hash\": \"hash\"\n" +
-          "      }\n" +
-          "    },\n" +
-          "    \"flows\": [\n" +
-          "      {\n" +
-          "        \"locations\": [\n" +
-          "          {\n" +
-          "            \"filePath\": \"functions/taint.js\",\n" +
-          "            \"message\": \"sink: tainted value is used to perform a security-sensitive operation\",\n" +
-          "            \"textRange\": {\n" +
-          "              \"startLine\": 17,\n" +
-          "              \"startLineOffset\": 10,\n" +
-          "              \"endLine\": 3,\n" +
-          "              \"endLineOffset\": 2,\n" +
-          "              \"hash\": \"hash1\"\n" +
-          "            }\n" +
-          "          },\n" +
-          "          {\n" +
-          "            \"filePath\": \"functions/taint2.js\",\n" +
-          "            \"message\": \"sink: tainted value is used to perform a security-sensitive operation\",\n" +
-          "            \"textRange\": {\n" +
-          "              \"startLine\": 18,\n" +
-          "              \"startLineOffset\": 11,\n" +
-          "              \"endLine\": 4,\n" +
-          "              \"endLineOffset\": 3,\n" +
-          "              \"hash\": \"hash2\"\n" +
-          "            }\n" +
-          "          }\n" +
-          "        ]\n" +
-          "      }\n" +
-          "    ]\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "TaintVulnerabilityRaised",
+            "data": {
+              "invalidKey": "taintKey",
+              "projectKey": "projectKey",
+              "branch": "branch",
+              "creationDate": 123456789,
+              "ruleKey": "javasecurity:S123",
+              "severity": "MAJOR",
+              "type": "VULNERABILITY",
+              "mainLocation": {
+                "filePath": "functions/taint.js",
+                "message": "blah blah",
+                "textRange": {
+                  "startLine": 17,
+                  "startLineOffset": 10,
+                  "endLine": 3,
+                  "endLineOffset": 2,
+                  "hash": "hash"
+                }
+              },
+              "flows": [
+                {
+                  "locations": [
+                    {
+                      "filePath": "functions/taint.js",
+                      "message": "sink: tainted value is used to perform a security-sensitive operation",
+                      "textRange": {
+                        "startLine": 17,
+                        "startLineOffset": 10,
+                        "endLine": 3,
+                        "endLineOffset": 2,
+                        "hash": "hash1"
+                      }
+                    },
+                    {
+                      "filePath": "functions/taint2.js",
+                      "message": "sink: tainted value is used to perform a security-sensitive operation",
+                      "textRange": {
+                        "startLine": 18,
+                        "startLineOffset": 11,
+                        "endLine": 4,
+                        "endLineOffset": 3,
+                        "hash": "hash2"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isFalse());
     }
@@ -1059,20 +1067,21 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withTaintIssue(serverTaintIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"TaintVulnerabilityClosed\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"key\": \"taintKey\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "TaintVulnerabilityClosed",
+            "data": {
+              "projectKey": "projectKey",
+              "key": "taintKey"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isFalse());
     }
@@ -1088,20 +1097,21 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withTaintIssue(serverTaintIssue))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"TaintVulnerabilityClosed\",\n" +
-          "  \"data\": {\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"taintKey\": \"taintKey\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "TaintVulnerabilityClosed",
+            "data": {
+              "projectKey": "projectKey",
+              "taintKey": "taintKey"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
     }
@@ -1120,25 +1130,26 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withHotspot(serverHotspot))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"key\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"updateDate\": 1685007187000,\n" +
-          "    \"status\": \"REVIEWED\",\n" +
-          "    \"assignee\": \"assigneeEmail\",\n" +
-          "    \"invalidKey\": \"SAFE\",\n" +
-          "    \"filePath\": \"/project/path/to/file\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "SecurityHotspotChanged",
+            "data": {
+              "key": "hotspotKey",
+              "projectKey": "projectKey",
+              "updateDate": 1685007187000,
+              "status": "REVIEWED",
+              "assignee": "assigneeEmail",
+              "invalidKey": "SAFE",
+              "filePath": "/project/path/to/file"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
     }
@@ -1154,25 +1165,26 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withHotspot(serverHotspot))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotChanged\",\n" +
-          "  \"data\": {\n" +
-          "    \"key\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"updateDate\": 1685007187000,\n" +
-          "    \"status\": \"REVIEWED\",\n" +
-          "    \"assignee\": \"assigneeEmail\",\n" +
-          "    \"wrongKey\": \"SAFE\",\n" +
-          "    \"filePath\": \"/project/path/to/file\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "SecurityHotspotChanged",
+            "data": {
+              "key": "hotspotKey",
+              "projectKey": "projectKey",
+              "updateDate": 1685007187000,
+              "status": "REVIEWED",
+              "assignee": "assigneeEmail",
+              "wrongKey": "SAFE",
+              "filePath": "/project/path/to/file"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
     }
@@ -1189,35 +1201,36 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey"))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotRaised\",\n" +
-          "  \"data\": {\n" +
-          "    \"status\": \"TO_REVIEW\",\n" +
-          "    \"vulnerabilityProbability\": \"MEDIUM\",\n" +
-          "    \"creationDate\": 1685006550000,\n" +
-          "    \"mainLocation\": {\n" +
-          "      \"filePath\": \"src/main/java/org/example/Main.java\",\n" +
-          "      \"message\": \"Make sure that using this pseudorandom number generator is safe here.\",\n" +
-          "      \"textRange\": {\n" +
-          "        \"startLine\": 12,\n" +
-          "        \"startLineOffset\": 29,\n" +
-          "        \"endLine\": 12,\n" +
-          "        \"endLineOffset\": 36,\n" +
-          "        \"hash\": \"43b5c9175984c071f30b873fdce0a000\"\n" +
-          "      }\n" +
-          "    },\n" +
-          "    \"ruleKey\": \"java:S2245\",\n" +
-          "    \"key\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"branch\": \"some-branch\"\n" +
-          "}}");
+        """
+          {
+            "event": "SecurityHotspotRaised",
+            "data": {
+              "status": "TO_REVIEW",
+              "vulnerabilityProbability": "MEDIUM",
+              "creationDate": 1685006550000,
+              "mainLocation": {
+                "filePath": "src/main/java/org/example/Main.java",
+                "message": "Make sure that using this pseudorandom number generator is safe here.",
+                "textRange": {
+                  "startLine": 12,
+                  "startLineOffset": 29,
+                  "endLine": 12,
+                  "endLineOffset": 36,
+                  "hash": "43b5c9175984c071f30b873fdce0a000"
+                }
+              },
+              "ruleKey": "java:S2245",
+              "key": "hotspotKey",
+              "projectKey": "projectKey",
+              "branch": "some-branch"
+          }}""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
     }
@@ -1231,35 +1244,36 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey"))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotRaised\",\n" +
-          "  \"data\": {\n" +
-          "    \"wrongKey\": \"TO_REVIEW\",\n" +
-          "    \"vulnerabilityProbability\": \"MEDIUM\",\n" +
-          "    \"creationDate\": 1685006550000,\n" +
-          "    \"mainLocation\": {\n" +
-          "      \"filePath\": \"src/main/java/org/example/Main.java\",\n" +
-          "      \"message\": \"Make sure that using this pseudorandom number generator is safe here.\",\n" +
-          "      \"textRange\": {\n" +
-          "        \"startLine\": 12,\n" +
-          "        \"startLineOffset\": 29,\n" +
-          "        \"endLine\": 12,\n" +
-          "        \"endLineOffset\": 36,\n" +
-          "        \"hash\": \"43b5c9175984c071f30b873fdce0a000\"\n" +
-          "      }\n" +
-          "    },\n" +
-          "    \"ruleKey\": \"java:S2245\",\n" +
-          "    \"key\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"branch\": \"some-branch\"\n" +
-          "}}");
+        """
+          {
+            "event": "SecurityHotspotRaised",
+            "data": {
+              "wrongKey": "TO_REVIEW",
+              "vulnerabilityProbability": "MEDIUM",
+              "creationDate": 1685006550000,
+              "mainLocation": {
+                "filePath": "src/main/java/org/example/Main.java",
+                "message": "Make sure that using this pseudorandom number generator is safe here.",
+                "textRange": {
+                  "startLine": 12,
+                  "startLineOffset": 29,
+                  "endLine": 12,
+                  "endLineOffset": 36,
+                  "hash": "43b5c9175984c071f30b873fdce0a000"
+                }
+              },
+              "ruleKey": "java:S2245",
+              "key": "hotspotKey",
+              "projectKey": "projectKey",
+              "branch": "some-branch"
+          }}""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
     }
@@ -1278,21 +1292,22 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withHotspot(serverHotspot))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotClosed\",\n" +
-          "  \"data\": {\n" +
-          "    \"key\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"filePath\": \"/project/path/to/file\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "SecurityHotspotClosed",
+            "data": {
+              "key": "hotspotKey",
+              "projectKey": "projectKey",
+              "filePath": "/project/path/to/file"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
     }
@@ -1308,21 +1323,22 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", storage -> storage
           .withProject("projectKey", project -> project.withMainBranch(branch -> branch.withHotspot(serverHotspot))))
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
 
       webSocketServer.getConnections().get(0).sendMessage(
-        "{\n" +
-          "  \"event\": \"SecurityHotspotClosed\",\n" +
-          "  \"data\": {\n" +
-          "    \"wrongKey\": \"hotspotKey\",\n" +
-          "    \"projectKey\": \"projectKey\",\n" +
-          "    \"filePath\": \"/project/path/to/file\"\n" +
-          "  }\n" +
-          "}");
+        """
+          {
+            "event": "SecurityHotspotClosed",
+            "data": {
+              "wrongKey": "hotspotKey",
+              "projectKey": "projectKey",
+              "filePath": "/project/path/to/file"
+            }
+          }""");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
     }
@@ -1338,7 +1354,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage("{\"event\": \"UnknownEvent\", \"data\": {\"message\": \"msg\"}}");
@@ -1354,7 +1370,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       await().atMost(Duration.ofSeconds(2)).until(() -> !webSocketServer.getConnections().isEmpty());
 
       webSocketServer.getConnections().get(0).sendMessage("{\"event\": \"Malformed");
@@ -1370,7 +1386,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).sendMessage(
@@ -1398,7 +1414,7 @@ class WebSocketMediumTests {
       newBackendWithWebSockets(harness)
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).close();
@@ -1417,7 +1433,7 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
         .withBoundConfigScope("configScope2", "connectionId", "projectKey")
-        .build(client);
+        .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
       webSocketServer.getConnections().get(0).close();

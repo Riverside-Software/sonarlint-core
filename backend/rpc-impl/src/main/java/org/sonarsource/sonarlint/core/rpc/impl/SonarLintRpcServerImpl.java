@@ -63,8 +63,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.IssueRpcService
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.newcode.NewCodeRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.RulesRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.TelemetryRpcService;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.IssueTrackingRpcService;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.SecurityHotspotMatchingRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.TaintVulnerabilityTrackingRpcService;
 import org.sonarsource.sonarlint.core.spring.SpringApplicationContextInitializer;
 import org.sonarsource.sonarlint.core.storage.StorageService;
@@ -123,8 +121,6 @@ public class SonarLintRpcServerImpl implements SonarLintRpcServer {
     rootLogger.addAppender(rpcAppender);
 
     this.clientListener = launcher.startListening();
-
-    LOG.info("SonarLint backend started, instance={}", this);
   }
 
   private static PrintWriter getMessageTracer() {
@@ -212,16 +208,6 @@ public class SonarLintRpcServerImpl implements SonarLintRpcServer {
   @Override
   public IssueRpcService getIssueService() {
     return new IssueRpcServiceDelegate(this);
-  }
-
-  @Override
-  public IssueTrackingRpcService getIssueTrackingService() {
-    return new IssueTrackingRpcServiceDelegate(this);
-  }
-
-  @Override
-  public SecurityHotspotMatchingRpcService getSecurityHotspotMatchingService() {
-    return new SecurityHotspotMatchingRpcServiceDelegate(this);
   }
 
   @Override

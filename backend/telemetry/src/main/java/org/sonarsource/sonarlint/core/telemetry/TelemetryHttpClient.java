@@ -28,8 +28,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.apache.commons.lang3.SystemUtils;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.http.HttpClient;
@@ -54,8 +52,6 @@ import org.sonarsource.sonarlint.core.telemetry.payload.cayc.NewCodeFocusPayload
 import static org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsValueGranularity.DAILY;
 import static org.sonarsource.sonarlint.core.telemetry.metricspayload.TelemetryMetricsValueType.INTEGER;
 
-@Named
-@Singleton
 public class TelemetryHttpClient {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();

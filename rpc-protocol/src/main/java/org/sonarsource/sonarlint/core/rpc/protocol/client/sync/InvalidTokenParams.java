@@ -17,21 +17,17 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.adapter;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.sync;
 
-import com.google.gson.reflect.TypeToken;
-import org.eclipse.lsp4j.jsonrpc.json.adapters.EitherTypeAdapter;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.LocalOnlyIssueDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.ServerMatchedIssueDto;
+public class InvalidTokenParams {
 
-public class EitherServerOrLocalIssueAdapterFactory extends CustomEitherAdapterFactory<ServerMatchedIssueDto, LocalOnlyIssueDto> {
+  String connectionId;
 
-  private static final TypeToken<Either<ServerMatchedIssueDto, LocalOnlyIssueDto>> ELEMENT_TYPE = new TypeToken<>() {
-  };
-
-  public EitherServerOrLocalIssueAdapterFactory() {
-    super(ELEMENT_TYPE, ServerMatchedIssueDto.class, LocalOnlyIssueDto.class, new EitherTypeAdapter.PropertyChecker("serverKey"));
+  public InvalidTokenParams(String connectionId) {
+    this.connectionId = connectionId;
   }
 
+  public String getConnectionId() {
+    return connectionId;
+  }
 }

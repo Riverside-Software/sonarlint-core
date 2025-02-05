@@ -24,10 +24,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.PreDestroy;
+import org.sonarsource.sonarlint.core.UserPaths;
 import org.sonarsource.sonarlint.core.analysis.api.AnalysisEngineConfiguration;
 import org.sonarsource.sonarlint.core.analysis.api.ClientModuleInfo;
 import org.sonarsource.sonarlint.core.analysis.command.RegisterModuleCommand;
@@ -55,12 +55,12 @@ public class AnalysisEngineCache {
   private AnalysisEngine standaloneEngine;
   private final Map<String, AnalysisEngine> connectedEnginesByConnectionId = new ConcurrentHashMap<>();
 
-  public AnalysisEngineCache(ConfigurationRepository configurationRepository, NodeJsService nodeJsService, InitializeParams initializeParams,
+  public AnalysisEngineCache(ConfigurationRepository configurationRepository, NodeJsService nodeJsService, InitializeParams initializeParams, UserPaths userPaths,
     PluginsService pluginsService, ClientFileSystemService clientFileSystemService) {
     this.configurationRepository = configurationRepository;
     this.pluginsService = pluginsService;
     this.nodeJsService = nodeJsService;
-    this.workDir = initializeParams.getWorkDir();
+    this.workDir = userPaths.getWorkDir();
     this.clientFileSystemService = clientFileSystemService;
     var shouldSupportCsharp = initializeParams.getEnabledLanguagesInStandaloneMode().contains(Language.CS);
     var languageSpecificRequirements = initializeParams.getLanguageSpecificRequirements();
@@ -136,7 +136,7 @@ public class AnalysisEngineCache {
     return leafConfigScopeIds.stream().map(scopeId -> {
       var backendModuleFileSystem = new BackendModuleFileSystem(clientFileSystemService, scopeId);
       return new ClientModuleInfo(scopeId, backendModuleFileSystem);
-    }).collect(Collectors.toList());
+    }).toList();
   }
 
   @EventListener

@@ -20,6 +20,8 @@
 package org.sonarsource.sonarlint.core.smartnotifications;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.ZonedDateTime;
 import java.util.Collection;
 import java.util.HashMap;
@@ -30,11 +32,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
 import org.sonarsource.sonarlint.core.commons.ConnectionKind;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -55,15 +53,13 @@ import org.sonarsource.sonarlint.core.websocket.WebSocketService;
 import org.sonarsource.sonarlint.core.websocket.events.SmartNotificationEvent;
 import org.springframework.context.event.EventListener;
 
-@Named
-@Singleton
 public class SmartNotifications {
 
   private final SonarLintLogger logger = SonarLintLogger.get();
 
   private final ConfigurationRepository configurationRepository;
   private final ConnectionConfigurationRepository connectionRepository;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final SonarLintRpcClient client;
   private final TelemetryService telemetryService;
   private final WebSocketService webSocketService;
@@ -72,11 +68,11 @@ public class SmartNotifications {
   private final LastEventPolling lastEventPollingService;
   private ExecutorServiceShutdownWatchable<ScheduledExecutorService> smartNotificationsPolling;
 
-  public SmartNotifications(ConfigurationRepository configurationRepository, ConnectionConfigurationRepository connectionRepository, ServerApiProvider serverApiProvider,
+  public SmartNotifications(ConfigurationRepository configurationRepository, ConnectionConfigurationRepository connectionRepository, ConnectionManager connectionManager,
     SonarLintRpcClient client, StorageService storageService, TelemetryService telemetryService, WebSocketService webSocketService, InitializeParams params) {
     this.configurationRepository = configurationRepository;
     this.connectionRepository = connectionRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.client = client;
     this.telemetryService = telemetryService;
     this.webSocketService = webSocketService;
@@ -101,7 +97,8 @@ public class SmartNotifications {
     boundScopeByConnectionAndSonarProject.forEach((connectionId, boundScopesByProject) -> {
       var connection = connectionRepository.getConnectionById(connectionId);
       if (connection != null && !connection.isDisableNotifications() && !shouldSkipPolling(connection)) {
-        serverApiProvider.getServerApi(connectionId).ifPresent(serverApi -> manageNotificationsForConnection(serverApi, boundScopesByProject, connection, cancelMonitor));
+        connectionManager.withValidConnection(connectionId,
+          serverApi -> manageNotificationsForConnection(serverApi, boundScopesByProject, connection, cancelMonitor));
       }
     });
   }
@@ -156,23 +153,23 @@ public class SmartNotifications {
         e.getLink(),
         e.getProjectKey(),
         e.getTime()))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @EventListener
   public void onServerEventReceived(SonarServerEventReceivedEvent eventReceived) {
     var serverEvent = eventReceived.getEvent();
-    if (serverEvent instanceof SmartNotificationEvent) {
-      notifyClient(eventReceived.getConnectionId(), (SmartNotificationEvent) serverEvent);
+    if (serverEvent instanceof SmartNotificationEvent smartNotificationEvent) {
+      notifyClient(eventReceived.getConnectionId(), smartNotificationEvent);
     }
   }
 
   private void notifyClient(String connectionId, SmartNotificationEvent event) {
-    var projectKey = event.getProject();
+    var projectKey = event.project();
     var boundScopes = configurationRepository.getBoundScopesToConnectionAndSonarProject(connectionId, projectKey);
-    client.showSmartNotification(new ShowSmartNotificationParams(event.getMessage(), event.getLink(),
-      boundScopes.stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()), event.getCategory(), connectionId));
-    telemetryService.smartNotificationsReceived(event.getCategory());
+    client.showSmartNotification(new ShowSmartNotificationParams(event.message(), event.link(),
+      boundScopes.stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()), event.category(), connectionId));
+    telemetryService.smartNotificationsReceived(event.category());
   }
 
 }

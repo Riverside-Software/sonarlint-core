@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.13.99001</version>
+    <version>10.14-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-analysis-engine</artifactId>
@@ -29,7 +29,7 @@
     <dependency>
       <groupId>org.apache.commons</groupId>
       <artifactId>commons-csv</artifactId>
-      <version>1.10.0</version>
+      <version>1.13.0</version>
     </dependency>
     <dependency>
       <groupId>commons-codec</groupId>

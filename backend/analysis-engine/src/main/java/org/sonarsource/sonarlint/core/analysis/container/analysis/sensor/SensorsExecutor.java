@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import org.sonar.api.batch.DependedUpon;
 import org.sonar.api.batch.DependsUpon;
 import org.sonar.api.batch.Phase;
@@ -37,6 +38,7 @@ import org.sonar.api.utils.dag.DirectAcyclicGraph;
 import org.sonarsource.sonarlint.core.analysis.sonarapi.DefaultSensorContext;
 import org.sonarsource.sonarlint.core.analysis.sonarapi.DefaultSensorDescriptor;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
+import org.sonarsource.sonarlint.core.commons.monitoring.Trace;
 import org.sonarsource.sonarlint.core.commons.progress.ProgressMonitor;
 
 /**
@@ -50,12 +52,15 @@ public class SensorsExecutor {
   private final ProgressMonitor progress;
   private final List<ProjectSensor> sensors;
   private final DefaultSensorContext context;
+  @Nullable
+  private final Trace trace;
 
-  public SensorsExecutor(DefaultSensorContext context, SensorOptimizer sensorOptimizer, ProgressMonitor progress, Optional<List<ProjectSensor>> sensors) {
+  public SensorsExecutor(DefaultSensorContext context, SensorOptimizer sensorOptimizer, ProgressMonitor progress, Optional<Trace> trace, Optional<List<ProjectSensor>> sensors) {
     this.context = context;
     this.sensors = sensors.orElse(List.of());
     this.sensorOptimizer = sensorOptimizer;
     this.progress = progress;
+    this.trace = trace.orElse(null);
   }
 
   public void execute() {
@@ -83,17 +88,24 @@ public class SensorsExecutor {
       var descriptor = new DefaultSensorDescriptor();
       sensor.describe(descriptor);
       if (sensorOptimizer.shouldExecute(descriptor)) {
-        executeSensor(context, sensor, descriptor);
+        executeSensor(context, sensor, descriptor, trace);
       }
     }
   }
 
-  private static void executeSensor(SensorContext context, ProjectSensor sensor, DefaultSensorDescriptor descriptor) {
+  private static void executeSensor(SensorContext context, ProjectSensor sensor, DefaultSensorDescriptor descriptor, @Nullable Trace trace) {
     var sensorName = descriptor.name() != null ? descriptor.name() : describe(sensor);
+    var sensorSpan = trace == null ? null : trace.startChild("executeSensor", sensorName);
     LOG.debug("Execute Sensor: {}", sensorName);
     try {
       sensor.execute(context);
+      if (sensorSpan != null) {
+        sensorSpan.finishSuccessfully();
+      }
     } catch (Throwable t) {
+      if (sensorSpan != null) {
+        sensorSpan.finishExceptionally(t);
+      }
       LOG.error("Error executing sensor: '{}'", sensorName, t);
     }
   }
@@ -130,7 +142,7 @@ public class SensorsExecutor {
 
     return (Collection<T>) sortedList.stream()
       .filter(extensions::contains)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   /**

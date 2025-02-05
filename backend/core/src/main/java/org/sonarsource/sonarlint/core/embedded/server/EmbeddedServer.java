@@ -19,12 +19,10 @@
  */
 package org.sonarsource.sonarlint.core.embedded.server;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.net.InetAddress;
 import java.util.concurrent.TimeUnit;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.apache.hc.core5.http.ConnectionReuseStrategy;
 import org.apache.hc.core5.http.HttpRequest;
 import org.apache.hc.core5.http.HttpResponse;
@@ -36,8 +34,6 @@ import org.apache.hc.core5.io.CloseMode;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 
-@Named
-@Singleton
 public class EmbeddedServer {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
@@ -79,15 +75,18 @@ public class EmbeddedServer {
     port = INVALID_PORT;
     var triedPort = STARTING_PORT;
     HttpServer startedServer = null;
+    var loopbackAddress = InetAddress.getLoopbackAddress();
     while (port < 0 && triedPort <= ENDING_PORT) {
       try {
         startedServer = ServerBootstrap.bootstrap()
-          .setLocalAddress(InetAddress.getLoopbackAddress())
+          .setLocalAddress(loopbackAddress)
+          .setCanonicalHostName(loopbackAddress.getHostName())
           // we will never have long connections
           .setConnectionReuseStrategy(new DontKeepAliveReuseStrategy())
           .setListenerPort(triedPort)
           .setSocketConfig(socketConfig)
-          .addFilterFirst("CORS", new CorsFilter())
+          .addFilterFirst("RateLimiter", new RateLimitFilter())
+          .addFilterAfter("RateLimiter", "CORS", new CorsFilter())
           .register("/sonarlint/api/status", statusRequestHandler)
           .register("/sonarlint/api/token", generatedUserTokenHandler)
           .register("/sonarlint/api/hotspots/show", showHotspotRequestHandler)

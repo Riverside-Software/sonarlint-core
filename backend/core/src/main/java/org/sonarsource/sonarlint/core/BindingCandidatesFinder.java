@@ -19,24 +19,19 @@
  */
 package org.sonarsource.sonarlint.core;
 
+import jakarta.inject.Inject;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationScope;
 import org.sonarsource.sonarlint.core.serverapi.component.ServerProject;
 
-import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 
-@Named
-@Singleton
 public class BindingCandidatesFinder {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -77,7 +72,7 @@ public class BindingCandidatesFinder {
 
     var cluesWithMatchingProjectKey = cluesAndConnections.stream()
       .filter(c -> projectKey.equals(c.getBindingClue().getSonarProjectKey()))
-      .collect(toList());
+      .toList();
 
 
     if (!cluesWithMatchingProjectKey.isEmpty()) {

@@ -26,6 +26,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.Tra
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.projects.GetProjectNamesByKeyParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.projects.GetProjectNamesByKeyResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
@@ -44,7 +45,7 @@ class ConnectionGetProjectNameByKeyMediumTests {
   @SonarLintTest
   void it_should_return_null_if_no_projects_in_sonarqube(SonarLintTestHarness harness) {
     var server = harness.newFakeSonarQubeServer().start();
-    var backend = harness.newBackend().build();
+    var backend = harness.newBackend().start();
 
     var response = getProjectNamesByKey(backend, new TransientSonarQubeConnectionDto(server.baseUrl(), Either.forLeft(new TokenDto("token"))),
       List.of("myProject"));
@@ -58,9 +59,9 @@ class ConnectionGetProjectNameByKeyMediumTests {
     var server = harness.newFakeSonarCloudServer("myOrg").start();
     var backend = harness.newBackend()
       .withSonarCloudUrl(server.baseUrl())
-      .build();
+      .start();
 
-    var response = getProjectNamesByKey(backend, new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto("token"))), List.of(
+    var response = getProjectNamesByKey(backend, new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto("token")), SonarCloudRegion.EU), List.of(
       "myProject"));
 
     assertThat(response.getProjectNamesByKey().entrySet()).extracting(Map.Entry::getKey, Map.Entry::getValue)
@@ -76,7 +77,7 @@ class ConnectionGetProjectNameByKeyMediumTests {
       .start();
     var backend = harness.newBackend()
       .withSonarQubeConnection("connectionId", server.baseUrl())
-      .build();
+      .start();
 
     var response = getProjectNamesByKey(backend, new TransientSonarQubeConnectionDto(server.baseUrl(), Either.forLeft(new TokenDto("token"))),
       List.of("project-foo2", "project-foo3", "project-foo4"));
@@ -95,9 +96,9 @@ class ConnectionGetProjectNameByKeyMediumTests {
       .start();
     var backend = harness.newBackend()
       .withSonarCloudUrl(server.baseUrl())
-      .build();
+      .start();
 
-    var response = getProjectNamesByKey(backend, new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto("token"))),
+    var response = getProjectNamesByKey(backend, new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto("token")), SonarCloudRegion.EU),
       List.of("projectKey2", "projectKey3", "projectKey4"));
 
     assertThat(response.getProjectNamesByKey().entrySet()).extracting(Map.Entry::getKey, Map.Entry::getValue)
@@ -112,7 +113,7 @@ class ConnectionGetProjectNameByKeyMediumTests {
       .withStatus(200)
       .withFixedDelay(2000)));
     var client = harness.newFakeClient().build();
-    var backend = harness.newBackend().build(client);
+    var backend = harness.newBackend().start(client);
 
     var connectionDto = new TransientSonarQubeConnectionDto(server.baseUrl(), Either.forLeft(new TokenDto(null)));
 

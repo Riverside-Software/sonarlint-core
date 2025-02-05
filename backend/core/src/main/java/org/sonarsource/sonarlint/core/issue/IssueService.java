@@ -20,6 +20,7 @@
 package org.sonarsource.sonarlint.core.issue;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -31,11 +32,9 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.ImpactSeverity;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
@@ -79,8 +78,6 @@ import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
-@Named
-@Singleton
 public class IssueService {
 
   private static final String STATUS_CHANGE_PERMISSION_MISSING_REASON = "Marking an issue as resolved requires the 'Administer Issues' permission";
@@ -96,11 +93,10 @@ public class IssueService {
   private static final Map<ResolutionStatus, Transition> transitionByResolutionStatus = Map.of(
     ResolutionStatus.ACCEPT, Transition.ACCEPT,
     ResolutionStatus.WONT_FIX, Transition.WONT_FIX,
-    ResolutionStatus.FALSE_POSITIVE, Transition.FALSE_POSITIVE
-  );
+    ResolutionStatus.FALSE_POSITIVE, Transition.FALSE_POSITIVE);
 
   private final ConfigurationRepository configurationRepository;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final StorageService storageService;
   private final LocalOnlyIssueStorageService localOnlyIssueStorageService;
   private final LocalOnlyIssueRepository localOnlyIssueRepository;
@@ -111,12 +107,12 @@ public class IssueService {
   private final RulesService rulesService;
   private final TaintVulnerabilityTrackingService taintVulnerabilityTrackingService;
 
-  public IssueService(ConfigurationRepository configurationRepository, ServerApiProvider serverApiProvider, StorageService storageService,
+  public IssueService(ConfigurationRepository configurationRepository, ConnectionManager connectionManager, StorageService storageService,
     LocalOnlyIssueStorageService localOnlyIssueStorageService, LocalOnlyIssueRepository localOnlyIssueRepository,
     ApplicationEventPublisher eventPublisher, FindingReportingService findingReportingService, SeverityModeService severityModeService,
     NewCodeService newCodeService, RulesService rulesService, TaintVulnerabilityTrackingService taintVulnerabilityTrackingService) {
     this.configurationRepository = configurationRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.storageService = storageService;
     this.localOnlyIssueStorageService = localOnlyIssueStorageService;
     this.localOnlyIssueRepository = localOnlyIssueRepository;
@@ -130,12 +126,12 @@ public class IssueService {
 
   public void changeStatus(String configurationScopeId, String issueKey, ResolutionStatus newStatus, boolean isTaintIssue, SonarLintCancelMonitor cancelMonitor) {
     var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-    var serverApi = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
+    var serverConnection = connectionManager.getConnectionOrThrow(binding.getConnectionId());
     var reviewStatus = transitionByResolutionStatus.get(newStatus);
     var projectServerIssueStore = storageService.binding(binding).findings();
     boolean isServerIssue = projectServerIssueStore.containsIssue(issueKey);
     if (isServerIssue) {
-      serverApi.issue().changeStatus(issueKey, reviewStatus, cancelMonitor);
+      serverConnection.withClientApi(serverApi -> serverApi.issue().changeStatus(issueKey, reviewStatus, cancelMonitor));
       projectServerIssueStore.updateIssueResolutionStatus(issueKey, isTaintIssue, true)
         .ifPresent(issue -> eventPublisher.publishEvent(new ServerIssueStatusChangedEvent(binding.getConnectionId(), binding.getSonarProjectKey(), issue)));
     } else {
@@ -148,27 +144,28 @@ public class IssueService {
       var issue = localIssueOpt.get();
       issue.resolve(coreStatus);
       var localOnlyIssueStore = localOnlyIssueStorageService.get();
-      serverApi.issue().anticipatedTransitions(binding.getSonarProjectKey(), concat(localOnlyIssueStore.loadAll(configurationScopeId), issue), cancelMonitor);
+      serverConnection.withClientApi(serverApi -> serverApi.issue()
+        .anticipatedTransitions(binding.getSonarProjectKey(), concat(localOnlyIssueStore.loadAll(configurationScopeId), issue), cancelMonitor));
       localOnlyIssueStore.storeLocalOnlyIssue(configurationScopeId, issue);
       eventPublisher.publishEvent(new LocalOnlyIssueStatusChangedEvent(issue));
     }
   }
 
   private static List<LocalOnlyIssue> concat(List<LocalOnlyIssue> issues, LocalOnlyIssue issue) {
-    return Stream.concat(issues.stream(), Stream.of(issue)).collect(Collectors.toList());
+    return Stream.concat(issues.stream(), Stream.of(issue)).toList();
   }
 
   private static List<LocalOnlyIssue> subtract(List<LocalOnlyIssue> allIssues, List<LocalOnlyIssue> issueToSubtract) {
     return allIssues.stream()
       .filter(it -> issueToSubtract.stream().noneMatch(issue -> issue.getId().equals(it.getId())))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public boolean checkAnticipatedStatusChangeSupported(String configScopeId) {
     var binding = configurationRepository.getEffectiveBindingOrThrow(configScopeId);
     var connectionId = binding.getConnectionId();
-    var serverApi = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
-    return checkAnticipatedStatusChangeSupported(serverApi, connectionId);
+    return connectionManager.getConnectionOrThrow(binding.getConnectionId())
+      .withClientApiAndReturn(serverApi -> checkAnticipatedStatusChangeSupported(serverApi, connectionId));
   }
 
   /**
@@ -185,8 +182,7 @@ public class IssueService {
   }
 
   public CheckStatusChangePermittedResponse checkStatusChangePermitted(String connectionId, String issueKey, SonarLintCancelMonitor cancelMonitor) {
-    var serverApi = serverApiProvider.getServerApiOrThrow(connectionId);
-    return asUUID(issueKey)
+    return connectionManager.getConnectionOrThrow(connectionId).withClientApiAndReturn(serverApi -> asUUID(issueKey)
       .flatMap(localOnlyIssueRepository::findByKey)
       .map(r -> {
         // For anticipated issues we currently don't get the information from SonarQube (as there is no web API
@@ -203,7 +199,7 @@ public class IssueService {
       .orElseGet(() -> {
         var issue = serverApi.issue().searchByKey(issueKey, cancelMonitor);
         return toResponse(getAdministerIssueTransitions(issue), STATUS_CHANGE_PERMISSION_MISSING_REASON);
-      });
+      }));
   }
 
   /**
@@ -261,11 +257,11 @@ public class IssueService {
 
   public boolean reopenIssue(String configurationScopeId, String issueId, boolean isTaintIssue, SonarLintCancelMonitor cancelMonitor) {
     var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-    var serverApiConnection = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
     var projectServerIssueStore = storageService.binding(binding).findings();
     boolean isServerIssue = projectServerIssueStore.containsIssue(issueId);
     if (isServerIssue) {
-      return reopenServerIssue(serverApiConnection, binding, issueId, projectServerIssueStore, isTaintIssue, cancelMonitor);
+      return connectionManager.getConnectionOrThrow(binding.getConnectionId())
+        .withClientApiAndReturn(serverApi -> reopenServerIssue(serverApi, binding, issueId, projectServerIssueStore, isTaintIssue, cancelMonitor));
     } else {
       return reopenLocalIssue(issueId, configurationScopeId, cancelMonitor);
     }
@@ -285,17 +281,17 @@ public class IssueService {
     var issuesForFile = localOnlyIssueStore.loadForFile(configurationScopeId, filePath);
     var issuesToSync = subtract(allIssues, issuesForFile);
     var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-    var serverConnection = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
-    serverConnection.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor);
+    connectionManager.getConnectionOrThrow(binding.getConnectionId())
+        .withClientApi(serverApi -> serverApi.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor));
   }
 
   private void removeIssueOnServer(XodusLocalOnlyIssueStore localOnlyIssueStore,
     String configurationScopeId, UUID issueId, SonarLintCancelMonitor cancelMonitor) {
     var allIssues = localOnlyIssueStore.loadAll(configurationScopeId);
-    var issuesToSync = allIssues.stream().filter(it -> !it.getId().equals(issueId)).collect(Collectors.toList());
+    var issuesToSync = allIssues.stream().filter(it -> !it.getId().equals(issueId)).toList();
     var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-    var serverConnection = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
-    serverConnection.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor);
+    connectionManager.getConnectionOrThrow(binding.getConnectionId())
+        .withClientApi(serverApi -> serverApi.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor));
   }
 
   private void setCommentOnLocalOnlyIssue(String configurationScopeId, UUID issueId, String comment, SonarLintCancelMonitor cancelMonitor) {
@@ -309,8 +305,8 @@ public class IssueService {
         var issuesToSync = localOnlyIssueStore.loadAll(configurationScopeId);
         issuesToSync.replaceAll(issue -> issue.getId().equals(issueId) ? commentedIssue : issue);
         var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-        var serverApi = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
-        serverApi.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor);
+        connectionManager.getConnectionOrThrow(binding.getConnectionId())
+            .withClientApi(serverApi -> serverApi.issue().anticipatedTransitions(binding.getSonarProjectKey(), issuesToSync, cancelMonitor));
         localOnlyIssueStore.storeLocalOnlyIssue(configurationScopeId, commentedIssue);
       }
     } else {
@@ -325,8 +321,8 @@ public class IssueService {
 
   private void addCommentOnServerIssue(String configurationScopeId, String issueKey, String comment, SonarLintCancelMonitor cancelMonitor) {
     var binding = configurationRepository.getEffectiveBindingOrThrow(configurationScopeId);
-    var serverApi = serverApiProvider.getServerApiOrThrow(binding.getConnectionId());
-    serverApi.issue().addComment(issueKey, comment, cancelMonitor);
+    connectionManager.getConnectionOrThrow(binding.getConnectionId())
+      .withClientApi(serverApi -> serverApi.issue().addComment(issueKey, comment, cancelMonitor));
   }
 
   private boolean reopenServerIssue(ServerApi connection, Binding binding, String issueId, ProjectServerIssueStore projectServerIssueStore, boolean isTaintIssue,
@@ -397,8 +393,8 @@ public class IssueService {
   public void onServerEventReceived(SonarServerEventReceivedEvent eventReceived) {
     var connectionId = eventReceived.getConnectionId();
     var serverEvent = eventReceived.getEvent();
-    if (serverEvent instanceof IssueChangedEvent) {
-      handleEvent(connectionId, (IssueChangedEvent) serverEvent);
+    if (serverEvent instanceof IssueChangedEvent issueChangedEvent) {
+      handleEvent(connectionId, issueChangedEvent);
     }
   }
 
@@ -426,28 +422,31 @@ public class IssueService {
       UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withResolution(resolved).buildIssue();
       updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
     }
-    if (userSeverity != null) {
-      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withSeverity(IssueSeverity.valueOf(userSeverity.name())).buildIssue();
-      updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
-    }
-    if (userType != null) {
-      UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withType(RuleType.valueOf(userType.name())).buildIssue();
-      updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+    if (updatedIssue.getSeverityMode().isLeft()) {
+      // if the event does not match the local severity mode, we skip updating as we would only have partial information
+      // the data will be updated at the next sync
+      var standardModeDetails = updatedIssue.getSeverityMode().getLeft();
+      if (userSeverity != null) {
+        UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withStandardModeDetails(IssueSeverity.valueOf(userSeverity.name()), standardModeDetails.getType())
+          .buildIssue();
+        updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+      }
+      if (userType != null) {
+        UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder().withStandardModeDetails(standardModeDetails.getSeverity(), RuleType.valueOf(userType.name()))
+          .buildIssue();
+        updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
+      }
     }
     for (var issue : event.getImpactedIssues()) {
-      if (!issue.getImpacts().isEmpty() && isMQRMode) {
+      if (!issue.getImpacts().isEmpty() && isMQRMode && updatedIssue.getSeverityMode().isRight()) {
+        var mqrModeDetails = updatedIssue.getSeverityMode().getRight();
         var impacts = issue.getImpacts().entrySet().stream()
-          .map(impact ->
-            new ImpactDto(
-              SoftwareQuality.valueOf(impact.getKey().name()),
-              org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.valueOf(impact.getValue().name())
-            )
-          ).collect(Collectors.toList());
-        UnaryOperator<RaisedIssueDto> issueUpdater =
-          it -> it.builder().withMQRModeDetails(
-            it.getCleanCodeAttribute(),
-            mergeImpacts(it.getSeverityMode().getRight().getImpacts(), impacts)
-          ).buildIssue();
+          .map(impact -> new ImpactDto(
+            SoftwareQuality.valueOf(impact.getKey().name()),
+            org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity.valueOf(impact.getValue().name())))
+          .toList();
+        UnaryOperator<RaisedIssueDto> issueUpdater = it -> it.builder()
+          .withMQRModeDetails(mqrModeDetails.getCleanCodeAttribute(), mergeImpacts(it.getSeverityMode().getRight().getImpacts(), impacts)).buildIssue();
         updatedIssue = updateIssue(updatedIssue, impactedIssueKeys, issueUpdater);
       }
 
@@ -456,12 +455,13 @@ public class IssueService {
   }
 
   private static List<ImpactDto> mergeImpacts(List<ImpactDto> currentImpacts, List<ImpactDto> overriddenImpacts) {
+    var mergedImpacts = new ArrayList<>(currentImpacts);
     for (var impact : overriddenImpacts) {
-      currentImpacts.removeIf(i -> i.getSoftwareQuality().equals(impact.getSoftwareQuality()));
-      currentImpacts.add(new ImpactDto(impact.getSoftwareQuality(), impact.getImpactSeverity()));
+      mergedImpacts.removeIf(i -> i.getSoftwareQuality().equals(impact.getSoftwareQuality()));
+      mergedImpacts.add(new ImpactDto(impact.getSoftwareQuality(), impact.getImpactSeverity()));
     }
 
-    return currentImpacts;
+    return mergedImpacts;
   }
 
   private static RaisedIssueDto updateIssue(RaisedIssueDto issue, Set<String> impactedIssueKeys, UnaryOperator<RaisedIssueDto> issueUpdater) {

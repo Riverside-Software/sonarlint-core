@@ -4,19 +4,22 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.13.99001</version>
+    <version>10.14-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-java-client-osgi</artifactId>
   <name>SonarLint Core - Java Client OSGi</name>
   <description>Common SonarLint features bundled for OSGi</description>
+  
+  <properties>
+    <!--
+      As this creates the OSGi bundle that is used on SonarQube for Eclipse, we
+      have to stick to Java 11 for the compiler!
+    -->
+    <maven.compiler.release>11</maven.compiler.release>
+  </properties>
 
   <dependencies>
-    <dependency>
-      <groupId>${project.groupId}</groupId>
-      <artifactId>sonarlint-commons</artifactId>
-      <version>${project.version}</version>
-    </dependency>
     <dependency>
       <groupId>${project.groupId}</groupId>
       <artifactId>sonarlint-java-client-dependencies</artifactId>

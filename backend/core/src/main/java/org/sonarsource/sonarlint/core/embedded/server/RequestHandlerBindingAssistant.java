@@ -20,6 +20,7 @@
 package org.sonarsource.sonarlint.core.embedded.server;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import jakarta.annotation.PreDestroy;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Objects;
@@ -30,12 +31,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
 import org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment;
+import org.sonarsource.sonarlint.core.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.ExecutorServiceShutdownWatchable;
@@ -52,8 +51,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowMessageParams;
 import org.sonarsource.sonarlint.core.usertoken.UserTokenService;
 
-@Named
-@Singleton
 public class RequestHandlerBindingAssistant {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -64,7 +61,7 @@ public class RequestHandlerBindingAssistant {
   private final ConfigurationRepository configurationRepository;
   private final UserTokenService userTokenService;
   private final ExecutorServiceShutdownWatchable<?> executorService;
-  private final String sonarCloudUrl;
+  private final SonarCloudActiveEnvironment sonarCloudActiveEnvironment;
   private final ConnectionConfigurationRepository repository;
 
   public RequestHandlerBindingAssistant(BindingSuggestionProvider bindingSuggestionProvider, BindingCandidatesFinder bindingCandidatesFinder,
@@ -78,7 +75,7 @@ public class RequestHandlerBindingAssistant {
     this.userTokenService = userTokenService;
     this.executorService = new ExecutorServiceShutdownWatchable<>(new ThreadPoolExecutor(0, 1, 10L, TimeUnit.SECONDS,
       new LinkedBlockingQueue<>(), r -> new Thread(r, "Show Issue or Hotspot Request Handler")));
-    this.sonarCloudUrl = sonarCloudActiveEnvironment.getUri().toString();
+    this.sonarCloudActiveEnvironment = sonarCloudActiveEnvironment;
     this.repository = repository;
   }
 
@@ -133,7 +130,8 @@ public class RequestHandlerBindingAssistant {
   }
 
   private String getServerUrl(AssistCreatingConnectionParams connectionParams) {
-    return connectionParams.getConnectionParams().isLeft() ? connectionParams.getConnectionParams().getLeft().getServerUrl() : sonarCloudUrl;
+    return connectionParams.getConnectionParams().isLeft() ? connectionParams.getConnectionParams().getLeft().getServerUrl() :
+      sonarCloudActiveEnvironment.getUri(SonarCloudRegion.valueOf(connectionParams.getConnectionParams().getRight().getRegion().name())).toString();
   }
 
   private AssistCreatingConnectionResponse assistCreatingConnectionAndWaitForRepositoryUpdate(

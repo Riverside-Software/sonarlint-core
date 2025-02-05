@@ -38,7 +38,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcErrorCode;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.OpenUrlInBrowserParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidChangeAnalysisReadinessParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidDetectSecretParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.DidRaiseIssueParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetFileExclusionsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetFileExclusionsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.GetInferredAnalysisPropertiesParams;
@@ -84,6 +83,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.StartProgress
 import org.sonarsource.sonarlint.core.rpc.protocol.client.promotion.PromoteExtraEnabledLanguagesInConnectedModeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.smartnotification.ShowSmartNotificationParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.sync.DidSynchronizeConfigurationScopeParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.sync.InvalidTokenParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.taint.vulnerability.DidChangeTaintVulnerabilitiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
 
@@ -373,11 +373,6 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
   }
 
   @Override
-  public void didRaiseIssue(DidRaiseIssueParams params) {
-    notify(() -> delegate.didRaiseIssue(params.getConfigurationScopeId(), params.getAnalysisId(), params.getRawIssue()));
-  }
-
-  @Override
   public void raiseIssues(RaiseIssuesParams params) {
     notify(() -> delegate.raiseIssues(params.getConfigurationScopeId(), params.getIssuesByFileUri(), params.isIntermediatePublication(), params.getAnalysisId()));
   }
@@ -422,5 +417,10 @@ public class SonarLintRpcClientImpl implements SonarLintRpcClient {
         throw configScopeNotFoundError(params.getConfigurationScopeId());
       }
     });
+  }
+
+  @Override
+  public void invalidToken(InvalidTokenParams params) {
+    notify(() -> delegate.invalidToken(params.getConnectionId()));
   }
 }

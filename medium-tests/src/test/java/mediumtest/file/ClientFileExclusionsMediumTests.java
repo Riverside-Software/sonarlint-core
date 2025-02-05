@@ -61,7 +61,7 @@ class ClientFileExclusionsMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
 
@@ -80,7 +80,7 @@ class ClientFileExclusionsMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
 
@@ -102,7 +102,7 @@ class ClientFileExclusionsMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
 
@@ -120,7 +120,7 @@ class ClientFileExclusionsMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
 
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
 
@@ -136,9 +136,10 @@ class ClientFileExclusionsMediumTests {
   void it_should_not_exclude_client_defined_file_exclusion_in_connected_mode(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = AnalysisUtils.createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -164,7 +165,7 @@ class ClientFileExclusionsMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -181,9 +182,10 @@ class ClientFileExclusionsMediumTests {
   void it_should_exclude_non_user_defined_files_in_connected_mode(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var ideFilePath = "Foo.java";
     var filePath = AnalysisUtils.createFile(baseDir, ideFilePath,
-      "// FIXME foo bar\n" +
-        "public class Foo {\n" +
-        "}");
+      """
+        // FIXME foo bar
+        public class Foo {
+        }""");
     var projectKey = "projectKey";
     var connectionId = "connectionId";
     var branchName = "main";
@@ -208,7 +210,7 @@ class ClientFileExclusionsMediumTests {
           project -> project.withRuleSet("java", ruleSet -> ruleSet.withActiveRule(ruleKey, "MINOR"))
             .withMainBranch(branchName)))
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getConfigurationService()
       .didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
@@ -223,12 +225,13 @@ class ClientFileExclusionsMediumTests {
 
   private static Path createXmlFile(Path baseDir) {
     return AnalysisUtils.createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
   }
 }

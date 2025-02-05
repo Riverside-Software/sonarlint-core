@@ -45,7 +45,6 @@ import org.sonarsource.sonarlint.core.commons.LogTestStartAndEnd;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.testutils.GitUtils;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeAnalysisPropertiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangePathToCompileCommandsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigParams;
@@ -57,7 +56,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidRemov
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidOpenFileParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.analysis.RawIssueDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.ImpactDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.plugin.DidSkipLoadingPluginParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ProgressEndNotification;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ReportProgressParams;
@@ -67,24 +67,22 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TextRangeDto;
+import org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
 import utils.OnDiskTestClientInputFile;
 import utils.TestPlugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.refEq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static utils.AnalysisUtils.waitForRaisedIssues;
 
 @ExtendWith(LogTestStartAndEnd.class)
 class AnalysisMediumTests {
@@ -108,32 +106,35 @@ class AnalysisMediumTests {
     var client = harness.newFakeClient().build();
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
     var result = backend.getAnalysisService()
-      .analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(tempDir.resolve("File.java").toUri()), Map.of(), System.currentTimeMillis())).join();
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(tempDir.resolve("File.java").toUri()), Map.of(), false, System.currentTimeMillis()))
+      .join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    verify(client, never()).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), any());
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty());
   }
 
   @SonarLintTest
   void should_not_raise_issues_for_previously_analysed_files_if_they_were_not_submitted_for_analysis(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var fileFooPath = createFile(baseDir, "Foo.java",
-      "public class Foo {\n"
-        + "  public void foo() {\n"
-        + "    int x;\n"
-        + "    System.out.println(\"Foo\");\n"
-        + "  }\n"
-        + "}");
+      """
+        public class Foo {
+          public void foo() {
+            int x;
+            System.out.println("Foo");
+          }
+        }""");
     var fileBarPath = createFile(baseDir, "Bar.java",
-      "public class Bar {\n"
-        + "  public void foo() {\n"
-        + "    int x;\n"
-        + "    System.out.println(\"Foo\");\n"
-        + "  }\n"
-        + "}");
+      """
+        public class Bar {
+          public void foo() {
+            int x;
+            System.out.println("Foo");
+          }
+        }""");
     var fileFooUri = fileFooPath.toUri();
     var fileBarUri = fileBarPath.toUri();
     var client = harness.newFakeClient()
@@ -145,7 +146,7 @@ class AnalysisMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
       .withDisabledPluginsForAnalysis(SonarLanguage.JAVA.getPluginKey())
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
     var result = backend.getAnalysisService()
@@ -169,13 +170,14 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_analyze_xml_file_in_standalone_mode(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
@@ -183,39 +185,38 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.MINOR);
-    assertThat(rawIssue.getType()).isEqualTo(RuleType.CODE_SMELL);
-    assertThat(rawIssue.getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
-    assertThat(rawIssue.getImpacts()).isEqualTo(Map.of(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW));
-    assertThat(rawIssue.getRuleKey()).isEqualTo("xml:S3421");
-    assertThat(rawIssue.getPrimaryMessage()).isEqualTo("Replace \"pom.version\" with \"project.version\".");
-    assertThat(rawIssue.getFileUri()).isEqualTo(fileUri);
-    assertThat(rawIssue.getFlows()).isEmpty();
-    assertThat(rawIssue.getQuickFixes()).isEmpty();
-    assertThat(rawIssue.getTextRange()).usingRecursiveComparison().isEqualTo(new TextRangeDto(6, 11, 6, 25));
-    assertThat(rawIssue.getRuleDescriptionContextKey()).isNull();
-    assertThat(rawIssue.getVulnerabilityProbability()).isNull();
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
+      .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
+      .containsExactly(tuple(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW));
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("xml:S3421");
+    assertThat(raisedIssueDto.getPrimaryMessage()).isEqualTo("Replace \"pom.version\" with \"project.version\".");
+    assertThat(raisedIssueDto.getFlows()).isEmpty();
+    assertThat(raisedIssueDto.getQuickFixes()).isEmpty();
+    assertThat(raisedIssueDto.getTextRange()).usingRecursiveComparison().isEqualTo(new TextRangeDto(6, 11, 6, 25));
+    assertThat(raisedIssueDto.getRuleDescriptionContextKey()).isNull();
   }
 
   @SonarLintTest
   void it_should_analyze_xml_file_in_connected_mode(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
@@ -226,17 +227,20 @@ class AnalysisMediumTests {
         storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("xml:S3421");
+    var raisedIssueDto = client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(fileUri).get(0);
+    assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
+      .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
+      .containsExactly(tuple(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW));
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("xml:S3421");
   }
 
   @SonarLintTest
@@ -251,13 +255,14 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    verify(client, timeout(200)).didSkipLoadingPlugin(CONFIG_SCOPE_ID, Language.JAVA, DidSkipLoadingPluginParams.SkipReason.UNSATISFIED_JRE, "11", "10");
+    verify(client, timeout(200)).didSkipLoadingPlugin(CONFIG_SCOPE_ID, Language.JAVA, DidSkipLoadingPluginParams.SkipReason.UNSATISFIED_JRE, "17", "10");
   }
 
   @SonarLintTest
@@ -271,10 +276,11 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     verify(client, timeout(1000)).didDetectSecret(CONFIG_SCOPE_ID);
@@ -291,10 +297,11 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     verify(client).startProgress(refEq(new StartProgressParams(analysisId.toString(), CONFIG_SCOPE_ID, "Analyzing 1 file", null, true, false)));
     var reportProgressCaptor = ArgumentCaptor.forClass(ReportProgressParams.class);
@@ -315,10 +322,11 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.TEXT)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     assertThat(result.getRawIssues()).hasSize(1);
@@ -328,11 +336,15 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_report_issues_for_multi_file_analysis_taking_data_from_module_filesystem(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var fileIssue = createFile(baseDir, "fileIssue.py",
-      "from fileFuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from fileFuncDef import foo
+        foo(1,2,3)
+        """);
     var fileFuncDef = createFile(baseDir, "fileFuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var fileIssueUri = fileIssue.toUri();
     var fileFuncDefUri = fileFuncDef.toUri();
     var client = harness.newFakeClient()
@@ -342,43 +354,45 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+        List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis()))
+      .join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, timeout(2000)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
   }
 
   @SonarLintTest
   void it_should_report_multi_file_issues_for_files_added_after_initialization(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var fileIssue = createFile(baseDir, "fileIssue.py",
-      "from fileFuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from fileFuncDef import foo
+        foo(1,2,3)
+        """);
     var fileFuncDef = createFile(baseDir, "fileFuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var fileIssueUri = fileIssue.toUri();
     var fileFuncDefUri = fileFuncDef.toUri();
     var client = harness.newFakeClient()
       .build();
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, times(0)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty());
 
     backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
       new ConfigurationScopeDto(CONFIG_SCOPE_ID, null, false, CONFIG_SCOPE_ID, null))));
@@ -389,31 +403,36 @@ class AnalysisMediumTests {
         List.of(),
         List.of()));
 
-    result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, timeout(2000)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
   }
 
   @SonarLintTest
   void it_should_report_issues_for_multi_file_analysis_only_for_leaf_config_scopes(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var file1Issue = createFile(baseDir, "file1Issue.py",
-      "from file1FuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from file1FuncDef import foo
+        foo(1,2,3)
+        """);
     var file1FuncDef = createFile(baseDir, "file1FuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var file2Issue = createFile(baseDir, "file2Issue.py",
-      "from file2FuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from file2FuncDef import foo
+        foo(1,2,3)
+        """);
     var file2FuncDef = createFile(baseDir, "file2FuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var file1IssueUri = file1Issue.toUri();
     var file1FuncDefUri = file1FuncDef.toUri();
     var file2IssueUri = file2Issue.toUri();
@@ -431,31 +450,31 @@ class AnalysisMediumTests {
       .withUnboundConfigScope(parentConfigScope)
       .withUnboundConfigScope(leafConfigScope, leafConfigScope, parentConfigScope)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var leafConfigScopeResult = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(leafConfigScope, analysisId,
-      List.of(file2IssueUri), Map.of(), System.currentTimeMillis())).join();
+    var leafConfigScopeResult = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(leafConfigScope, analysisId,
+      List.of(file2IssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(leafConfigScopeResult.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(leafConfigScope), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, leafConfigScope).get(0);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
 
-    var parentConfigScopeResult = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(parentConfigScope,
-      analysisId, List.of(file1IssueUri), Map.of(), System.currentTimeMillis())).join();
+    var parentConfigScopeResult = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(parentConfigScope,
+      analysisId, List.of(file1IssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(parentConfigScopeResult.getFailedAnalysisFiles()).isEmpty();
-    verify(client, times(0)).didRaiseIssue(eq(parentConfigScope), eq(analysisId), rawIssueCaptor.capture());
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(parentConfigScope)).isEmpty());
   }
 
   @SonarLintTest
-  void it_should_update_module_file_system_on_file_events_creating_file(SonarLintTestHarness harness, @TempDir Path baseDir) {
+  void it_should_update_module_file_system_on_file_events_creating_file(SonarLintTestHarness harness, @TempDir Path tempDir) throws IOException {
+    var baseDir = Files.createDirectory(tempDir.resolve("it_should_update_module_file_system_on_file_events_creating_file"));
     var fileIssue = createFile(baseDir, "fileIssue.py",
-      "from fileFuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from fileFuncDef import foo
+        foo(1,2,3)
+        """);
     var fileIssueUri = fileIssue.toUri();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileIssueUri, baseDir.relativize(fileIssue),
@@ -464,19 +483,20 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var parentConfigScopeResult = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    var parentConfigScopeResult = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(parentConfigScopeResult.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, times(0)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty());
 
     var fileFuncDef = createFile(baseDir, "fileFuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var fileFuncDefUri = fileFuncDef.toUri();
     backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(
       List.of(new ClientFileDto(fileFuncDefUri, baseDir.relativize(fileFuncDef), CONFIG_SCOPE_ID, false, null, fileFuncDef, null, null,
@@ -484,26 +504,27 @@ class AnalysisMediumTests {
       List.of(),
       List.of()));
 
-    parentConfigScopeResult = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID,
-      analysisId, List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    parentConfigScopeResult = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID,
+      analysisId, List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(parentConfigScopeResult.getFailedAnalysisFiles()).isEmpty();
-    rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
   }
 
   @Disabled("SLCORE-1113")
   @SonarLintTest
   void it_should_update_module_file_system_on_file_events_deleting_file(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var fileIssue = createFile(baseDir, "fileIssue.py",
-      "from fileFuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from fileFuncDef import foo
+        foo(1,2,3)
+        """);
     var fileFuncDef = createFile(baseDir, "fileFuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var fileIssueUri = fileIssue.toUri();
     var fileFuncDefUri = fileFuncDef.toUri();
     var client = harness.newFakeClient()
@@ -515,39 +536,41 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getSeverityMode().isLeft()).isTrue();
+    assertThat(raisedIssueDto.getSeverityMode().getLeft().getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
 
     removeFile(baseDir, "fileFuncDef.py");
     backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(), List.of(), List.of(fileFuncDefUri)));
 
-    result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, times(0)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
+    assertThat(client.getRaisedHotspotsForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty();
   }
 
   @Disabled("SLCORE-1113")
   @SonarLintTest
   void it_should_update_module_file_system_on_file_events_editing_file(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var fileIssue = createFile(baseDir, "fileIssue.py",
-      "from fileFuncDef import foo\n" +
-        "foo(1,2,3)\n");
+      """
+        from fileFuncDef import foo
+        foo(1,2,3)
+        """);
     var fileFuncDef = createFile(baseDir, "fileFuncDef.py",
-      "def foo(a):\n" +
-        "    print(a)\n");
+      """
+        def foo(a):
+            print(a)
+        """);
     var fileIssueUri = fileIssue.toUri();
     var fileFuncDefUri = fileFuncDef.toUri();
     var client = harness.newFakeClient()
@@ -559,18 +582,17 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
-    var result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    var result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    var rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
-    var rawIssue = rawIssueCaptor.getValue();
-    assertThat(rawIssue.getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
-    assertThat(rawIssue.getRuleKey()).isEqualTo("python:S930");
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID).get(0);
+    assertThat(raisedIssueDto.getSeverityMode().isLeft()).isTrue();
+    assertThat(raisedIssueDto.getSeverityMode().getLeft().getSeverity()).isEqualTo(IssueSeverity.BLOCKER);
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("python:S930");
 
     editFile(baseDir, "fileFuncDef.py", "");
     backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(
@@ -579,17 +601,16 @@ class AnalysisMediumTests {
       List.of(),
       List.of()));
 
-    result = backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId,
-      List.of(fileIssueUri), Map.of(), System.currentTimeMillis())).join();
+    result = backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId,
+      List.of(fileIssueUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
-    rawIssueCaptor = ArgumentCaptor.forClass(RawIssueDto.class);
-    verify(client, times(0)).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), rawIssueCaptor.capture());
+    assertThat(client.getRaisedHotspotsForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty();
   }
 
   @SonarLintTest
   void should_save_and_return_client_analysis_settings(SonarLintTestHarness harness) {
-    var backend = harness.newBackend().build();
+    var backend = harness.newBackend().start();
     backend.getAnalysisService().didSetUserAnalysisProperties(
       new DidChangeAnalysisPropertiesParams(CONFIG_SCOPE_ID, Map.of("key1", "user-value1", "key2", "user-value2")));
 
@@ -602,7 +623,7 @@ class AnalysisMediumTests {
   void should_set_js_internal_bundlePath_if_provided(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var backend = harness.newBackend()
       .withEslintBridgeServerBundlePath(baseDir.resolve("eslint-bridge"))
-      .build();
+      .start();
 
     var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
 
@@ -611,7 +632,7 @@ class AnalysisMediumTests {
 
   @SonarLintTest
   void should_not_set_js_internal_bundlePath_when_not_provided(SonarLintTestHarness harness) {
-    var backend = harness.newBackend().build();
+    var backend = harness.newBackend().start();
 
     var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
 
@@ -622,7 +643,7 @@ class AnalysisMediumTests {
   void should_not_set_js_internal_bundlePath_when_no_language_specific_requirements(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withNoLanguageSpecificRequirements()
-      .build();
+      .start();
 
     var analysisProperties = backend.getAnalysisService().getAnalysisConfig(new GetAnalysisConfigParams(CONFIG_SCOPE_ID)).join().getAnalysisProperties();
 
@@ -632,13 +653,14 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_skip_analysis_and_keep_rules_if_disabled_language_for_analysis(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
@@ -647,7 +669,7 @@ class AnalysisMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
       .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
     var result = backend.getAnalysisService()
@@ -655,7 +677,7 @@ class AnalysisMediumTests {
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     assertThat(result.getRawIssues()).isEmpty();
-    verify(client, never()).didRaiseIssue(eq(CONFIG_SCOPE_ID), eq(analysisId), any());
+    await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty());
 
     var allRules = backend.getRulesService().listAllStandaloneRulesDefinitions().join();
     assertThat(allRules.getRulesByKey().keySet())
@@ -668,13 +690,14 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_skip_analysis_only_for_disabled_language(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var xmlFilePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var xmlFileUri = xmlFilePath.toUri();
     var javaFilePath = createFile(baseDir, "Main.java",
       "public class Main {}");
@@ -690,7 +713,7 @@ class AnalysisMediumTests {
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
       .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
-      .build(client);
+      .start(client);
     var analysisId = UUID.randomUUID();
 
     var result = backend.getAnalysisService()
@@ -730,7 +753,7 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.CFAMILY)
-      .build(client);
+      .start(client);
     backend.getAnalysisService()
       .didSetUserAnalysisProperties(new DidChangeAnalysisPropertiesParams(CONFIG_SCOPE_ID, Map.of("sonar.cfamily.build-wrapper-content", buildWrapperContent)));
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, cFileUri));
@@ -752,7 +775,7 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.CFAMILY)
-      .build();
+      .start();
 
     backend.getAnalysisService().didChangePathToCompileCommands(new DidChangePathToCompileCommandsParams(CONFIG_SCOPE_ID, null));
 
@@ -763,21 +786,23 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_unload_rules_cache_on_config_scope_closed(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var filePath2 = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var fileUri2 = filePath2.toUri();
     var configScope2 = "configScope2";
@@ -801,16 +826,18 @@ class AnalysisMediumTests {
       .withBoundConfigScope(configScope2, connectionId2, projectKey2)
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
       .withFullSynchronization()
-      .build(client);
+      .start(client);
     backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
       new ConfigurationScopeDto(configScope2, null, true, configScope2,
         new BindingConfigurationDto(connectionId2, projectKey2, true)))));
 
     // analyse files to warmup caches
     var analysisId1 = UUID.randomUUID();
-    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), true, System.currentTimeMillis()))
+      .join();
     var analysisId2 = UUID.randomUUID();
-    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), System.currentTimeMillis())).join();
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), true, System.currentTimeMillis()))
+      .join();
 
     // unload one of the projects
     backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams(configScope2));
@@ -822,29 +849,32 @@ class AnalysisMediumTests {
   @SonarLintTest
   void it_should_not_unload_rules_cache_on_config_scope_closed_if_another_config_scope_still_opened(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var filePath2 = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var filePath3 = createFile(baseDir, "pom.xml",
-      "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-        + "<project>\n"
-        + "  <modelVersion>4.0.0</modelVersion>\n"
-        + "  <groupId>com.foo</groupId>\n"
-        + "  <artifactId>bar</artifactId>\n"
-        + "  <version>${pom.version}</version>\n"
-        + "</project>");
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
     var fileUri = filePath.toUri();
     var fileUri2 = filePath2.toUri();
     var fileUri3 = filePath3.toUri();
@@ -871,7 +901,7 @@ class AnalysisMediumTests {
       .withBoundConfigScope(configScope2, connectionId2, projectKey2)
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
       .withFullSynchronization()
-      .build(client);
+      .start(client);
     backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
       new ConfigurationScopeDto(configScope2, null, true, configScope2,
         new BindingConfigurationDto(connectionId2, projectKey2, true)))));
@@ -881,9 +911,11 @@ class AnalysisMediumTests {
 
     // analyse files to warmup caches
     var analysisId1 = UUID.randomUUID();
-    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), System.currentTimeMillis())).join();
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId1, List.of(fileUri), Map.of(), true, System.currentTimeMillis()))
+      .join();
     var analysisId2 = UUID.randomUUID();
-    backend.getAnalysisService().analyzeFiles(new AnalyzeFilesParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), System.currentTimeMillis())).join();
+    backend.getAnalysisService().analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(configScope2, analysisId2, List.of(fileUri2), Map.of(), true, System.currentTimeMillis()))
+      .join();
 
     // unload one of the projects
     backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams(configScope2));
@@ -907,20 +939,20 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getAnalysisService()
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri1), Map.of(), false, System.currentTimeMillis())).join();
-    await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).hasSize(1));
 
-    var raisedIssues = client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID);
+    var raisedIssues = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID);
     assertThat(raisedIssues).hasSize(1);
+    client.cleanRaisedIssues();
 
     backend.getAnalysisService()
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri2), Map.of(), false, System.currentTimeMillis())).join();
     await().atMost(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).hasSize(1));
 
-    raisedIssues = client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID);
+    raisedIssues = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID);
     assertThat(raisedIssues).hasSize(1);
   }
 
@@ -939,7 +971,7 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build(client);
+      .start(client);
 
     backend.getAnalysisService()
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
@@ -950,7 +982,7 @@ class AnalysisMediumTests {
   void it_should_not_use_enterprise_csharp_analyzer_in_standalone(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
-      .build();
+      .start();
 
     var response = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
 
@@ -967,7 +999,7 @@ class AnalysisMediumTests {
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
       .withFullSynchronization()
-      .build();
+      .start();
 
     var result = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
 
@@ -987,7 +1019,7 @@ class AnalysisMediumTests {
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
       .withFullSynchronization()
-      .build();
+      .start();
 
     var result = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
 
@@ -1027,5 +1059,10 @@ class AnalysisMediumTests {
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+  }
+
+  private static List<RaisedIssueDto> awaitRaisedIssuesNotification(SonarLintBackendFixture.FakeSonarLintRpcClient client, String configScopeId) {
+    waitForRaisedIssues(client, configScopeId);
+    return client.getRaisedIssuesForScopeIdAsList(configScopeId);
   }
 }

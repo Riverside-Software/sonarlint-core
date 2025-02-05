@@ -36,8 +36,6 @@ import java.time.OffsetDateTime;
 import java.util.Base64;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryMigrationDto;
@@ -45,8 +43,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryM
 /**
  * Serialize and deserialize telemetry data to persistent storage.
  */
-@Named
-@Singleton
 public class TelemetryLocalStorageManager {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
   private final Path path;

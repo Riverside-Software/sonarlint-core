@@ -19,14 +19,18 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.client.connection;
 
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
+
 public class SonarCloudConnectionSuggestionDto {
 
   private final String organization;
   private final String projectKey;
+  private final SonarCloudRegion region;
 
-  public SonarCloudConnectionSuggestionDto(String organization, String projectKey) {
+  public SonarCloudConnectionSuggestionDto(String organization, String projectKey, SonarCloudRegion region) {
     this.organization = organization;
     this.projectKey = projectKey;
+    this.region = region;
   }
 
   public String getOrganization() {
@@ -37,4 +41,7 @@ public class SonarCloudConnectionSuggestionDto {
     return projectKey;
   }
 
+  public SonarCloudRegion getRegion() {
+    return region;
+  }
 }

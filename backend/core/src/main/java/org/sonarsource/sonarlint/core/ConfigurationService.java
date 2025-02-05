@@ -24,8 +24,6 @@ import java.util.List;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
 import org.sonarsource.sonarlint.core.event.ConfigurationScopeRemovedEvent;
@@ -39,8 +37,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.Configur
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
-@Named
-@Singleton
 public class ConfigurationService {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -89,7 +85,7 @@ public class ConfigurationService {
   public void didRemoveConfigurationScope(String removedId) {
     var removed = repository.remove(removedId);
     if (removed == null) {
-      LOG.error("Attempt to remove configuration scope '{}' that was not registered", removedId);
+      LOG.debug("Attempt to remove configuration scope '{}' that was not registered", removedId);
     } else {
       applicationEventPublisher.publishEvent(new ConfigurationScopeRemovedEvent(removed.getScope(), removed.getBindingConfiguration()));
     }

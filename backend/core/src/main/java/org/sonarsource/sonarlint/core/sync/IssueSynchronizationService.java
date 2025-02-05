@@ -22,9 +22,7 @@ package org.sonarsource.sonarlint.core.sync;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -36,23 +34,21 @@ import org.sonarsource.sonarlint.core.serverconnection.ServerIssueUpdater;
 import org.sonarsource.sonarlint.core.serverconnection.TaintIssueDownloader;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 
-@Named
-@Singleton
 public class IssueSynchronizationService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
   private final StorageService storageService;
   private final LanguageSupportRepository languageSupportRepository;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
 
   public IssueSynchronizationService(StorageService storageService, LanguageSupportRepository languageSupportRepository,
-    ServerApiProvider serverApiProvider) {
+    ConnectionManager connectionManager) {
     this.storageService = storageService;
     this.languageSupportRepository = languageSupportRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
   }
 
   public void syncServerIssuesForProject(ServerApi serverApi, String connectionId, String projectKey, String branchName, SonarLintCancelMonitor cancelMonitor) {
-    var storage = storageService.getStorageFacade().connection(connectionId);
+    var storage = storageService.connection(connectionId);
     var enabledLanguagesToSync = languageSupportRepository.getEnabledLanguagesInConnectedMode().stream().filter(SonarLanguage::shouldSyncInConnectedMode)
       .collect(Collectors.toCollection(LinkedHashSet::new));
     var issuesUpdater = new ServerIssueUpdater(storage, new IssueDownloader(enabledLanguagesToSync), new TaintIssueDownloader(enabledLanguagesToSync));
@@ -65,12 +61,12 @@ public class IssueSynchronizationService {
   }
 
   public void fetchProjectIssues(Binding binding, String activeBranch, SonarLintCancelMonitor cancelMonitor) {
-    serverApiProvider.getServerApi(binding.getConnectionId())
-      .ifPresent(serverApi -> downloadServerIssuesForProject(binding.getConnectionId(), serverApi, binding.getSonarProjectKey(), activeBranch, cancelMonitor));
+    connectionManager.withValidConnection(binding.getConnectionId(), serverApi ->
+      downloadServerIssuesForProject(binding.getConnectionId(), serverApi, binding.getSonarProjectKey(), activeBranch, cancelMonitor));
   }
 
   private void downloadServerIssuesForProject(String connectionId, ServerApi serverApi, String projectKey, String branchName, SonarLintCancelMonitor cancelMonitor) {
-    var storage = storageService.getStorageFacade().connection(connectionId);
+    var storage = storageService.connection(connectionId);
     var enabledLanguagesToSync = languageSupportRepository.getEnabledLanguagesInConnectedMode().stream().filter(SonarLanguage::shouldSyncInConnectedMode)
       .collect(Collectors.toCollection(LinkedHashSet::new));
     var issuesUpdater = new ServerIssueUpdater(storage, new IssueDownloader(enabledLanguagesToSync), new TaintIssueDownloader(enabledLanguagesToSync));
@@ -78,13 +74,13 @@ public class IssueSynchronizationService {
   }
 
   public void fetchFileIssues(Binding binding, Path serverFileRelativePath, String activeBranch, SonarLintCancelMonitor cancelMonitor) {
-    serverApiProvider.getServerApi(binding.getConnectionId())
-      .ifPresent(serverApi -> downloadServerIssuesForFile(binding.getConnectionId(), serverApi, binding.getSonarProjectKey(), serverFileRelativePath, activeBranch, cancelMonitor));
+    connectionManager.withValidConnection(binding.getConnectionId(), serverApi ->
+      downloadServerIssuesForFile(binding.getConnectionId(), serverApi, binding.getSonarProjectKey(), serverFileRelativePath, activeBranch, cancelMonitor));
   }
 
   public void downloadServerIssuesForFile(String connectionId, ServerApi serverApi, String projectKey, Path serverFileRelativePath, String branchName,
     SonarLintCancelMonitor cancelMonitor) {
-    var storage = storageService.getStorageFacade().connection(connectionId);
+    var storage = storageService.connection(connectionId);
     var enabledLanguagesToSync = languageSupportRepository.getEnabledLanguagesInConnectedMode().stream().filter(SonarLanguage::shouldSyncInConnectedMode)
       .collect(Collectors.toCollection(LinkedHashSet::new));
     var issuesUpdater = new ServerIssueUpdater(storage, new IssueDownloader(enabledLanguagesToSync), new TaintIssueDownloader(enabledLanguagesToSync));

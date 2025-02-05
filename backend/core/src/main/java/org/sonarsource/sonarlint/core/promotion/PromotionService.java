@@ -22,8 +22,6 @@ package org.sonarsource.sonarlint.core.promotion;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.analysis.AnalysisFinishedEvent;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
@@ -33,8 +31,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.promotion.PromoteExtra
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 import org.springframework.context.event.EventListener;
 
-@Named
-@Singleton
 public class PromotionService {
   private final ConfigurationRepository configurationRepository;
   private final Set<Language> extraEnabledLanguagesInConnectedMode;

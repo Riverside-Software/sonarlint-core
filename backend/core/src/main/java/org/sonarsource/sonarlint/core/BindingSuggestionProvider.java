@@ -20,6 +20,8 @@
 package org.sonarsource.sonarlint.core;
 
 import com.google.common.util.concurrent.MoreExecutors;
+import jakarta.annotation.PreDestroy;
+import jakarta.inject.Inject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -32,10 +34,6 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.annotation.PreDestroy;
-import javax.inject.Inject;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.ExecutorServiceShutdownWatchable;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
@@ -53,12 +51,9 @@ import org.springframework.context.event.EventListener;
 import static java.lang.String.join;
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.requireNonNull;
-import static java.util.stream.Collectors.toList;
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.sonarsource.sonarlint.core.commons.log.SonarLintLogger.singlePlural;
 
-@Named
-@Singleton
 public class BindingSuggestionProvider {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -166,7 +161,7 @@ public class BindingSuggestionProvider {
     var cluesAndConnections = bindingClueProvider.collectBindingCluesWithConnections(checkedConfigScopeId, candidateConnectionIds, cancelMonitor);
 
     List<BindingSuggestionDto> suggestions = new ArrayList<>();
-    var cluesWithProjectKey = cluesAndConnections.stream().filter(c -> c.getBindingClue().getSonarProjectKey() != null).collect(toList());
+    var cluesWithProjectKey = cluesAndConnections.stream().filter(c -> c.getBindingClue().getSonarProjectKey() != null).toList();
     for (var bindingClueWithConnections : cluesWithProjectKey) {
       var sonarProjectKey = requireNonNull(bindingClueWithConnections.getBindingClue().getSonarProjectKey());
       for (var connectionId : bindingClueWithConnections.getConnectionIds()) {
@@ -179,7 +174,7 @@ public class BindingSuggestionProvider {
     if (suggestions.isEmpty()) {
       var configScopeName = Optional.ofNullable(configRepository.getConfigurationScope(checkedConfigScopeId)).map(ConfigurationScope::getName).orElse(null);
       if (isNotBlank(configScopeName)) {
-        var cluesWithoutProjectKey = cluesAndConnections.stream().filter(c -> c.getBindingClue().getSonarProjectKey() == null).collect(toList());
+        var cluesWithoutProjectKey = cluesAndConnections.stream().filter(c -> c.getBindingClue().getSonarProjectKey() == null).toList();
         for (var bindingClueWithConnections : cluesWithoutProjectKey) {
           searchGoodMatchInConnections(suggestions, configScopeName, bindingClueWithConnections.getConnectionIds(), cancelMonitor);
         }

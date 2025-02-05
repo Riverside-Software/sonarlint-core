@@ -25,11 +25,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.jetbrains.annotations.NotNull;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
 import org.sonarsource.sonarlint.core.commons.ConnectionKind;
@@ -54,8 +51,6 @@ import org.springframework.context.event.EventListener;
 import static org.sonarsource.sonarlint.core.serverconnection.PluginsSynchronizer.CUSTOM_SECRETS_MIN_SQ_VERSION;
 import static org.sonarsource.sonarlint.core.serverconnection.PluginsSynchronizer.ENTERPRISE_IAC_MIN_SQ_VERSION;
 
-@Named
-@Singleton
 public class PluginsService {
   private static final Version REPACKAGED_DOTNET_ANALYZER_MIN_SQ_VERSION = Version.create("10.8");
 
@@ -128,7 +123,7 @@ public class PluginsService {
     return result.getPluginCheckResultByKeys().values().stream()
       .filter(PluginRequirementsCheckResult::isSkipped)
       .map(plugin -> new SkippedPlugin(plugin.getPlugin().getKey(), plugin.getSkipReason().get()))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public LoadedPlugins getPlugins(String connectionId) {
@@ -242,8 +237,6 @@ public class PluginsService {
 
   @CheckForNull
   public Path getEffectivePathToCsharpAnalyzer(String connectionId) {
-    return shouldUseEnterpriseCSharpAnalyzer(connectionId) ?
-      csharpSupport.csharpEnterprisePluginPath :
-      csharpSupport.csharpOssPluginPath;
+    return shouldUseEnterpriseCSharpAnalyzer(connectionId) ? csharpSupport.csharpEnterprisePluginPath : csharpSupport.csharpOssPluginPath;
   }
 }

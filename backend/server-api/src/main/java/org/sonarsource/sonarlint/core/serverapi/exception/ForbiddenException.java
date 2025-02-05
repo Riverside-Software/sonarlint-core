@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,33 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.client.analysis;
+package org.sonarsource.sonarlint.core.serverapi.exception;
 
-import java.util.UUID;
-
-
-@Deprecated(since = "10.2")
-public class DidRaiseIssueParams {
-  private final String configurationScopeId;
-  // the ID that was provided when the analysis was triggered
-  private final UUID analysisId;
-  private final RawIssueDto rawIssue;
-
-  public DidRaiseIssueParams(String configurationScopeId, UUID analysisId, RawIssueDto rawIssue) {
-    this.configurationScopeId = configurationScopeId;
-    this.analysisId = analysisId;
-    this.rawIssue = rawIssue;
-  }
-
-  public String getConfigurationScopeId() {
-    return configurationScopeId;
-  }
-
-  public UUID getAnalysisId() {
-    return analysisId;
-  }
-
-  public RawIssueDto getRawIssue() {
-    return rawIssue;
+public class ForbiddenException extends RuntimeException {
+  public ForbiddenException(String message) {
+    super(message);
   }
 }

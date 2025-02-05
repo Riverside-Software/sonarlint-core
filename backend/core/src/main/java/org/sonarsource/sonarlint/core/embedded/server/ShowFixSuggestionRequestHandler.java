@@ -30,10 +30,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.hc.core5.http.ClassicHttpRequest;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.HttpException;
@@ -64,14 +62,15 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowMessageParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AiSuggestionSource;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionReceivedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.sync.SonarProjectBranchesSynchronizationService;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
 
 import static org.apache.commons.lang3.StringUtils.isNotBlank;
 import static org.apache.commons.lang3.StringUtils.isNotEmpty;
+import static org.sonarsource.sonarlint.core.commons.util.StringUtils.sanitizeAgainstRTLO;
+import static org.sonarsource.sonarlint.core.embedded.server.RequestHandlerUtils.getServerUrlForSonarCloud;
 
-@Named
-@Singleton
 public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -81,7 +80,7 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
   private final boolean canOpenFixSuggestion;
   private final RequestHandlerBindingAssistant requestHandlerBindingAssistant;
   private final PathTranslationService pathTranslationService;
-  private final String sonarCloudUrl;
+  private final SonarCloudActiveEnvironment sonarCloudActiveEnvironment;
   private final SonarProjectBranchesSynchronizationService sonarProjectBranchesSynchronizationService;
   private final ClientFileSystemService clientFs;
 
@@ -94,7 +93,7 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
     this.canOpenFixSuggestion = params.getFeatureFlags().canOpenFixSuggestion();
     this.requestHandlerBindingAssistant = requestHandlerBindingAssistant;
     this.pathTranslationService = pathTranslationService;
-    this.sonarCloudUrl = sonarCloudActiveEnvironment.getUri().toString();
+    this.sonarCloudActiveEnvironment = sonarCloudActiveEnvironment;
     this.sonarProjectBranchesSynchronizationService = sonarProjectBranchesSynchronizationService;
     this.clientFs = clientFs;
   }
@@ -113,7 +112,7 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
       showFixSuggestionQuery.isSonarCloud ? AiSuggestionSource.SONARCLOUD : AiSuggestionSource.SONARQUBE,
       showFixSuggestionQuery.fixSuggestion.fileEdit.changes.size()));
 
-    AssistCreatingConnectionParams serverConnectionParams = createAssistServerConnectionParams(showFixSuggestionQuery);
+    AssistCreatingConnectionParams serverConnectionParams = createAssistServerConnectionParams(showFixSuggestionQuery, sonarCloudActiveEnvironment);
 
     requestHandlerBindingAssistant.assistConnectionAndBindingIfNeededAsync(
       serverConnectionParams,
@@ -129,8 +128,8 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
             client.matchProjectBranch(new MatchProjectBranchParams(configScopeId, branchToMatch)).join().isBranchMatched();
           if (!localBranchMatchesRequesting) {
             client.showMessage(new ShowMessageParams(MessageType.ERROR,
-              "Attempted to show a fix suggestion from branch '" + branchToMatch + "', which is different from the currently " +
-                "checked-out branch.\nPlease switch to the correct branch and try again."));
+              "Attempted to show a fix suggestion from branch '" + StringEscapeUtils.escapeHtml(branchToMatch) + "', " +
+                "which is different from the currently checked-out branch.\nPlease switch to the correct branch and try again."));
             return;
           }
 
@@ -152,8 +151,8 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
     if (optTranslation.isPresent()) {
       var translation = optTranslation.get();
       var idePath = translation.serverToIdePath(Paths.get(filePath));
-      for (var scope: boundScopes) {
-        for (var file: clientFs.getFiles(scope)) {
+      for (var scope : boundScopes) {
+        for (var file : clientFs.getFiles(scope)) {
           if (Path.of(file.getUri()).endsWith(idePath)) {
             return true;
           }
@@ -163,17 +162,21 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
     return false;
   }
 
-  private static AssistCreatingConnectionParams createAssistServerConnectionParams(ShowFixSuggestionQuery query) {
+  private static AssistCreatingConnectionParams createAssistServerConnectionParams(ShowFixSuggestionQuery query, SonarCloudActiveEnvironment sonarCloudActiveEnvironment) {
     String tokenName = query.getTokenName();
     String tokenValue = query.getTokenValue();
-    return query.isSonarCloud ?
-      new AssistCreatingConnectionParams(new SonarCloudConnectionParams(query.getOrganizationKey(), tokenName, tokenValue))
-      : new AssistCreatingConnectionParams(new SonarQubeConnectionParams(query.getServerUrl(), tokenName, tokenValue));
+    if (query.isSonarCloud) {
+      // If 'isSonarCloud' check passed, we are sure we will have a region
+      var region = sonarCloudActiveEnvironment.getRegionOrThrow(query.getServerUrl());
+      return new AssistCreatingConnectionParams(new SonarCloudConnectionParams(query.getOrganizationKey(), tokenName, tokenValue, SonarCloudRegion.valueOf(region.name())));
+    } else {
+      return new AssistCreatingConnectionParams(new SonarQubeConnectionParams(query.getServerUrl(), tokenName, tokenValue));
+    }
   }
 
   private boolean isSonarCloud(@Nullable String origin) {
     return Optional.ofNullable(origin)
-      .map(sonarCloudUrl::equals)
+      .map(sonarCloudActiveEnvironment::isSonarQubeCloud)
       .orElse(false);
   }
 
@@ -181,7 +184,7 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
     pathTranslationService.getOrComputePathTranslation(configScopeId).ifPresent(translation -> {
       var fixSuggestionDto = new FixSuggestionDto(
         fixSuggestion.suggestionId,
-        fixSuggestion.getExplanation(),
+        fixSuggestion.explanation(),
         new FileEditDto(
           translation.serverToIdePath(Paths.get(fixSuggestion.fileEdit.path)),
           fixSuggestion.fileEdit.changes.stream().map(c ->
@@ -189,7 +192,7 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
               new LineRangeDto(c.beforeLineRange.startLine, c.beforeLineRange.endLine),
               c.before,
               c.after)
-          ).collect(Collectors.toList())
+          ).toList()
         )
       );
       client.showFixSuggestion(new ShowFixSuggestionParams(configScopeId, issueKey, fixSuggestionDto));
@@ -208,7 +211,12 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
     }
     var payload = extractAndValidatePayload(request);
     boolean isSonarCloud = isSonarCloud(origin);
-    var serverUrl = isSonarCloud ? sonarCloudUrl : params.get("server");
+    String serverUrl;
+    if (isSonarCloud) {
+      serverUrl = getServerUrlForSonarCloud(request);
+    } else {
+      serverUrl = params.get("server");
+    }
     return new ShowFixSuggestionQuery(serverUrl, params.get("project"), params.get("issue"), params.get("branch"),
       params.get("tokenName"), params.get("tokenValue"), params.get("organizationKey"), isSonarCloud, payload);
   }
@@ -311,107 +319,51 @@ public class ShowFixSuggestionRequestHandler implements HttpRequestHandler {
   }
 
   @VisibleForTesting
-  public static class FixSuggestionPayload {
-    private final FileEditPayload fileEdit;
-    private final String suggestionId;
-    private final String explanation;
+  public record FixSuggestionPayload(FileEditPayload fileEdit, String suggestionId, String explanation) {
 
     public FixSuggestionPayload(FileEditPayload fileEdit, String suggestionId, String explanation) {
       this.fileEdit = fileEdit;
       this.suggestionId = suggestionId;
-      this.explanation = explanation;
+      this.explanation = StringEscapeUtils.escapeHtml(explanation);
     }
 
     public boolean isValid() {
       return fileEdit.isValid() && !suggestionId.isBlank();
     }
 
-    public FileEditPayload getFileEdit() {
-      return fileEdit;
-    }
-
-    public String getSuggestionId() {
-      return suggestionId;
-    }
-
-    public String getExplanation() {
-      return explanation;
-    }
   }
 
   @VisibleForTesting
-  public static class FileEditPayload {
-    private final List<ChangesPayload> changes;
-    private final String path;
-
-    public FileEditPayload(List<ChangesPayload> changes, String path) {
-      this.changes = changes;
-      this.path = path;
-    }
+  public record FileEditPayload(List<ChangesPayload> changes, String path) {
 
     public boolean isValid() {
       return !path.isBlank() && changes.stream().allMatch(ChangesPayload::isValid);
     }
 
-    public List<ChangesPayload> getChanges() {
-      return changes;
-    }
-
-    public String getPath() {
-      return path;
-    }
   }
 
   @VisibleForTesting
-  public static class ChangesPayload {
-    private final TextRangePayload beforeLineRange;
-    private final String before;
-    private final String after;
+  public record ChangesPayload(TextRangePayload beforeLineRange, String before, String after) {
 
     public ChangesPayload(TextRangePayload beforeLineRange, String before, String after) {
       this.beforeLineRange = beforeLineRange;
-      this.before = before;
-      this.after = after;
+      this.before = sanitizeAgainstRTLO(before);
+      this.after = sanitizeAgainstRTLO(after);
     }
 
     public boolean isValid() {
       return beforeLineRange.isValid();
     }
 
-    public TextRangePayload getBeforeLineRange() {
-      return beforeLineRange;
-    }
-
-    public String getBefore() {
-      return before;
-    }
-
-    public String getAfter() {
-      return after;
-    }
   }
 
   @VisibleForTesting
-  public static class TextRangePayload {
-    private final int startLine;
-    private final int endLine;
-
-    public TextRangePayload(int startLine, int endLine) {
-      this.startLine = startLine;
-      this.endLine = endLine;
-    }
+  public record TextRangePayload(int startLine, int endLine) {
 
     public boolean isValid() {
       return startLine >= 0 && endLine >= 0 && startLine <= endLine;
     }
 
-    public int getStartLine() {
-      return startLine;
-    }
-
-    public int getEndLine() {
-      return endLine;
-    }
   }
 
 }

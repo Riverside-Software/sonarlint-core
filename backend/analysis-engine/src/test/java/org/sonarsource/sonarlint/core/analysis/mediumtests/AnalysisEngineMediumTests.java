@@ -90,8 +90,10 @@ class AnalysisEngineMediumTests {
 
   @Test
   void should_analyze_a_single_file_outside_of_any_module(@TempDir Path baseDir) throws Exception {
-    var content = "def foo():\n"
-      + "  x = 9; # trailing comment\n";
+    var content = """
+      def foo():
+        x = 9; # trailing comment
+      """;
     var inputFile = preparePythonInputFile(baseDir, content);
 
     var analysisConfig = AnalysisConfiguration.builder()
@@ -100,7 +102,7 @@ class AnalysisEngineMediumTests {
       .setBaseDir(baseDir)
       .build();
     List<Issue> issues = new ArrayList<>();
-    analysisEngine.post(new AnalyzeCommand(null, analysisConfig, issues::add, null), progressMonitor).get();
+    analysisEngine.post(new AnalyzeCommand(null, analysisConfig, issues::add, null, null), progressMonitor).get();
     assertThat(issues).hasSize(1);
     assertThat(issues)
       .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
@@ -110,8 +112,10 @@ class AnalysisEngineMediumTests {
 
   @Test
   void should_analyze_a_file_inside_a_module(@TempDir Path baseDir) throws Exception {
-    var content = "def foo():\n"
-      + "  x = 9; # trailing comment\n";
+    var content = """
+      def foo():
+        x = 9; # trailing comment
+      """;
     ClientInputFile inputFile = preparePythonInputFile(baseDir, content);
 
     AnalysisConfiguration analysisConfig = AnalysisConfiguration.builder()
@@ -121,7 +125,7 @@ class AnalysisEngineMediumTests {
       .build();
     List<Issue> issues = new ArrayList<>();
     analysisEngine.post(new RegisterModuleCommand(new ClientModuleInfo("moduleKey", aModuleFileSystem())), progressMonitor).get();
-    analysisEngine.post(new AnalyzeCommand("moduleKey", analysisConfig, issues::add, null), progressMonitor).get();
+    analysisEngine.post(new AnalyzeCommand("moduleKey", analysisConfig, issues::add, null, null), progressMonitor).get();
     assertThat(issues).hasSize(1);
     assertThat(issues)
       .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
@@ -176,7 +180,7 @@ class AnalysisEngineMediumTests {
   void should_cancel_pending_commands_when_stopping() {
     var futureLongCommand = analysisEngine.post((moduleRegistry, progressMonitor) -> {
       while (!engineStopped) {
-        ;
+        // make the command block until canceled
       }
       return null;
     }, progressMonitor);

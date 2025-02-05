@@ -47,7 +47,7 @@ class StandaloneRulesMediumTests {
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
       .withStandaloneEmbeddedPlugin(TestPlugin.PHP)
-      .build();
+      .start();
 
     var allRules = listAllStandaloneRulesDefinitions(backend).getRulesByKey().values();
 
@@ -58,7 +58,7 @@ class StandaloneRulesMediumTests {
   void it_should_return_param_definition(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build();
+      .start();
 
     var javaS1176 = listAllStandaloneRulesDefinitions(backend).getRulesByKey().get("java:S1176");
 
@@ -79,25 +79,25 @@ class StandaloneRulesMediumTests {
   void it_should_return_rule_details_with_definition_and_description(SonarLintTestHarness harness) throws ExecutionException, InterruptedException {
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build();
+      .start();
 
     var ruleDetails = backend.getRulesService().getStandaloneRuleDetails(new GetStandaloneRuleDescriptionParams("java:S1176")).get();
 
-    assertThat(ruleDetails.getRuleDefinition().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
+    assertThat(ruleDetails.getRuleDefinition().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CLEAR);
     assertThat(ruleDetails.getRuleDefinition().getSoftwareImpacts())
       .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
       .containsExactly(tuple(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.MEDIUM));
     assertThat(ruleDetails.getRuleDefinition().getName()).isEqualTo("Public types, methods and fields (API) should be documented with Javadoc");
-    assertThat(ruleDetails.getDescription().isLeft()).isTrue();
-    assertThat(ruleDetails.getDescription().getLeft().getHtmlContent())
-      .startsWith("<p>Try to imagine using the standard Java API (Collections, JDBC, IO, …\u200B) without Javadoc.");
+    assertThat(ruleDetails.getDescription().isRight()).isTrue();
+    assertThat(ruleDetails.getDescription().getRight().getIntroductionHtmlContent())
+      .startsWith("<p>A good API documentation is a key factor in the usability and success of a software API");
   }
 
   @SonarLintTest
   void it_should_not_contain_rule_templates(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
-      .build();
+      .start();
 
     var allRules = listAllStandaloneRulesDefinitions(backend).getRulesByKey().values();
 
@@ -109,7 +109,7 @@ class StandaloneRulesMediumTests {
   void it_should_not_contain_hotspots_by_default(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .build();
+      .start();
 
     var allRules = listAllStandaloneRulesDefinitions(backend).getRulesByKey().values();
 

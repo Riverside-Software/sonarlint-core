@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server Connection
+ * SonarLint Core - Implementation
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,27 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverconnection;
+package org.sonarsource.sonarlint.core;
 
-import java.nio.file.Path;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.nio.file.Paths;
+import org.junit.jupiter.api.Test;
 
-public class StorageFacade {
-  private final Path globalStorageRoot;
-  private final Path workDir;
-  private final Map<String, ConnectionStorage> connectionStorageById = new ConcurrentHashMap<>();
+import static org.assertj.core.api.Assertions.assertThat;
 
-  public StorageFacade(Path globalStorageRoot, Path workDir) {
-    this.globalStorageRoot = globalStorageRoot;
-    this.workDir = workDir;
+class UserPathsTests {
+
+  @Test
+  void default_home_should_be_in_user_home() {
+    assertThat(UserPaths.computeUserHome(null)).isEqualTo(Paths.get(System.getProperty("user.home")).resolve(".sonarlint"));
   }
 
-  public ConnectionStorage connection(String connectionId) {
-    return connectionStorageById.computeIfAbsent(connectionId, k -> new ConnectionStorage(globalStorageRoot, workDir, connectionId));
-  }
-
-  public void close() {
-    connectionStorageById.values().forEach(ConnectionStorage::close);
+  @Test
+  void env_setting_should_override_default_home() {
+    assertThat(UserPaths.computeUserHome("clientPath")).isEqualTo(Paths.get("clientPath"));
   }
 }

@@ -29,8 +29,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.SmartCancelableLoadingCache;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -44,10 +42,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
-import static java.util.stream.Collectors.toList;
-
-@Named
-@Singleton
 public class ClientFileSystemService {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -102,13 +96,13 @@ public class ClientFileSystemService {
   public List<ClientFile> findFilesByNamesInScope(String configScopeId, List<String> filenames) {
     return getFiles(configScopeId).stream()
       .filter(f -> filenames.contains(f.getClientRelativePath().getFileName().toString()))
-      .collect(toList());
+      .toList();
   }
 
   public List<ClientFile> findSonarlintConfigurationFilesByScope(String configScopeId) {
     return getFiles(configScopeId).stream()
       .filter(ClientFile::isSonarlintConfigurationFile)
-      .collect(toList());
+      .toList();
   }
 
   public Map<URI, ClientFile> initializeFileSystem(String configScopeId, SonarLintCancelMonitor cancelMonitor) {

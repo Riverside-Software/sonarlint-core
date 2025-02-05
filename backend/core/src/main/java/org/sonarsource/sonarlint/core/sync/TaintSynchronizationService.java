@@ -21,9 +21,7 @@ package org.sonarsource.sonarlint.core.sync;
 
 import java.util.LinkedHashSet;
 import java.util.stream.Collectors;
-import javax.inject.Named;
-import javax.inject.Singleton;
-import org.sonarsource.sonarlint.core.ServerApiProvider;
+import org.sonarsource.sonarlint.core.ConnectionManager;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
@@ -42,8 +40,6 @@ import org.springframework.context.ApplicationEventPublisher;
 
 import static java.util.stream.Collectors.groupingBy;
 
-@Named
-@Singleton
 public class TaintSynchronizationService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
@@ -51,22 +47,22 @@ public class TaintSynchronizationService {
   private final SonarProjectBranchTrackingService branchTrackingService;
   private final StorageService storageService;
   private final LanguageSupportRepository languageSupportRepository;
-  private final ServerApiProvider serverApiProvider;
+  private final ConnectionManager connectionManager;
   private final ApplicationEventPublisher eventPublisher;
 
   public TaintSynchronizationService(ConfigurationRepository configurationRepository, SonarProjectBranchTrackingService branchTrackingService,
-    StorageService storageService, LanguageSupportRepository languageSupportRepository,
-    ServerApiProvider serverApiProvider, ApplicationEventPublisher eventPublisher) {
+                                     StorageService storageService, LanguageSupportRepository languageSupportRepository,
+                                     ConnectionManager connectionManager, ApplicationEventPublisher eventPublisher) {
     this.configurationRepository = configurationRepository;
     this.branchTrackingService = branchTrackingService;
     this.storageService = storageService;
     this.languageSupportRepository = languageSupportRepository;
-    this.serverApiProvider = serverApiProvider;
+    this.connectionManager = connectionManager;
     this.eventPublisher = eventPublisher;
   }
 
   public void synchronizeTaintVulnerabilities(String connectionId, String projectKey, SonarLintCancelMonitor cancelMonitor) {
-    serverApiProvider.getServerApi(connectionId).ifPresent(serverApi -> {
+    connectionManager.withValidConnection(connectionId, serverApi -> {
       var allScopes = configurationRepository.getBoundScopesToConnectionAndSonarProject(connectionId, projectKey);
       var allScopesByOptBranch = allScopes.stream()
         .collect(groupingBy(b -> branchTrackingService.awaitEffectiveSonarProjectBranch(b.getConfigScopeId())));
@@ -86,7 +82,7 @@ public class TaintSynchronizationService {
 
   private UpdateSummary<ServerTaintIssue> updateServerTaintIssuesForProject(String connectionId, ServerApi serverApi, String projectKey,
     String branchName, SonarLintCancelMonitor cancelMonitor) {
-    var storage = storageService.getStorageFacade().connection(connectionId);
+    var storage = storageService.connection(connectionId);
     var enabledLanguagesToSync = languageSupportRepository.getEnabledLanguagesInConnectedMode().stream().filter(SonarLanguage::shouldSyncInConnectedMode)
       .collect(Collectors.toCollection(LinkedHashSet::new));
     var issuesUpdater = new ServerIssueUpdater(storage, new IssueDownloader(enabledLanguagesToSync), new TaintIssueDownloader(enabledLanguagesToSync));

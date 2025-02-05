@@ -21,19 +21,16 @@ package org.sonarsource.sonarlint.core;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonSyntaxException;
 import java.io.StringReader;
-import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.fs.ClientFile;
@@ -42,15 +39,13 @@ import org.sonarsource.sonarlint.core.repository.connection.AbstractConnectionCo
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.SonarCloudConnectionConfiguration;
 import org.sonarsource.sonarlint.core.repository.connection.SonarQubeConnectionConfiguration;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang.StringUtils.isBlank;
-import static org.apache.commons.lang.StringUtils.removeEnd;
 import static org.apache.commons.lang.StringUtils.trimToNull;
 import static org.sonarsource.sonarlint.core.commons.log.SonarLintLogger.singlePlural;
 
-@Named
-@Singleton
 public class BindingClueProvider {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -61,12 +56,12 @@ public class BindingClueProvider {
 
   private final ConnectionConfigurationRepository connectionRepository;
   private final ClientFileSystemService clientFs;
-  private final URI sonarCloudUri;
+  private final SonarCloudActiveEnvironment sonarCloudActiveEnvironment;
 
   public BindingClueProvider(ConnectionConfigurationRepository connectionRepository, ClientFileSystemService clientFs, SonarCloudActiveEnvironment sonarCloudActiveEnvironment) {
     this.connectionRepository = connectionRepository;
     this.clientFs = clientFs;
-    this.sonarCloudUri = sonarCloudActiveEnvironment.getUri();
+    this.sonarCloudActiveEnvironment = sonarCloudActiveEnvironment;
   }
 
   public List<BindingClueWithConnections> collectBindingCluesWithConnections(String configScopeId, Set<String> connectionIds, SonarLintCancelMonitor cancelMonitor) {
@@ -166,8 +161,8 @@ public class BindingClueProvider {
   }
 
   private Set<String> matchConnections(BindingClue bindingClue, Set<String> eligibleConnectionIds) {
-    if (bindingClue instanceof SonarQubeBindingClue) {
-      var serverUrl = ((SonarQubeBindingClue) bindingClue).serverUrl;
+    if (bindingClue instanceof SonarQubeBindingClue sonarQubeBindingClue) {
+      var serverUrl = sonarQubeBindingClue.serverUrl;
       return eligibleConnectionIds.stream().map(connectionRepository::getConnectionById)
         .filter(SonarQubeConnectionConfiguration.class::isInstance)
         .map(SonarQubeConnectionConfiguration.class::cast)
@@ -175,8 +170,8 @@ public class BindingClueProvider {
         .map(AbstractConnectionConfiguration::getConnectionId)
         .collect(toSet());
     }
-    if (bindingClue instanceof SonarCloudBindingClue) {
-      var organization = ((SonarCloudBindingClue) bindingClue).organization;
+    if (bindingClue instanceof SonarCloudBindingClue sonarCloudBindingClue) {
+      var organization = sonarCloudBindingClue.organization;
       return eligibleConnectionIds.stream().map(connectionRepository::getConnectionById)
         .filter(SonarCloudConnectionConfiguration.class::isInstance)
         .map(SonarCloudConnectionConfiguration.class::cast)
@@ -194,6 +189,7 @@ public class BindingClueProvider {
       var projectKey = configuration.get("projectKey");
       var organization = configuration.get("sonarCloudOrganization");
       var serverUrl = configuration.get("sonarQubeUri");
+      var region = configuration.get("region");
       // Checking for PascalCase due to VS backward compatibility
       if (projectKey == null || ((organization == null) == (serverUrl == null))) {
         projectKey = configuration.get("ProjectKey");
@@ -203,8 +199,9 @@ public class BindingClueProvider {
       return new BindingProperties(projectKey != null ? projectKey.getAsString() : null,
         organization != null ? organization.getAsString() : null,
         serverUrl != null ? serverUrl.getAsString() : null,
+        region != null ? region.getAsString() : null,
         true);
-    } catch (JsonSyntaxException e) {
+    } catch (Exception e) {
       LOG.warn("Unable to parse candidate connected mode configuration file", e);
       return null;
     }
@@ -224,7 +221,7 @@ public class BindingClueProvider {
         return null;
       }
       return new BindingProperties(getAndTrim(properties, "sonar.projectKey"), getAndTrim(properties, "sonar.organization"),
-        getAndTrim(properties, "sonar.host.url"), false);
+        getAndTrim(properties, "sonar.host.url"), null, false);
     }
   }
 
@@ -238,26 +235,36 @@ public class BindingClueProvider {
     private final String organization;
     private final String serverUrl;
     private final boolean isFromSharedConfiguration;
+    private final SonarCloudRegion region;
 
-    private BindingProperties(@Nullable String projectKey, @Nullable String organization, @Nullable String serverUrl, boolean isFromSharedConfiguration) {
+    private BindingProperties(@Nullable String projectKey, @Nullable String organization, @Nullable String serverUrl, @Nullable String region, boolean isFromSharedConfiguration) {
       this.projectKey = projectKey;
       this.organization = organization;
       this.serverUrl = serverUrl;
       this.isFromSharedConfiguration = isFromSharedConfiguration;
+      SonarCloudRegion configuredRegion;
+      try {
+        configuredRegion = region != null ? SonarCloudRegion.valueOf(region.toUpperCase(Locale.ENGLISH)) : SonarCloudRegion.EU;
+      } catch (IllegalArgumentException e) {
+        LOG.warn("Cannot accept '{}' as a valid SonarQube Cloud region while reading shared Connected Mode settings. Falling back to EU region", region);
+        configuredRegion = SonarCloudRegion.EU;
+      }
+      this.region = configuredRegion;
     }
   }
 
   @CheckForNull
   private BindingClue computeBindingClue(String filename, BindingProperties scannerProps) {
     if (AUTOSCAN_CONFIG_FILENAME.equals(filename)) {
-      return new SonarCloudBindingClue(scannerProps.projectKey, scannerProps.organization, scannerProps.isFromSharedConfiguration);
+      return new SonarCloudBindingClue(scannerProps.projectKey, scannerProps.organization, null, scannerProps.isFromSharedConfiguration);
     }
     if (scannerProps.organization != null) {
-      return new SonarCloudBindingClue(scannerProps.projectKey, scannerProps.organization, scannerProps.isFromSharedConfiguration);
+      return new SonarCloudBindingClue(scannerProps.projectKey, scannerProps.organization, scannerProps.region, scannerProps.isFromSharedConfiguration);
     }
     if (scannerProps.serverUrl != null) {
-      if (removeEnd(scannerProps.serverUrl, "/").equals(removeEnd(sonarCloudUri.toString(), "/"))) {
-        return new SonarCloudBindingClue(scannerProps.projectKey, null, scannerProps.isFromSharedConfiguration);
+      if (sonarCloudActiveEnvironment.isSonarQubeCloud(scannerProps.serverUrl)) {
+        var region = sonarCloudActiveEnvironment.getRegionOrThrow(scannerProps.serverUrl);
+        return new SonarCloudBindingClue(scannerProps.projectKey, null, SonarCloudRegion.valueOf(region.name()), scannerProps.isFromSharedConfiguration);
       } else {
         return new SonarQubeBindingClue(scannerProps.projectKey, scannerProps.serverUrl, scannerProps.isFromSharedConfiguration);
       }
@@ -329,12 +336,14 @@ public class BindingClueProvider {
 
     private final String sonarProjectKey;
     private final String organization;
+    private final SonarCloudRegion region;
     private final boolean isFromSharedConfiguration;
 
-    SonarCloudBindingClue(@Nullable String sonarProjectKey, @Nullable String organization, boolean isFromSharedConfiguration) {
+    SonarCloudBindingClue(@Nullable String sonarProjectKey, @Nullable String organization, @Nullable SonarCloudRegion region, boolean isFromSharedConfiguration) {
       this.sonarProjectKey = sonarProjectKey;
       this.organization = organization;
       this.isFromSharedConfiguration = isFromSharedConfiguration;
+      this.region = region != null ? region : SonarCloudRegion.EU;
     }
 
     @Override
@@ -349,6 +358,10 @@ public class BindingClueProvider {
 
     public String getOrganization() {
       return organization;
+    }
+
+    public SonarCloudRegion getRegion() {
+      return region;
     }
 
   }

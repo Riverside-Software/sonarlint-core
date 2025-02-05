@@ -30,8 +30,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.sonarsource.sonarlint.core.commons.Binding;
@@ -42,8 +40,6 @@ import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.toSet;
 
-@Named
-@Singleton
 public class ConfigurationRepository {
 
   private final Map<String, ConfigurationScope> configScopePerId = new ConcurrentHashMap<>();
@@ -159,7 +155,7 @@ public class ConfigurationRepository {
           requireNonNull(binding.getSonarProjectKey()))).orElse(null);
       })
       .filter(Objects::nonNull)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public Collection<ConfigurationScope> getAllBindableUnboundScopes() {
@@ -168,7 +164,7 @@ public class ConfigurationRepository {
       .filter(e -> e.getValue().isBindable())
       .filter(e -> getEffectiveBinding(e.getKey()).isEmpty())
       .map(Map.Entry::getValue)
-      .collect(Collectors.toList());
+      .toList();
   }
 
   @CheckForNull
@@ -183,14 +179,14 @@ public class ConfigurationRepository {
     return getBoundScopesToConnection(connectionId)
       .stream()
       .filter(b -> projectKey.equals(b.getSonarProjectKey()))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   public Collection<BoundScope> getBoundScopesToConnection(String connectionId) {
     return getAllBoundScopes()
       .stream()
       .filter(b -> connectionId.equals(b.getConnectionId()))
-      .collect(Collectors.toList());
+      .toList();
   }
 
   /**

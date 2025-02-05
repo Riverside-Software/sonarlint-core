@@ -19,14 +19,12 @@
  */
 package org.sonarsource.sonarlint.core.file;
 
+import jakarta.annotation.PreDestroy;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Optional;
 import javax.annotation.CheckForNull;
-import javax.annotation.PreDestroy;
-import javax.inject.Named;
-import javax.inject.Singleton;
 import org.sonarsource.sonarlint.core.SonarLintMDC;
 import org.sonarsource.sonarlint.core.branch.MatchedSonarProjectBranchChangedEvent;
 import org.sonarsource.sonarlint.core.commons.SmartCancelableLoadingCache;
@@ -40,15 +38,11 @@ import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.serverconnection.prefix.FileTreeMatcher;
 import org.springframework.context.event.EventListener;
 
-import static java.util.stream.Collectors.toList;
-
 /**
  * The path translation service is responsible for matching the files on the server with the files on the client.
  * This is only used in connected mode.
  * A debounce mechanism is used to avoid too many requests to the server.
  */
-@Named
-@Singleton
 public class PathTranslationService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
   private final ClientFileSystemService clientFs;
@@ -87,7 +81,7 @@ public class PathTranslationService {
       // Maybe a config scope without files, or the filesystem has not been initialized yet
       return new FilePathTranslation(Paths.get(""), Paths.get(""));
     }
-    var match = fileMatcher.match(serverFilePaths, localFilePaths.stream().map(ClientFile::getClientRelativePath).collect(toList()));
+    var match = fileMatcher.match(serverFilePaths, localFilePaths.stream().map(ClientFile::getClientRelativePath).toList());
     LOG.debug("Matched paths for config scope '{}':\n  * idePrefix={}\n  * serverPrefix={}", configScopeId, match.idePrefix(), match.sqPrefix());
     return new FilePathTranslation(match.idePrefix(), match.sqPrefix());
   }

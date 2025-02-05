@@ -25,6 +25,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.Tra
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarQubeConnectionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.validate.ValidateConnectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.UsernamePasswordDto;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarcloud.ws.Organizations;
@@ -48,7 +49,7 @@ class ConnectionValidatorMediumTests {
   void testConnection_ok(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": \"20160308094653\",\"version\": \"9.9\",\"status\": \"UP\"}")));
     serverMock.stubFor(get("/api/authentication/validate?format=json")
@@ -63,7 +64,7 @@ class ConnectionValidatorMediumTests {
   void testConnectionOrganizationNotFound(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": \"20160308094653\",\"version\": \"9.9\",\"status\": \"UP\"}")));
     serverMock.stubFor(get("/api/authentication/validate?format=json")
@@ -71,7 +72,7 @@ class ConnectionValidatorMediumTests {
     serverMock.stubFor(get("/api/organizations/search.protobuf?organizations=myOrg&ps=500&p=1")
       .willReturn(aResponse().withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder().build()))));
 
-    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto(null))))).join();
+    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto(null)), SonarCloudRegion.EU))).join();
 
     assertThat(response.isSuccess()).isFalse();
     assertThat(response.getMessage()).isEqualTo("No organizations found for key: myOrg");
@@ -81,7 +82,7 @@ class ConnectionValidatorMediumTests {
   void testConnection_ok_with_org(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": \"20160308094653\",\"version\": \"9.9\",\"status\": \"UP\"}")));
     serverMock.stubFor(get("/api/authentication/validate?format=json")
@@ -96,7 +97,7 @@ class ConnectionValidatorMediumTests {
     serverMock.stubFor(get("/api/organizations/search.protobuf?organizations=myOrg&ps=500&p=2")
       .willReturn(aResponse().withResponseBody(protobufBody(Organizations.SearchWsResponse.newBuilder().build()))));
 
-    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto(null))))).join();
+    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto("myOrg", Either.forLeft(new TokenDto(null)), SonarCloudRegion.EU))).join();
 
     assertThat(response.isSuccess()).isTrue();
   }
@@ -105,12 +106,12 @@ class ConnectionValidatorMediumTests {
   void testConnection_ok_without_org(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": \"20160308094653\",\"version\": \"9.9\",\"status\": \"UP\"}")));
     serverMock.stubFor(get("/api/authentication/validate?format=json")
       .willReturn(aResponse().withBody("{\"valid\": true}")));
-    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto(null, Either.forLeft(new TokenDto(null))))).join();
+    var response = backend.getConnectionService().validateConnection(new ValidateConnectionParams(new TransientSonarCloudConnectionDto(null, Either.forLeft(new TokenDto(null)), SonarCloudRegion.EU))).join();
 
     assertThat(response.isSuccess()).isTrue();
   }
@@ -119,7 +120,7 @@ class ConnectionValidatorMediumTests {
   void testUnsupportedServer(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": \"20160308094653\",\"version\": \"6.7\",\"status\": \"UP\"}")));
 
@@ -133,7 +134,7 @@ class ConnectionValidatorMediumTests {
   void testClientError(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withStatus(400)));
 
@@ -148,7 +149,7 @@ class ConnectionValidatorMediumTests {
   void testResponseError(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
       .withSonarCloudUrl(serverMock.baseUrl())
-      .build();
+      .start();
     serverMock.stubFor(get("/api/system/status")
       .willReturn(aResponse().withBody("{\"id\": }")));
 
