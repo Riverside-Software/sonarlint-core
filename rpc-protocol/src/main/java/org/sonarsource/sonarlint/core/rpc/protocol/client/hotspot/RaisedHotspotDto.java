@@ -55,4 +55,9 @@ public class RaisedHotspotDto extends RaisedFindingDto {
   public HotspotStatus getStatus() {
     return status;
   }
+
+  public RaisedHotspotDto withHotspotStatusAndResolution(HotspotStatus hotspotStatus, boolean resolved) {
+    return new RaisedHotspotDto(getId(), getServerKey(), getRuleKey(), getPrimaryMessage(), getSeverityMode(), getIntroductionDate(), isOnNewCode(), resolved, getTextRange(),
+      getFlows(), getQuickFixes(), getRuleDescriptionContextKey(), getVulnerabilityProbability(), hotspotStatus);
+  }
 }

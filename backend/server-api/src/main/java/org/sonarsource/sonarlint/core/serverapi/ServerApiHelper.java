@@ -48,6 +48,8 @@ import org.sonarsource.sonarlint.core.serverapi.exception.NotFoundException;
 import org.sonarsource.sonarlint.core.serverapi.exception.ServerErrorException;
 import org.sonarsource.sonarlint.core.serverapi.exception.UnauthorizedException;
 
+import static java.util.Objects.requireNonNull;
+
 /**
  * Wrapper around HttpClient to avoid repetitive code, like support of pagination, and log timing of requests
  */
@@ -78,7 +80,23 @@ public class ServerApiHelper {
     return response;
   }
 
-  public HttpClient.Response post(String url, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
+  public HttpClient.Response apiGet(String path, SonarLintCancelMonitor cancelMonitor) {
+    var response = rawGetUrl(buildApiEndpointUrl(path), cancelMonitor);
+    if (!response.isSuccessful()) {
+      throw handleError(response);
+    }
+    return response;
+  }
+
+  public HttpClient.Response post(String relativePath, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
+    return postUrl(buildEndpointUrl(relativePath), contentType, body, cancelMonitor);
+  }
+
+  public HttpClient.Response apiPost(String relativePath, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
+    return postUrl(buildApiEndpointUrl(relativePath), contentType, body, cancelMonitor);
+  }
+
+  private HttpClient.Response postUrl(String url, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
     var response = rawPost(url, contentType, body, cancelMonitor);
     if (!response.isSuccessful()) {
       throw handleError(response);
@@ -90,17 +108,17 @@ public class ServerApiHelper {
    * Execute GET and don't check response
    */
   public HttpClient.Response rawGet(String relativePath, SonarLintCancelMonitor cancelMonitor) {
-    var startTime = Instant.now();
-    var url = buildEndpointUrl(relativePath);
+    return rawGetUrl(buildEndpointUrl(relativePath), cancelMonitor);
+  }
 
+  private HttpClient.Response rawGetUrl(String url, SonarLintCancelMonitor cancelMonitor) {
+    var startTime = Instant.now();
     var httpFuture = client.getAsync(url);
     return processResponse("GET", cancelMonitor, httpFuture, startTime, url);
   }
 
-  public HttpClient.Response rawPost(String relativePath, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
+  public HttpClient.Response rawPost(String url, String contentType, String body, SonarLintCancelMonitor cancelMonitor) {
     var startTime = Instant.now();
-    var url = buildEndpointUrl(relativePath);
-
     var httpFuture = client.postAsync(url, contentType, body);
     return processResponse("POST", cancelMonitor, httpFuture, startTime, url);
   }
@@ -130,6 +148,10 @@ public class ServerApiHelper {
 
   private String buildEndpointUrl(String relativePath) {
     return concat(endpointParams.getBaseUrl(), relativePath);
+  }
+
+  private String buildApiEndpointUrl(String relativePath) {
+    return concat(requireNonNull(endpointParams.getApiBaseUrl()), relativePath);
   }
 
   public static String concat(String baseUrl, String relativePath) {

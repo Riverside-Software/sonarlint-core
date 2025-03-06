@@ -22,6 +22,8 @@ package org.sonarsource.sonarlint.core.serverconnection;
 import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.sonarsource.sonarlint.core.serverconnection.storage.AiCodeFixStorage;
+import org.sonarsource.sonarlint.core.serverconnection.storage.OrganizationStorage;
 import org.sonarsource.sonarlint.core.serverconnection.storage.PluginsStorage;
 import org.sonarsource.sonarlint.core.serverconnection.storage.ServerInfoStorage;
 import org.sonarsource.sonarlint.core.serverconnection.storage.ServerIssueStoresManager;
@@ -35,6 +37,8 @@ public class ConnectionStorage {
   private final Path projectsStorageRoot;
   private final PluginsStorage pluginsStorage;
   private final Path connectionStorageRoot;
+  private final AiCodeFixStorage aiCodeFixStorage;
+  private final OrganizationStorage organizationStorage;
 
   public ConnectionStorage(Path globalStorageRoot, Path workDir, String connectionId) {
     this.connectionStorageRoot = globalStorageRoot.resolve(encodeForFs(connectionId));
@@ -42,6 +46,8 @@ public class ConnectionStorage {
     this.serverIssueStoresManager = new ServerIssueStoresManager(projectsStorageRoot, workDir);
     this.serverInfoStorage = new ServerInfoStorage(connectionStorageRoot);
     this.pluginsStorage = new PluginsStorage(connectionStorageRoot);
+    this.aiCodeFixStorage = new AiCodeFixStorage(connectionStorageRoot);
+    this.organizationStorage = new OrganizationStorage(connectionStorageRoot);
   }
 
   public ServerInfoStorage serverInfo() {
@@ -55,6 +61,14 @@ public class ConnectionStorage {
 
   public PluginsStorage plugins() {
     return pluginsStorage;
+  }
+
+  public AiCodeFixStorage aiCodeFix() {
+    return aiCodeFixStorage;
+  }
+
+  public OrganizationStorage organization() {
+    return organizationStorage;
   }
 
   public void close() {

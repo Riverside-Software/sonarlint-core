@@ -25,25 +25,31 @@ package org.sonarsource.sonarlint.core.commons;
 public class BoundScope {
 
   private final String configScopeId;
-  private final String connectionId;
-  private final String sonarProjectKey;
+  private final Binding binding;
 
   public BoundScope(String configScopeId, String connectionId, String sonarProjectKey) {
+    this(configScopeId, new Binding(connectionId, sonarProjectKey));
+  }
+
+  public BoundScope(String configScopeId, Binding binding) {
     this.configScopeId = configScopeId;
-    this.connectionId = connectionId;
-    this.sonarProjectKey = sonarProjectKey;
+    this.binding = binding;
   }
 
   public String getConfigScopeId() {
     return configScopeId;
   }
 
+  public Binding getBinding() {
+    return binding;
+  }
+
   public String getConnectionId() {
-    return connectionId;
+    return binding.connectionId();
   }
 
   public String getSonarProjectKey() {
-    return sonarProjectKey;
+    return binding.sonarProjectKey();
   }
 
 }

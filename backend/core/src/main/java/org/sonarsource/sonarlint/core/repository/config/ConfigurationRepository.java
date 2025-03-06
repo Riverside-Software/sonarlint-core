@@ -151,8 +151,7 @@ public class ConfigurationRepository {
       .stream()
       .map(scopeId -> {
         var effectiveBinding = getEffectiveBinding(scopeId);
-        return effectiveBinding.map(binding -> new BoundScope(scopeId, requireNonNull(binding.getConnectionId()),
-          requireNonNull(binding.getSonarProjectKey()))).orElse(null);
+        return effectiveBinding.map(binding -> new BoundScope(scopeId, binding)).orElse(null);
       })
       .filter(Objects::nonNull)
       .toList();
@@ -170,8 +169,7 @@ public class ConfigurationRepository {
   @CheckForNull
   public BoundScope getBoundScope(String configScopeId) {
     var effectiveBinding = getEffectiveBinding(configScopeId);
-    return effectiveBinding.map(binding -> new BoundScope(configScopeId, requireNonNull(binding.getConnectionId()),
-      requireNonNull(binding.getSonarProjectKey()))).orElse(null);
+    return effectiveBinding.map(binding -> new BoundScope(configScopeId, binding)).orElse(null);
   }
 
 

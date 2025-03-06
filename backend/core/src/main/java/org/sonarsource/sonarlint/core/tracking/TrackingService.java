@@ -19,6 +19,7 @@
  */
 package org.sonarsource.sonarlint.core.tracking;
 
+import java.net.URI;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Collection;
@@ -39,12 +40,14 @@ import org.sonarsource.sonarlint.core.analysis.RawIssueDetectedEvent;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.KnownFinding;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
+import org.sonarsource.sonarlint.core.commons.NewCodeDefinition;
 import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.SonarLintBlameResult;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.git.GitRepoNotFoundException;
 import org.sonarsource.sonarlint.core.file.PathTranslationService;
 import org.sonarsource.sonarlint.core.local.only.LocalOnlyIssueStorageService;
+import org.sonarsource.sonarlint.core.newcode.NewCodeService;
 import org.sonarsource.sonarlint.core.reporting.FindingReportingService;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
@@ -64,7 +67,7 @@ import org.springframework.context.event.EventListener;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toMap;
-import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.blameWithFilesGitCommand;
+import static org.sonarsource.sonarlint.core.commons.util.git.GitUtils.getBlameResult;
 
 public class TrackingService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
@@ -79,10 +82,12 @@ public class TrackingService {
   private final LocalOnlyIssueRepository localOnlyIssueRepository;
   private final LocalOnlyIssueStorageService localOnlyIssueStorageService;
   private final FindingsSynchronizationService findingsSynchronizationService;
+  private final NewCodeService newCodeService;
 
   public TrackingService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, SonarProjectBranchTrackingService branchTrackingService,
     PathTranslationService pathTranslationService, FindingReportingService reportingService, KnownFindingsStorageService knownFindingsStorageService, StorageService storageService,
-    LocalOnlyIssueRepository localOnlyIssueRepository, LocalOnlyIssueStorageService localOnlyIssueStorageService, FindingsSynchronizationService findingsSynchronizationService) {
+    LocalOnlyIssueRepository localOnlyIssueRepository, LocalOnlyIssueStorageService localOnlyIssueStorageService, FindingsSynchronizationService findingsSynchronizationService,
+    NewCodeService newCodeService) {
     this.client = client;
     this.configurationRepository = configurationRepository;
     this.branchTrackingService = branchTrackingService;
@@ -93,12 +98,13 @@ public class TrackingService {
     this.localOnlyIssueRepository = localOnlyIssueRepository;
     this.localOnlyIssueStorageService = localOnlyIssueStorageService;
     this.findingsSynchronizationService = findingsSynchronizationService;
+    this.newCodeService = newCodeService;
   }
 
   @EventListener
   public void onAnalysisStarted(AnalysisStartedEvent event) {
     var configurationScopeId = event.getConfigurationScopeId();
-    var matchingSession = startMatchingSession(configurationScopeId, event.getFileRelativePaths(), event.getFileContentProvider());
+    var matchingSession = startMatchingSession(configurationScopeId, event.getFileRelativePaths(), event.getFileUris(), event.getFileContentProvider());
     matchingSessionByAnalysisId.put(event.getAnalysisId(), matchingSession);
     reportingService.resetFindingsForFiles(configurationScopeId, event.getFileUris());
     reportingService.initFilesToAnalyze(event.getAnalysisId(), event.getFileUris());
@@ -256,22 +262,25 @@ public class TrackingService {
       trackedIssue.getCleanCodeAttribute(), trackedIssue.getFileUri());
   }
 
-  private MatchingSession startMatchingSession(String configurationScopeId, Set<Path> fileRelativePaths, UnaryOperator<String> fileContentProvider) {
+  private MatchingSession startMatchingSession(String configurationScopeId, Set<Path> fileRelativePaths, Set<URI> fileUris, UnaryOperator<String> fileContentProvider) {
     var knownFindingsStore = knownFindingsStorageService.get();
     var issuesByRelativePath = fileRelativePaths.stream()
       .collect(toMap(Function.identity(), relativePath -> knownFindingsStore.loadIssuesForFile(configurationScopeId, relativePath)));
     var hotspotsByRelativePath = fileRelativePaths.stream()
       .collect(toMap(Function.identity(), relativePath -> knownFindingsStore.loadSecurityHotspotsForFile(configurationScopeId, relativePath)));
-    var introductionDateProvider = getIntroductionDateProvider(configurationScopeId, fileRelativePaths, fileContentProvider);
+    var introductionDateProvider = getIntroductionDateProvider(configurationScopeId, fileRelativePaths, fileUris, fileContentProvider);
     var previousFindings = new KnownFindings(issuesByRelativePath, hotspotsByRelativePath);
     return new MatchingSession(previousFindings, introductionDateProvider);
   }
 
-  private IntroductionDateProvider getIntroductionDateProvider(String configurationScopeId, Set<Path> fileRelativePaths, UnaryOperator<String> fileContentProvider) {
+  private IntroductionDateProvider getIntroductionDateProvider(String configurationScopeId, Set<Path> fileRelativePaths, Set<URI> fileUris,
+    UnaryOperator<String> fileContentProvider) {
     var baseDir = getBaseDir(configurationScopeId);
     if (baseDir != null) {
       try {
-        var sonarLintBlameResult = blameWithFilesGitCommand(baseDir, fileRelativePaths, fileContentProvider);
+        var newCodeDefinition = newCodeService.getFullNewCodeDefinition(configurationScopeId);
+        var thresholdDate = newCodeDefinition.map(NewCodeDefinition::getThresholdDate).orElse(NewCodeDefinition.withAlwaysNew().getThresholdDate());
+        var sonarLintBlameResult = getBlameResult(baseDir, fileRelativePaths, fileUris, fileContentProvider, thresholdDate);
         return (filePath, lineNumbers) -> determineIntroductionDate(filePath, lineNumbers, sonarLintBlameResult);
       } catch (GitRepoNotFoundException e) {
         LOG.info("Git Repository not found for {}. The path {} is not in a Git repository", configurationScopeId, e.getPath());
@@ -279,6 +288,7 @@ public class TrackingService {
         LOG.error("Cannot access blame info for " + configurationScopeId, e);
       }
     }
+    LOG.debug("Git blame is not working. Falling back to detection date as the introduction date");
     // we keep the detection date as the introduction date
     return (filePath, lineNumber) -> Instant.now();
   }

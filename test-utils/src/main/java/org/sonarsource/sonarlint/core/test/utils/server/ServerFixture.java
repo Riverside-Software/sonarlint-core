@@ -19,8 +19,13 @@
  */
 package org.sonarsource.sonarlint.core.test.utils.server;
 
+import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.PropertyAccessor;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.client.WireMock;
+import com.github.tomakehurst.wiremock.matching.AnythingPattern;
 import com.google.protobuf.Message;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -37,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
@@ -64,12 +70,17 @@ import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.ProjectBranch
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Qualityprofiles;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Rules;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Settings;
+import org.sonarsource.sonarlint.core.serverconnection.AiCodeFixFeatureEnablement;
 import org.sonarsource.sonarlint.core.test.utils.plugins.Plugin;
+import org.sonarsource.sonarlint.core.test.utils.server.sse.SSEServer;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.equalTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static com.github.tomakehurst.wiremock.client.WireMock.jsonResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlMatching;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
@@ -110,7 +121,7 @@ public class ServerFixture {
   }
 
   public static ServerBuilder newSonarCloudServer(@Nullable Consumer<Server> onStart, String organization) {
-    return new ServerBuilder(onStart, ServerKind.SONARCLOUD, organization, null);
+    return new ServerBuilder(onStart, ServerKind.SONARCLOUD, organization, "0.0.0");
   }
 
   private enum ServerKind {
@@ -134,6 +145,9 @@ public class ServerFixture {
     private boolean smartNotificationsSupported;
     private final List<String> tokensRegistered = new ArrayList<>();
     private Integer statusCode = 200;
+    private Integer issueTransitionStatusCode = 200;
+    private AiCodeFixFeatureBuilder aiCodeFixFeature = new AiCodeFixFeatureBuilder();
+    private boolean serverSentEventsEnabled;
 
     public ServerBuilder(@Nullable Consumer<Server> onStart, ServerKind serverKind, @Nullable String organizationKey, @Nullable String version) {
       this.onStart = onStart;
@@ -193,10 +207,25 @@ public class ServerFixture {
       return this;
     }
 
+    public ServerBuilder withIssueTransitionStatusCode(Integer issueTransitionStatusCode) {
+      this.issueTransitionStatusCode = issueTransitionStatusCode;
+      return this;
+    }
+
+    public ServerBuilder withAiCodeFixFeature(UnaryOperator<AiCodeFixFeatureBuilder> aiCodeFixBuilder) {
+      this.aiCodeFixFeature = new AiCodeFixFeatureBuilder();
+      aiCodeFixBuilder.apply(aiCodeFixFeature);
+      return this;
+    }
+
+    public ServerBuilder withServerSentEventsEnabled() {
+      this.serverSentEventsEnabled = true;
+      return this;
+    }
+
     public Server start() {
-      var server = new Server(serverKind, serverStatus, organizationKey, version, projectByProjectKey, smartNotificationsSupported, pluginsByKey,
-        qualityProfilesByKey,
-        tokensRegistered, statusCode);
+      var server = new Server(serverKind, serverStatus, organizationKey, version, projectByProjectKey, smartNotificationsSupported, pluginsByKey, qualityProfilesByKey,
+        tokensRegistered, statusCode, issueTransitionStatusCode, aiCodeFixFeature, serverSentEventsEnabled);
       server.start();
       if (onStart != null) {
         onStart.accept(server);
@@ -225,6 +254,47 @@ public class ServerFixture {
       }
     }
 
+    public static class AiCodeFixFeatureBuilder {
+      private Set<String> supportedRules = Set.of();
+      private boolean organizationEligible = true;
+      private AiCodeFixFeatureEnablement enablement = AiCodeFixFeatureEnablement.DISABLED;
+      private List<String> enabledProjectKeys;
+
+      public AiCodeFixFeatureBuilder withSupportedRules(Set<String> supportedRules) {
+        this.supportedRules = supportedRules;
+        return this;
+      }
+
+      public AiCodeFixFeatureBuilder organizationEligible(boolean organizationEligible) {
+        this.organizationEligible = organizationEligible;
+        return this;
+      }
+
+      public AiCodeFixFeatureBuilder disabled() {
+        this.enablement = AiCodeFixFeatureEnablement.DISABLED;
+        return this;
+      }
+
+      public AiCodeFixFeatureBuilder enabledForProjects(String projectKey) {
+        this.enablement = AiCodeFixFeatureEnablement.ENABLED_FOR_SOME_PROJECTS;
+        this.enabledProjectKeys = List.of(projectKey);
+        return this;
+      }
+
+      public AiCodeFixFeatureBuilder enabledForAllProjects() {
+        this.enablement = AiCodeFixFeatureEnablement.ENABLED_FOR_ALL_PROJECTS;
+        this.enabledProjectKeys = null;
+        return this;
+      }
+
+      public AiCodeFixFeature build() {
+        return new AiCodeFixFeature(supportedRules, enablement);
+      }
+    }
+
+    public record AiCodeFixFeature(Set<String> rules, AiCodeFixFeatureEnablement enablement) {
+    }
+
     public static class ServerProjectBuilder {
       private final Map<String, ServerProjectBranchBuilder> branchesByName = new HashMap<>();
       private String mainBranchName = "main";
@@ -233,6 +303,7 @@ public class ServerFixture {
       private final List<String> relativeFilePaths = new ArrayList<>();
       private String name = "MyProject";
       private String projectName;
+      private AiCodeFixSuggestionBuilder aiCodeFixSuggestion;
 
       private ServerProjectBuilder() {
         branchesByName.put(mainBranchName, new ServerProjectBranchBuilder());
@@ -286,6 +357,12 @@ public class ServerFixture {
 
       public ServerProjectBuilder withFile(String relativeFilePath) {
         this.relativeFilePaths.add(relativeFilePath);
+        return this;
+      }
+
+      public ServerProjectBuilder withAiCodeFixSuggestion(UnaryOperator<AiCodeFixSuggestionBuilder> aiCodeFixSuggestionBuilder) {
+        this.aiCodeFixSuggestion = new AiCodeFixSuggestionBuilder();
+        aiCodeFixSuggestionBuilder.apply(aiCodeFixSuggestion);
         return this;
       }
 
@@ -427,6 +504,38 @@ public class ServerFixture {
         }
       }
 
+      public static class AiCodeFixSuggestionBuilder {
+        private UUID id = UUID.randomUUID();
+        private String explanation = "default";
+        private final List<AiCodeFixChange> changes = new ArrayList<>();
+
+        public AiCodeFixSuggestionBuilder withId(UUID id) {
+          this.id = id;
+          return this;
+        }
+
+        public AiCodeFixSuggestionBuilder withExplanation(String explanation) {
+          this.explanation = explanation;
+          return this;
+        }
+
+        public AiCodeFixSuggestionBuilder withChange(int startLine, int endLine, String newCode) {
+          this.changes.add(new AiCodeFixChange(startLine, endLine, newCode));
+          return this;
+        }
+
+        public AiCodeFix build() {
+          return new AiCodeFix(id, explanation, changes);
+        }
+      }
+
+      public record AiCodeFix(UUID id, String explanation, List<AiCodeFixChange> changes) {
+      }
+
+      public record AiCodeFixChange(int startLine, int endLine, String newCode) {
+
+      }
+
       public static class ServerProjectPullRequestBuilder extends ServerProjectBranchBuilder {
       }
 
@@ -540,6 +649,10 @@ public class ServerFixture {
     @Nullable
     private final String organizationKey;
     @Nullable
+    private final String organizationId;
+    @Nullable
+    private final UUID organizationUuidV4;
+    @Nullable
     private final Version version;
     private final Map<String, ServerBuilder.ServerProjectBuilder> projectsByProjectKey;
     private final boolean smartNotificationsSupported;
@@ -547,11 +660,15 @@ public class ServerFixture {
     private final Map<String, ServerBuilder.ServerQualityProfileBuilder> qualityProfilesByKey;
     private final List<String> tokensRegistered;
     private final Integer statusCode;
+    private final Integer issueTransitionStatusCode;
+    private final ServerBuilder.AiCodeFixFeatureBuilder aiCodeFixFeature;
+    private final boolean serverSentEventsEnabled;
+    private SSEServer sseServer;
 
     public Server(ServerKind serverKind, ServerStatus serverStatus, @Nullable String organizationKey, @Nullable String version,
-      Map<String, ServerBuilder.ServerProjectBuilder> projectsByProjectKey,
-      boolean smartNotificationsSupported, Map<String, ServerBuilder.ServerPluginBuilder> pluginsByKey,
-      Map<String, ServerBuilder.ServerQualityProfileBuilder> qualityProfilesByKey, List<String> tokensRegistered, Integer statusCode) {
+      Map<String, ServerBuilder.ServerProjectBuilder> projectsByProjectKey, boolean smartNotificationsSupported, Map<String, ServerBuilder.ServerPluginBuilder> pluginsByKey,
+      Map<String, ServerBuilder.ServerQualityProfileBuilder> qualityProfilesByKey, List<String> tokensRegistered, Integer statusCode, Integer issueTransitionStatusCode,
+      ServerBuilder.AiCodeFixFeatureBuilder aiCodeFixFeature, boolean serverSentEventsEnabled) {
       this.serverKind = serverKind;
       this.serverStatus = serverStatus;
       this.organizationKey = organizationKey;
@@ -562,10 +679,24 @@ public class ServerFixture {
       this.qualityProfilesByKey = qualityProfilesByKey;
       this.tokensRegistered = tokensRegistered;
       this.statusCode = statusCode;
+      this.issueTransitionStatusCode = issueTransitionStatusCode;
+      this.aiCodeFixFeature = aiCodeFixFeature;
+      this.serverSentEventsEnabled = serverSentEventsEnabled;
+      if (organizationKey != null) {
+        this.organizationId = organizationKey;
+        this.organizationUuidV4 = UUID.randomUUID();
+      } else {
+        this.organizationId = null;
+        this.organizationUuidV4 = null;
+      }
     }
 
     public void start() {
       mockServer.start();
+      if (serverSentEventsEnabled) {
+        sseServer = new SSEServer();
+        sseServer.start();
+      }
       registerWebApiResponses();
     }
 
@@ -585,6 +716,9 @@ public class ServerFixture {
         registerSettingsApiResponses();
         registerTokenApiResponse();
         registerComponentApiResponses();
+        registerFixSuggestionsApiResponses();
+        registerOrganizationApiResponses();
+        registerPushApiResponses();
       }
     }
 
@@ -999,7 +1133,7 @@ public class ServerFixture {
     }
 
     private void registerIssuesStatusChangeApiResponses() {
-      mockServer.stubFor(post("/api/issues/do_transition").willReturn(aResponse().withStatus(statusCode)));
+      mockServer.stubFor(post("/api/issues/do_transition").willReturn(aResponse().withStatus(issueTransitionStatusCode)));
     }
 
     private void registerAddIssueCommentApiResponses() {
@@ -1183,8 +1317,60 @@ public class ServerFixture {
         tokenName -> mockServer.stubFor(post("/api/user_tokens/revoke").withRequestBody(WireMock.containing("name=" + tokenName)).willReturn(aResponse().withStatus(statusCode))));
     }
 
+    private void registerFixSuggestionsApiResponses() {
+      projectsByProjectKey.forEach((projectKey, project) -> {
+        try {
+          if (project.aiCodeFixSuggestion != null) {
+            mockServer.stubFor(post("/fix-suggestions/ai-suggestions")
+              .willReturn(jsonResponse(
+                new ObjectMapper().setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY).writeValueAsString(project.aiCodeFixSuggestion.build()), 200)));
+          }
+        } catch (JsonProcessingException e) {
+          throw new IllegalArgumentException(e);
+        }
+      });
+
+      if (serverKind == ServerKind.SONARCLOUD) {
+        var feature = aiCodeFixFeature.build();
+        mockServer.stubFor(get("/fix-suggestions/supported-rules")
+          .willReturn(jsonResponse("{\"rules\": [" + String.join(", ", feature.rules.stream().map(rule -> "\"" + rule + "\"").toList()) + "]}", 200)));
+        var enabledProjectKeys = aiCodeFixFeature.enabledProjectKeys == null ? null : ("[" + String.join(", ", aiCodeFixFeature.enabledProjectKeys) + "]");
+        mockServer.stubFor(get("/fix-suggestions/organization-configs/" + organizationId)
+          .willReturn(jsonResponse("{\"enablement\": \"" + aiCodeFixFeature.enablement.name() + "\", \"organizationEligible\": " + aiCodeFixFeature.organizationEligible
+            + ",  \"enabledProjectKeys\": " + enabledProjectKeys + "}", 200)));
+      }
+    }
+
+    private void registerOrganizationApiResponses() {
+      mockServer.stubFor(get("/organizations/organizations?organizationKey=" + organizationKey + "&excludeEligibility=true")
+        .willReturn(jsonResponse("[{\"id\": \"" + organizationId + "\", \"uuidV4\": \"" + organizationUuidV4 + "\"}]", 200)));
+    }
+
+    private void registerPushApiResponses() {
+      if (!serverSentEventsEnabled) {
+        return;
+      }
+      // wiremock does not support SSE, so we redirect to our custom SSE server
+      mockServer.stubFor(get(urlPathEqualTo("/api/push/sonarlint_events"))
+        .withQueryParam("projectKeys", equalTo(String.join(",", projectsByProjectKey.keySet())))
+        .withQueryParam("languages", new AnythingPattern())
+        .willReturn(aResponse()
+          .withStatus(302)
+          .withHeader("Location", sseServer.getUrl())));
+    }
+
+    public void pushEvent(String eventPayload) {
+      if (!serverSentEventsEnabled) {
+        throw new IllegalStateException("Please use withServerSentEventsEnabled() first");
+      }
+      sseServer.sendEventToAllClients(eventPayload);
+    }
+
     public void shutdown() {
       mockServer.stop();
+      if (sseServer != null) {
+        sseServer.stop();
+      }
     }
 
     public String baseUrl() {

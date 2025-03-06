@@ -88,8 +88,9 @@ public class ConnectionService {
   }
 
   private SonarCloudConnectionConfiguration adapt(SonarCloudConnectionConfigurationDto scDto) {
-    return new SonarCloudConnectionConfiguration(sonarCloudActiveEnvironment.getUri(SonarCloudRegion.valueOf(scDto.getRegion().toString())), scDto.getConnectionId(),
-      scDto.getOrganization(), SonarCloudRegion.valueOf(scDto.getRegion().toString()), scDto.isDisableNotifications());
+    var region = SonarCloudRegion.valueOf(scDto.getRegion().toString());
+    return new SonarCloudConnectionConfiguration(sonarCloudActiveEnvironment.getUri(region), sonarCloudActiveEnvironment.getApiUri(region), scDto.getConnectionId(),
+      scDto.getOrganization(), region, scDto.isDisableNotifications());
   }
 
   private static void putAndLogIfDuplicateId(Map<String, AbstractConnectionConfiguration> map, AbstractConnectionConfiguration config) {
@@ -160,7 +161,7 @@ public class ConnectionService {
       if (validateCredentials.success() && transientConnection.isRight()) {
         var organizationKey = transientConnection.getRight().getOrganization();
         if (organizationKey != null) {
-          var organization = serverApi.organization().getOrganization(organizationKey, cancelMonitor);
+          var organization = serverApi.organization().searchOrganization(organizationKey, cancelMonitor);
           if (organization.isEmpty()) {
             return new ValidateConnectionResponse(false, "No organizations found for key: " + organizationKey);
           }
