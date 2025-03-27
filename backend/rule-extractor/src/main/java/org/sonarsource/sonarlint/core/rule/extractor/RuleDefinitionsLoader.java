@@ -22,17 +22,23 @@ package org.sonarsource.sonarlint.core.rule.extractor;
 import java.util.List;
 import java.util.Optional;
 import org.sonar.api.server.rule.RulesDefinition;
+import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 
 /**
  * Load rules directly from plugins {@link RulesDefinition}
  */
 public class RuleDefinitionsLoader {
+
   private final RulesDefinition.Context context;
 
   public RuleDefinitionsLoader(Optional<List<RulesDefinition>> pluginDefs) {
     context = new RulesDefinition.Context();
     for (var pluginDefinition : pluginDefs.orElse(List.of())) {
-      pluginDefinition.define(context);
+      try {
+        pluginDefinition.define(context);
+      } catch (Exception e) {
+        SonarLintLogger.get().warn(String.format("Failed to load rule definitions for %s, associated rules will be skipped", pluginDefinition), e);
+      }
     }
   }
 

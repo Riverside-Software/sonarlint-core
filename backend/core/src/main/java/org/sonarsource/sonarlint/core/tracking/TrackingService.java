@@ -44,7 +44,7 @@ import org.sonarsource.sonarlint.core.commons.NewCodeDefinition;
 import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.SonarLintBlameResult;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
-import org.sonarsource.sonarlint.core.commons.util.git.GitRepoNotFoundException;
+import org.sonarsource.sonarlint.core.commons.util.git.exceptions.GitException;
 import org.sonarsource.sonarlint.core.file.PathTranslationService;
 import org.sonarsource.sonarlint.core.local.only.LocalOnlyIssueStorageService;
 import org.sonarsource.sonarlint.core.newcode.NewCodeService;
@@ -112,18 +112,18 @@ public class TrackingService {
 
   @EventListener
   public void onIssueDetected(RawIssueDetectedEvent event) {
-    var analysisId = event.getAnalysisId();
+    var analysisId = event.analysisId();
     var matchingSession = matchingSessionByAnalysisId.get(analysisId);
     if (matchingSession == null) {
       // an issue was detected outside any analysis, this normally shouldn't happen
       return;
     }
-    var detectedIssue = event.getDetectedIssue();
+    var detectedIssue = event.detectedIssue();
     var isSupported = detectedIssue.isInFile();
     if (isSupported) {
       // we don't support global issues for now
       var trackedIssue = matchingSession.matchWithKnownFinding(requireNonNull(detectedIssue.getIdeRelativePath()), detectedIssue);
-      reportingService.streamIssue(event.getConfigurationScopeId(), analysisId, trackedIssue);
+      reportingService.streamIssue(event.configurationScopeId(), analysisId, trackedIssue);
     }
   }
 
@@ -282,8 +282,8 @@ public class TrackingService {
         var thresholdDate = newCodeDefinition.map(NewCodeDefinition::getThresholdDate).orElse(NewCodeDefinition.withAlwaysNew().getThresholdDate());
         var sonarLintBlameResult = getBlameResult(baseDir, fileRelativePaths, fileUris, fileContentProvider, thresholdDate);
         return (filePath, lineNumbers) -> determineIntroductionDate(filePath, lineNumbers, sonarLintBlameResult);
-      } catch (GitRepoNotFoundException e) {
-        LOG.info("Git Repository not found for {}. The path {} is not in a Git repository", configurationScopeId, e.getPath());
+      } catch (GitException e) {
+        LOG.info("Could not get git blame data for file {} in {}. ", e.getPath(), configurationScopeId);
       } catch (Exception e) {
         LOG.error("Cannot access blame info for " + configurationScopeId, e);
       }

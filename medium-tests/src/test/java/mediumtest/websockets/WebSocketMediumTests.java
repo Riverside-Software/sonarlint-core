@@ -64,18 +64,24 @@ class WebSocketMediumTests {
   @RegisterExtension
   private static final SonarLintLogTester logTester = new SonarLintLogTester();
 
-  private WebSocketServer webSocketServer;
+  private WebSocketServer webSocketServerEU;
+  private WebSocketServer webSocketServerUS;
 
   @BeforeEach
   void prepare() {
-    webSocketServer = new WebSocketServer();
-    webSocketServer.start();
+    webSocketServerEU = new WebSocketServer();
+    webSocketServerEU.start();
+    webSocketServerUS = new WebSocketServer(WebSocketServer.DEFAULT_PORT + 1);
+    webSocketServerUS.start();
   }
 
   @AfterEach
   void tearDown() {
-    if (webSocketServer != null) {
-      webSocketServer.stop();
+    if (webSocketServerEU != null) {
+      webSocketServerEU.stop();
+    }
+    if (webSocketServerUS != null) {
+      webSocketServerUS.stop();
     }
   }
 
@@ -91,7 +97,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::getAuthorizationHeader, WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple("Bearer token", true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -106,7 +112,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::getUserAgent)
         .containsExactly(USER_AGENT_FOR_TESTS));
     }
@@ -123,7 +129,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "projectKey");
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -139,7 +145,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").unsubscribeWithProjectKey(
           "projectKey").subscribeWithProjectKey("newProjectKey").build())));
@@ -159,10 +165,42 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope1", "connectionId", "projectKey2");
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true,
           webSocketPayloadBuilder().subscribeWithProjectKey("projectKey2", "projectKey1").unsubscribeWithProjectKey("projectKey1").build())));
+    }
+
+    @SonarLintTest
+    void should_unsubscribe_from_old_region_and_subscribe_to_new_when_connection_and_region_changed(SonarLintTestHarness harness) {
+      var client = harness.newFakeClient()
+        .withToken("connectionId", "token")
+        .withToken("connectionIdUS", "token")
+        .build();
+
+      // backend with two sonarqube cloud connections - one EU and one US; bound initially to EU
+      var backend = newBackendWithWebSockets(harness)
+        .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
+        .withSonarCloudConnection("connectionIdUS", "orgKey", false, null, SonarCloudRegion.US)
+        .withBoundConfigScope("configScope", "connectionId", "projectKey")
+        .start(client);
+      awaitUntilFirstWebSocketSubscribedTo("projectKey");
+
+      // Change binding to US connection
+      bind(backend, "configScope", "connectionIdUS", "projectKey");
+
+      // assert unsubscribed and closed connection to EU region; subscribed to US region.
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
+        assertThat(webSocketServerEU.getConnections())
+          .hasSize(1)
+          .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
+          .containsExactly(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").unsubscribeWithProjectKey(
+              "projectKey").build()));
+        assertThat(webSocketServerUS.getConnections())
+          .hasSize(1)
+          .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
+          .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build()));
+      });
     }
 
     @SonarLintTest
@@ -177,7 +215,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -192,7 +230,7 @@ class WebSocketMediumTests {
 
       bind(backend, "configScope", "connectionId", "newProjectKey");
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     private void bind(SonarLintTestRpcServer backend, String configScopeId, String connectionId, String newProjectKey) {
@@ -217,7 +255,7 @@ class WebSocketMediumTests {
       unbind(backend, "configScope");
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
-        assertThat(webSocketServer.getConnections())
+        assertThat(webSocketServerEU.getConnections())
           .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
           .containsExactly(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").unsubscribeWithProjectKey(
             "projectKey").build()));
@@ -237,7 +275,7 @@ class WebSocketMediumTests {
 
       unbind(backend, "configScope1");
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -254,7 +292,7 @@ class WebSocketMediumTests {
 
       unbind(backend, "configScope");
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     private void unbind(SonarLintTestRpcServer backend, String configScope) {
@@ -276,7 +314,7 @@ class WebSocketMediumTests {
         .start(client);
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
-        assertThat(webSocketServer.getConnections())
+        assertThat(webSocketServerEU.getConnections())
           .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
           .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build()));
       });
@@ -292,7 +330,7 @@ class WebSocketMediumTests {
         .withUnboundConfigScope("configScope")
         .start(client);
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -305,7 +343,7 @@ class WebSocketMediumTests {
         .withUnboundConfigScope("configScope")
         .start(client);
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -318,7 +356,7 @@ class WebSocketMediumTests {
         .withUnboundConfigScope("configScope")
         .start(client);
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
   }
 
@@ -338,7 +376,7 @@ class WebSocketMediumTests {
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope"));
 
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
-        assertThat(webSocketServer.getConnections())
+        assertThat(webSocketServerEU.getConnections())
           .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
           .containsExactly(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").unsubscribeWithProjectKey(
             "projectKey").build()));
@@ -361,7 +399,7 @@ class WebSocketMediumTests {
 
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope1"));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -378,11 +416,11 @@ class WebSocketMediumTests {
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
       backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(emptyList(),
         List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, true))));
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).extracting(WebSocketConnection::isOpened).containsExactly(false));
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).extracting(WebSocketConnection::isOpened).containsExactly(false));
 
       backend.getConfigurationService().didRemoveConfigurationScope(new DidRemoveConfigurationScopeParams("configScope"));
 
-      await().pollDelay(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().pollDelay(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened)
         .containsExactly(false));
     }
@@ -402,7 +440,7 @@ class WebSocketMediumTests {
 
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::getAuthorizationHeader, WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple("Bearer firstToken", false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build()),
           tuple("Bearer secondToken", true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
@@ -419,7 +457,7 @@ class WebSocketMediumTests {
 
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -434,7 +472,7 @@ class WebSocketMediumTests {
 
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
   }
 
@@ -453,7 +491,7 @@ class WebSocketMediumTests {
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, false))));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -463,7 +501,7 @@ class WebSocketMediumTests {
       var client = harness.newFakeClient()
         .withToken("connectionId", "token")
         .build();
-      webSocketServer.stop();
+      webSocketServerEU.stop();
       var backend = newBackendWithWebSockets(harness)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
         .start(client);
@@ -473,11 +511,11 @@ class WebSocketMediumTests {
 
       await().untilAsserted(() -> assertThat(client.getLogMessages()).contains("Error while trying to create websocket connection for ws://localhost:54321/endpoint"));
 
-      webSocketServer.start();
+      webSocketServerEU.start();
       // Emulate a change on the connection to force websocket service to reconnect
       backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams("connectionId"));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -498,7 +536,7 @@ class WebSocketMediumTests {
 
       backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), emptyList()));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened)
         .containsExactly(false));
     }
@@ -520,7 +558,7 @@ class WebSocketMediumTests {
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId2", "orgKey2", SonarCloudRegion.EU, false))));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true,
           webSocketPayloadBuilder().subscribeWithProjectKey("projectKey2", "projectKey1").unsubscribeWithProjectKey("projectKey1").build())));
@@ -543,7 +581,7 @@ class WebSocketMediumTests {
         .didUpdateConnections(new DidUpdateConnectionsParams(List.of(new SonarQubeConnectionConfigurationDto("connectionid", "url",
           false)), emptyList()));
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -558,7 +596,7 @@ class WebSocketMediumTests {
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey2", SonarCloudRegion.EU, false))));
 
-      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections()).isEmpty());
+      await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections()).isEmpty());
     }
 
     @SonarLintTest
@@ -575,7 +613,7 @@ class WebSocketMediumTests {
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, true))));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -598,7 +636,7 @@ class WebSocketMediumTests {
         List.of(new SonarCloudConnectionConfigurationDto("connectionId1", "orgKey1", SonarCloudRegion.EU, false), new SonarCloudConnectionConfigurationDto(
           "connectionId2", "orgKey2", SonarCloudRegion.EU, true))));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey2", "projectKey1").build()),
           tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey1").build())));
@@ -617,7 +655,7 @@ class WebSocketMediumTests {
       backend.getConnectionService()
         .didUpdateConnections(new DidUpdateConnectionsParams(emptyList(), List.of(new SonarCloudConnectionConfigurationDto("connectionId", "orgKey", SonarCloudRegion.EU, false))));
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .containsExactly(tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
     }
@@ -637,7 +675,7 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         "{\"event\": \"QualityGateChanged\", \"data\": {\"message\": \"msg\", \"link\": \"lnk\", \"project\": \"projectKey\", \"date\": " +
           "\"2023-07-19T15:08:01+0000\"}}");
 
@@ -660,7 +698,7 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         "{\"event\": \"MyNewIssues\", \"data\": {\"message\": \"msg\", \"link\": \"lnk\", \"project\": \"projectKey\", \"date\": " +
           "\"2023-07-19T15:08:01+0000\"}}");
 
@@ -683,7 +721,7 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage("{\"event\": [\"QualityGateChanged\"], \"data\": {\"message\": 0}}");
+      webSocketServerEU.getConnections().get(0).sendMessage("{\"event\": [\"QualityGateChanged\"], \"data\": {\"message\": 0}}");
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(client.getSmartNotificationsToShow()).isEmpty());
     }
@@ -723,7 +761,7 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage(payload);
+      webSocketServerEU.getConnections().get(0).sendMessage(payload);
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(client.getSmartNotificationsToShow()).isEmpty());
     }
@@ -748,7 +786,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "IssueChanged",
@@ -784,7 +822,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "IssueChanged",
@@ -820,7 +858,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "IssueChanged",
@@ -855,7 +893,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "IssueChanged",
@@ -890,7 +928,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getIssue("myIssueKey").isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "IssueChanged",
@@ -925,7 +963,7 @@ class WebSocketMediumTests {
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "TaintVulnerabilityRaised",
@@ -996,7 +1034,7 @@ class WebSocketMediumTests {
 
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "TaintVulnerabilityRaised",
@@ -1073,7 +1111,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "TaintVulnerabilityClosed",
@@ -1103,7 +1141,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.containsIssue("taintKey")).isTrue());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "TaintVulnerabilityClosed",
@@ -1136,7 +1174,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotChanged",
@@ -1171,7 +1209,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey").getStatus().isResolved()).isFalse());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotChanged",
@@ -1207,7 +1245,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotRaised",
@@ -1250,7 +1288,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNull());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotRaised",
@@ -1298,7 +1336,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotClosed",
@@ -1329,7 +1367,7 @@ class WebSocketMediumTests {
       var issueStorage = backend.getIssueStorageService().connection("connectionId").project("projectKey").findings();
       await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(issueStorage.getHotspot("hotspotKey")).isNotNull());
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         """
           {
             "event": "SecurityHotspotClosed",
@@ -1357,7 +1395,7 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage("{\"event\": \"UnknownEvent\", \"data\": {\"message\": \"msg\"}}");
+      webSocketServerEU.getConnections().get(0).sendMessage("{\"event\": \"UnknownEvent\", \"data\": {\"message\": \"msg\"}}");
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(client.getSmartNotificationsToShow()).isEmpty());
     }
@@ -1371,9 +1409,9 @@ class WebSocketMediumTests {
         .withSonarCloudConnectionAndNotifications("connectionId", "orgKey", null)
         .withBoundConfigScope("configScope", "connectionId", "projectKey")
         .start(client);
-      await().atMost(Duration.ofSeconds(2)).until(() -> !webSocketServer.getConnections().isEmpty());
+      await().atMost(Duration.ofSeconds(2)).until(() -> !webSocketServerEU.getConnections().isEmpty());
 
-      webSocketServer.getConnections().get(0).sendMessage("{\"event\": \"Malformed");
+      webSocketServerEU.getConnections().get(0).sendMessage("{\"event\": \"Malformed");
 
       await().pollDelay(Duration.ofMillis(200)).atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(client.getSmartNotificationsToShow()).isEmpty());
     }
@@ -1389,10 +1427,10 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         "{\"event\": \"QualityGateChanged\", \"data\": {\"message\": \"msg\", \"link\": \"lnk\", \"project\": \"projectKey\", \"date\": " +
           "\"2023-07-19T15:08:01+0000\"}}");
-      webSocketServer.getConnections().get(0).sendMessage(
+      webSocketServerEU.getConnections().get(0).sendMessage(
         "{\"event\": \"QualityGateChanged\", \"data\": {\"message\": \"msg\", \"link\": \"lnk\", \"project\": \"projectKey\", \"date\": " +
           "\"2023-07-19T15:08:01+0000\"}}");
 
@@ -1417,9 +1455,9 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).close();
+      webSocketServerEU.getConnections().get(0).close();
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .contains(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build()),
           tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
@@ -1436,9 +1474,9 @@ class WebSocketMediumTests {
         .start(client);
       awaitUntilFirstWebSocketSubscribedTo("projectKey");
 
-      webSocketServer.getConnections().get(0).close();
+      webSocketServerEU.getConnections().get(0).close();
 
-      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServer.getConnections())
+      await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> assertThat(webSocketServerEU.getConnections())
         .extracting(WebSocketConnection::isOpened, WebSocketConnection::getReceivedMessages)
         .contains(tuple(false, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build()),
           tuple(true, webSocketPayloadBuilder().subscribeWithProjectKey("projectKey").build())));
@@ -1448,7 +1486,8 @@ class WebSocketMediumTests {
   public SonarLintBackendFixture.SonarLintBackendBuilder newBackendWithWebSockets(SonarLintTestHarness harness) {
     return harness.newBackend()
       .withServerSentEventsEnabled()
-      .withSonarCloudWebSocketsUrl(webSocketServer.getUrl());
+      .withSonarQubeCloudEuRegionWebSocketUri(webSocketServerEU.getUrl())
+      .withSonarQubeCloudUsRegionWebSocketUri(webSocketServerUS.getUrl());
   }
 
   public static class WebSocketPayloadBuilder {
@@ -1517,7 +1556,7 @@ class WebSocketMediumTests {
 
   private void awaitUntilFirstWebSocketSubscribedTo(String... projectKey) {
     await().atMost(Duration.ofSeconds(2)).untilAsserted(() -> {
-      assertThat(webSocketServer.getConnections()).hasSize(1)
+      assertThat(webSocketServerEU.getConnections()).hasSize(1)
         .first()
         .extracting(WebSocketConnection::getReceivedMessages)
         .isEqualTo(webSocketPayloadBuilder().subscribeWithProjectKey(projectKey).build());

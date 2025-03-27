@@ -26,17 +26,21 @@ import java.util.Set;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.analysis.AnalysisFinishedEvent;
+import org.sonarsource.sonarlint.core.analysis.IssuesRaisedEvent;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
+import org.sonarsource.sonarlint.core.event.FixSuggestionReceivedEvent;
 import org.sonarsource.sonarlint.core.event.LocalOnlyIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.event.ServerIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.GetStatusResponse;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionReceivedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.HelpAndFeedbackClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
@@ -159,10 +163,6 @@ public class TelemetryService {
     updateTelemetry(localStorage -> localStorage.helpAndFeedbackLinkClicked(params.getItemId()));
   }
 
-  public void fixSuggestionReceived(FixSuggestionReceivedParams params) {
-    updateTelemetry(localStorage -> localStorage.fixSuggestionReceived(params.getSuggestionId(), params.getAiSuggestionsSource(), params.getSnippetsCount()));
-  }
-
   public void fixSuggestionResolved(FixSuggestionResolvedParams params) {
     updateTelemetry(localStorage -> localStorage.fixSuggestionResolved(params.getSuggestionId(), params.getStatus(), params.getSnippetIndex()));
   }
@@ -246,6 +246,25 @@ public class TelemetryService {
       analysisDoneOnMultipleFiles();
     }
     addReportedRules(event.getReportedRuleKeys());
+  }
+
+  @EventListener
+  public void onFixSuggestionReceived(FixSuggestionReceivedEvent event) {
+    updateTelemetry(localStorage -> localStorage.fixSuggestionReceived(
+      event.fixSuggestionId(),
+      event.source(),
+      event.snippetsCount(),
+      event.wasGeneratedFromIde())
+    );
+  }
+
+  @EventListener
+  public void onIssuesRaised(IssuesRaisedEvent event) {
+    var issuesToReport = event.issues().stream()
+      .filter(RaisedIssueDto::isAiCodeFixable)
+      .map(RaisedFindingDto::getId)
+      .collect(Collectors.toSet());
+    updateTelemetry(localStorage -> localStorage.addIssuesWithPossibleAiFixFromIde(issuesToReport));
   }
 
   @PreDestroy
