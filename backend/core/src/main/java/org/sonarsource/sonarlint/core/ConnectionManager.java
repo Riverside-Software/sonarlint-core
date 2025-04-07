@@ -19,7 +19,9 @@
  */
 package org.sonarsource.sonarlint.core;
 
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.annotation.Nullable;
@@ -28,6 +30,9 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.connection.ServerConnection;
+import org.sonarsource.sonarlint.core.event.ConnectionConfigurationRemovedEvent;
+import org.sonarsource.sonarlint.core.event.ConnectionConfigurationUpdatedEvent;
+import org.sonarsource.sonarlint.core.event.ConnectionCredentialsChangedEvent;
 import org.sonarsource.sonarlint.core.http.ConnectionAwareHttpClientProvider;
 import org.sonarsource.sonarlint.core.http.HttpClient;
 import org.sonarsource.sonarlint.core.http.HttpClientProvider;
@@ -43,6 +48,7 @@ import org.sonarsource.sonarlint.core.serverapi.EndpointParams;
 import org.sonarsource.sonarlint.core.serverapi.ServerApi;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 import org.sonarsource.sonarlint.core.serverconnection.ServerVersionAndStatusChecker;
+import org.springframework.context.event.EventListener;
 
 public class ConnectionManager {
 
@@ -52,6 +58,7 @@ public class ConnectionManager {
   private final HttpClientProvider httpClientProvider;
   private final SonarLintRpcClient client;
   private final SonarCloudActiveEnvironment sonarCloudActiveEnvironment;
+  private final Map<String, ServerConnection> connectionCache = new ConcurrentHashMap<>();
 
   public ConnectionManager(ConnectionConfigurationRepository connectionRepository, ConnectionAwareHttpClientProvider awareHttpClientProvider, HttpClientProvider httpClientProvider,
     SonarCloudActiveEnvironment sonarCloudActiveEnvironment, SonarLintRpcClient client) {
@@ -145,16 +152,18 @@ public class ConnectionManager {
    * Throws ResponseErrorException if connection with provided ID is not found in ConnectionConfigurationRepository
    */
   public ServerConnection getConnectionOrThrow(String connectionId) {
-    var serverApi = getServerApiOrThrow(connectionId);
-    return new ServerConnection(connectionId, serverApi, client);
+    return connectionCache.computeIfAbsent(connectionId, connId -> {
+      var serverApi = getServerApiOrThrow(connId);
+      return new ServerConnection(connId, serverApi, client);
+    });
   }
 
   /**
    * Returns empty Optional if connection with provided ID is not found in ConnectionConfigurationRepository
    */
   public Optional<ServerConnection> tryGetConnection(String connectionId) {
-    return getServerApi(connectionId)
-      .map(serverApi -> new ServerConnection(connectionId, serverApi, client));
+    return Optional.ofNullable(connectionCache.computeIfAbsent(connectionId, connId ->
+      getServerApi(connId).map(serverApi -> new ServerConnection(connId, serverApi, client)).orElse(null)));
   }
 
   /**
@@ -162,7 +171,7 @@ public class ConnectionManager {
    */
   public Optional<ServerConnection> tryGetConnectionWithoutCredentials(String connectionId) {
     return getServerApiWithoutCredentials(connectionId)
-      .map(serverApi -> new ServerConnection(connectionId, serverApi, client));
+      .map(serverApi -> new ServerConnection(connectionId, serverApi, client, true));
   }
 
   public void withValidConnection(String connectionId, Consumer<ServerApi> serverApiConsumer) {
@@ -183,5 +192,20 @@ public class ConnectionManager {
         LOG.debug("Connection '{}' is invalid", connectionId);
         return Optional.empty();
       });
+  }
+
+  @EventListener
+  public void onConnectionRemoved(ConnectionConfigurationRemovedEvent event) {
+    connectionCache.remove(event.getRemovedConnectionId());
+  }
+
+  @EventListener
+  public void onConnectionUpdated(ConnectionConfigurationUpdatedEvent event) {
+    connectionCache.remove(event.updatedConnectionId());
+  }
+
+  @EventListener
+  public void onCredentialsChanged(ConnectionCredentialsChangedEvent event) {
+    connectionCache.remove(event.getConnectionId());
   }
 }

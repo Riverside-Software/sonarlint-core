@@ -48,7 +48,7 @@ public class SecurityHotspotRaisedEventParser implements EventParser<SecurityHot
       payload.key,
       payload.projectKey,
       VulnerabilityProbability.valueOf(payload.vulnerabilityProbability),
-      HotspotReviewStatus.valueOf(payload.status),
+      HotspotReviewStatus.fromStatusAndResolution(payload.status, payload.resolution),
       Instant.ofEpochMilli(payload.creationDate),
       payload.branch,
       adapt(payload.mainLocation),
@@ -60,6 +60,8 @@ public class SecurityHotspotRaisedEventParser implements EventParser<SecurityHot
     private String key;
     private String projectKey;
     private String status;
+    @Nullable
+    private String resolution;
     private String branch;
     private String vulnerabilityProbability;
     private long creationDate;

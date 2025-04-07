@@ -19,30 +19,33 @@
  */
 package mediumtest.synchronization;
 
-import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.get;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.awaitility.Awaitility.await;
-import static org.mockito.Mockito.when;
-import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA;
-import static org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture.newBackend;
-import static org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture.newFakeClient;
-import static org.sonarsource.sonarlint.core.test.utils.server.ServerFixture.newSonarQubeServer;
-
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.api.TextRange;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingConfigurationDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.DidUpdateBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.DidChangeCredentialsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.DidUpdateConnectionsParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.SonarQubeConnectionConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.EffectiveRuleDetailsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
 import utils.TestPlugin;
+
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA;
+import static org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture.newBackend;
+import static org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture.newFakeClient;
+import static org.sonarsource.sonarlint.core.test.utils.server.ServerFixture.newSonarQubeServer;
 
 class ConnectionSyncMediumTests {
   public static final String CONNECTION_ID = "connectionId";
@@ -51,9 +54,8 @@ class ConnectionSyncMediumTests {
   @SonarLintTest
   void it_should_cache_extracted_rule_metadata_per_connection(SonarLintTestHarness harness) {
     var client = harness.newFakeClient()
-      .withCredentials(CONNECTION_ID, "user", "pw")
+      .withToken(CONNECTION_ID, "token")
       .build();
-    when(client.getClientLiveDescription()).thenReturn(this.getClass().getName());
 
     var server = harness.newFakeSonarQubeServer().start();
     var backend = harness.newBackend()
@@ -78,9 +80,8 @@ class ConnectionSyncMediumTests {
   @SonarLintTest
   void it_should_evict_cache_when_connection_is_removed(SonarLintTestHarness harness) {
     var client = harness.newFakeClient()
-      .withCredentials(CONNECTION_ID, "user", "pw")
+      .withToken(CONNECTION_ID, "token")
       .build();
-    when(client.getClientLiveDescription()).thenReturn(this.getClass().getName());
 
     var server = harness.newFakeSonarQubeServer().start();
     var backend = harness.newBackend()
@@ -99,9 +100,8 @@ class ConnectionSyncMediumTests {
   @SonarLintTest
   void it_should_sync_when_credentials_are_updated(SonarLintTestHarness harness) {
     var client = harness.newFakeClient()
-      .withCredentials(CONNECTION_ID, "user", "pw")
+      .withToken(CONNECTION_ID, "token")
       .build();
-    when(client.getClientLiveDescription()).thenReturn(this.getClass().getName());
 
     var introductionDate = Instant.now().truncatedTo(ChronoUnit.MILLIS);
     var server = harness.newFakeSonarQubeServer()
@@ -132,12 +132,35 @@ class ConnectionSyncMediumTests {
   }
 
   @SonarLintTest
-  void it_should_notify_client_if_invalid_token() {
+  void it_should_notify_client_on_invalid_token_exactly_once() {
     var status = 401;
     var client = newFakeClient()
-      .withCredentials(CONNECTION_ID, "user", "pw")
+      .withToken(CONNECTION_ID, "token")
       .build();
-    when(client.getClientLiveDescription()).thenReturn(this.getClass().getName());
+
+    var server = newSonarQubeServer()
+      .withProject("projectKey", project -> project.withBranch("main"))
+      .withResponseCodes(responseCodes -> responseCodes.withStatusCode(status))
+      .start();
+
+    newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server, storage -> storage.withPlugin(TestPlugin.JAVA).withProject("projectKey"))
+      .withBoundConfigScope(SCOPE_ID, CONNECTION_ID, "projectKey")
+      .withEnabledLanguageInStandaloneMode(JAVA)
+      .withProjectSynchronization()
+      .withFullSynchronization()
+      .start(client);
+
+    await().untilAsserted(() -> assertThat(client.getLogMessages()).contains("Error during synchronization"));
+    await().during(5, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(1));
+  }
+
+  @SonarLintTest
+  void it_should_renotify_client_on_invalid_token_after_connection_is_recreated() {
+    var status = 401;
+    var client = newFakeClient()
+      .withToken(CONNECTION_ID, "token")
+      .build();
 
     var server = newSonarQubeServer()
       .withProject("projectKey", project -> project.withBranch("main"))
@@ -151,11 +174,38 @@ class ConnectionSyncMediumTests {
       .withProjectSynchronization()
       .withFullSynchronization()
       .start(client);
-    await().untilAsserted(() -> assertThat(client.getLogMessages()).contains("Error during synchronization"));
+    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(1));
+    backend.getConnectionService().didUpdateConnections(new DidUpdateConnectionsParams(List.of(), List.of()));
+    backend.getConnectionService()
+      .didUpdateConnections(new DidUpdateConnectionsParams(List.of(new SonarQubeConnectionConfigurationDto(CONNECTION_ID, server.baseUrl(), true)), List.of()));
+    backend.getConfigurationService().didUpdateBinding(new DidUpdateBindingParams(SCOPE_ID, new BindingConfigurationDto(CONNECTION_ID, "projectKey", true)));
 
+    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(2));
+  }
+
+  @SonarLintTest
+  void it_should_renotify_client_on_invalid_token_after_connection_credentials_are_changed() {
+    var status = 401;
+    var client = newFakeClient()
+      .withToken(CONNECTION_ID, "token")
+      .build();
+
+    var server = newSonarQubeServer()
+      .withProject("projectKey", project -> project.withBranch("main"))
+      .withResponseCodes(responseCodes -> responseCodes.withStatusCode(status))
+      .start();
+
+    var backend = newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server, storage -> storage.withPlugin(TestPlugin.JAVA).withProject("projectKey"))
+      .withBoundConfigScope(SCOPE_ID, CONNECTION_ID, "projectKey")
+      .withEnabledLanguageInStandaloneMode(JAVA)
+      .withProjectSynchronization()
+      .withFullSynchronization()
+      .start(client);
+    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(1));
     backend.getConnectionService().didChangeCredentials(new DidChangeCredentialsParams(CONNECTION_ID));
 
-    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken()).containsExactly(CONNECTION_ID));
+    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(2));
   }
 
   private EffectiveRuleDetailsDto getEffectiveRuleDetails(SonarLintTestRpcServer backend, String configScopeId, String ruleKey) {
