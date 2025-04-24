@@ -9,7 +9,7 @@
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.18.99001</version>
+  <version>10.19.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -75,6 +75,7 @@
     <version.surefire.plugin>3.1.2</version.surefire.plugin>
     <jgit.version>6.9.0.202403050737-r</jgit.version>
     <system.stubs.version>2.1.7</system.stubs.version>
+    <sentry.version>8.0.0</sentry.version>
 
     <!-- Not only used as a plug-in but also as a dependency for 'maven-shade-ext-bnd-transformer' -->
     <version.shade.plugin>3.6.0</version.shade.plugin>
@@ -225,7 +226,7 @@
       <dependency>
         <groupId>org.wiremock</groupId>
         <artifactId>wiremock-jetty12</artifactId>
-        <version>3.10.0</version>
+        <version>3.12.1</version>
       </dependency>
       <dependency>
         <groupId>org.slf4j</groupId>

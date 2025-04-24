@@ -22,6 +22,7 @@ package mediumtest.analysis;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -54,6 +55,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangePat
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.GetAnalysisConfigParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.ShouldUseEnterpriseCSharpAnalyzerParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingConfigurationDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.DidUpdateBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.ConfigurationScopeDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddConfigurationScopesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidRemoveConfigurationScopeParams;
@@ -98,7 +100,7 @@ class AnalysisMediumTests {
   private static final boolean COMMERCIAL_ENABLED = System.getProperty("commercial") != null;
 
   @BeforeEach
-  public void setUp() {
+  void setUp() {
     javaVersion = System2.INSTANCE.property("java.specification.version");
   }
 
@@ -230,7 +232,8 @@ class AnalysisMediumTests {
     var server = harness.newFakeSonarQubeServer().start();
     var backend = harness.newBackend()
       .withSonarQubeConnection("connectionId", server,
-        storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+        storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey",
+          project -> project.withMainBranch("main").withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
       .start(client);
@@ -240,7 +243,58 @@ class AnalysisMediumTests {
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
 
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    await().untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());
     var raisedIssueDto = client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID).get(fileUri).get(0);
+    assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
+    assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
+      .extracting(ImpactDto::getSoftwareQuality, ImpactDto::getImpactSeverity)
+      .containsExactly(tuple(SoftwareQuality.MAINTAINABILITY, ImpactSeverity.LOW));
+    assertThat(raisedIssueDto.getRuleKey()).isEqualTo("xml:S3421");
+  }
+
+  @SonarLintTest
+  void it_should_analyze_xml_file_after_binding(SonarLintTestHarness harness, @TempDir Path baseDir) {
+    var xmlFileContent = """
+      <?xml version="1.0" encoding="UTF-8"?>
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <groupId>com.foo</groupId>
+        <artifactId>bar</artifactId>
+        <version>${pom.version}</version>
+      </project>""";
+    var firstFilePath = createFile(baseDir, "pom.xml", xmlFileContent);
+    var firstFileUri = firstFilePath.toUri();
+    var secondFilePath = createFile(baseDir, "pom.xml", xmlFileContent);
+    var secondFileUri = secondFilePath.toUri();
+    final var OTHER_CONFIG_SCOPE_ID = CONFIG_SCOPE_ID + "2";
+    var client = harness.newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(firstFileUri, baseDir.relativize(firstFilePath), CONFIG_SCOPE_ID, false, null, firstFilePath, null, null, true)))
+      .withInitialFs(OTHER_CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(secondFileUri, baseDir.relativize(secondFilePath), OTHER_CONFIG_SCOPE_ID, false, null, secondFilePath, null, null, true)))
+      .build();
+    var server = harness.newFakeSonarQubeServer()
+      .withProject("projectKey")
+      .start();
+    var backend = harness.newBackend()
+      .withSonarQubeConnection("connectionId", server,
+        storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey",
+          project -> project.withMainBranch("main").withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
+      .withExtraEnabledLanguagesInConnectedMode(Language.XML)
+      .start(client);
+    backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, firstFileUri));
+    await().untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isNotEmpty());
+    client.cleanRaisedIssues();
+
+    backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(new ConfigurationScopeDto(OTHER_CONFIG_SCOPE_ID, null, true, "Name", null))));
+    backend.getConfigurationService().didUpdateBinding(new DidUpdateBindingParams(OTHER_CONFIG_SCOPE_ID, new BindingConfigurationDto("connectionId", "projectKey", true)));
+
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(OTHER_CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(secondFileUri), Map.of(), false)).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    await().untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(OTHER_CONFIG_SCOPE_ID)).isNotEmpty());
+    var raisedIssueDto = client.getRaisedIssuesForScopeId(OTHER_CONFIG_SCOPE_ID).get(secondFileUri).get(0);
     assertThat(raisedIssueDto.getSeverityMode().isRight()).isTrue();
     assertThat(raisedIssueDto.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.CONVENTIONAL);
     assertThat(raisedIssueDto.getSeverityMode().getRight().getImpacts())
@@ -421,6 +475,7 @@ class AnalysisMediumTests {
       .build();
     var backend = harness.newBackend()
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .start(client);
     var analysisId = UUID.randomUUID();
 
@@ -430,8 +485,6 @@ class AnalysisMediumTests {
     assertThat(result.getFailedAnalysisFiles()).isEmpty();
     await().during(2, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeIdAsList(CONFIG_SCOPE_ID)).isEmpty());
 
-    backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(List.of(
-      new ConfigurationScopeDto(CONFIG_SCOPE_ID, null, false, CONFIG_SCOPE_ID, null))));
     backend.getFileService().didUpdateFileSystem(
       new DidUpdateFileSystemParams(
         List.of(new ClientFileDto(fileIssueUri, baseDir.relativize(fileIssue), CONFIG_SCOPE_ID, false, null, fileIssue, null, null, true),
@@ -850,7 +903,10 @@ class AnalysisMediumTests {
     var connectionId = "connectionId";
     var projectKey2 = "projectKey-2";
     var connectionId2 = "connectionId-2";
-    var server = harness.newFakeSonarQubeServer().start();
+    var server = harness.newFakeSonarQubeServer()
+      .withProject(projectKey)
+      .withProject(projectKey2)
+      .start();
     var backend = harness.newBackend()
       .withSonarQubeConnection(connectionId, server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,
@@ -925,7 +981,7 @@ class AnalysisMediumTests {
     var connectionId = "connectionId";
     var projectKey2 = "projectKey-2";
     var connectionId2 = "connectionId-2";
-    var server = harness.newFakeSonarQubeServer().start();
+    var server = harness.newFakeSonarQubeServer().withProject(projectKey).withProject(projectKey2).start();
     var backend = harness.newBackend()
       .withSonarQubeConnection(connectionId, server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject(projectKey,
@@ -1060,6 +1116,68 @@ class AnalysisMediumTests {
     var result = backend.getAnalysisService().shouldUseEnterpriseCSharpAnalyzer(new ShouldUseEnterpriseCSharpAnalyzerParams(CONFIG_SCOPE_ID)).join();
 
     assertThat(result.shouldUseEnterpriseAnalyzer()).isTrue();
+  }
+
+  @SonarLintTest
+  void it_should_analyze_xml_file_in_non_ascii_directory(SonarLintTestHarness harness, @TempDir Path baseDir) throws IOException {
+    var directoryPath = baseDir.resolve("中文字符");
+    Files.createDirectory(directoryPath);
+    var filePath = createFile(directoryPath, "pom.xml",
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
+    var fileUri = filePath.toUri();
+    var client = harness.newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
+      .build();
+    var backend = harness.newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .start(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID);
+    assertThat(raisedIssueDto).isNotEmpty();
+  }
+
+  @SonarLintTest
+  void it_should_analyze_xml_file_in_non_ascii_directory_and_non_decoded_uri(SonarLintTestHarness harness, @TempDir Path baseDir) throws IOException {
+    var directoryPath = baseDir.resolve("中文字符");
+    Files.createDirectory(directoryPath);
+    var filePath = createFile(directoryPath, "pom.xml",
+      """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <project>
+          <modelVersion>4.0.0</modelVersion>
+          <groupId>com.foo</groupId>
+          <artifactId>bar</artifactId>
+          <version>${pom.version}</version>
+        </project>""");
+    var fileUri = URI.create(URLDecoder.decode(filePath.toUri().toString(), StandardCharsets.UTF_8));
+    var client = harness.newFakeClient()
+      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
+      .build();
+    var backend = harness.newBackend()
+      .withUnboundConfigScope(CONFIG_SCOPE_ID)
+      .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .start(client);
+    var analysisId = UUID.randomUUID();
+
+    var result = backend.getAnalysisService()
+      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, analysisId, List.of(fileUri), Map.of(), false, System.currentTimeMillis())).join();
+
+    assertThat(result.getFailedAnalysisFiles()).isEmpty();
+    var raisedIssueDto = awaitRaisedIssuesNotification(client, CONFIG_SCOPE_ID);
+    assertThat(raisedIssueDto).isNotEmpty();
   }
 
   private ClientInputFile prepareInputFile(String relativePath, String content, final boolean isTest, Charset encoding,

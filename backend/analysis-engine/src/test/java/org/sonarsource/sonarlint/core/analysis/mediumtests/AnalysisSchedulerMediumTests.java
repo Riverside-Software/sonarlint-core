@@ -25,12 +25,17 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import org.apache.commons.io.FileUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -39,21 +44,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonar.api.batch.fs.InputFile;
-import org.sonarsource.sonarlint.core.analysis.AnalysisEngine;
+import org.sonarsource.sonarlint.core.analysis.AnalysisScheduler;
 import org.sonarsource.sonarlint.core.analysis.api.ActiveRule;
 import org.sonarsource.sonarlint.core.analysis.api.AnalysisConfiguration;
-import org.sonarsource.sonarlint.core.analysis.api.AnalysisEngineConfiguration;
+import org.sonarsource.sonarlint.core.analysis.api.AnalysisSchedulerConfiguration;
 import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
 import org.sonarsource.sonarlint.core.analysis.api.ClientModuleFileSystem;
 import org.sonarsource.sonarlint.core.analysis.api.ClientModuleInfo;
 import org.sonarsource.sonarlint.core.analysis.api.Issue;
+import org.sonarsource.sonarlint.core.analysis.api.TriggerType;
 import org.sonarsource.sonarlint.core.analysis.command.AnalyzeCommand;
-import org.sonarsource.sonarlint.core.analysis.command.Command;
 import org.sonarsource.sonarlint.core.analysis.command.RegisterModuleCommand;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.LogOutput;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
-import org.sonarsource.sonarlint.core.commons.progress.ProgressMonitor;
+import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
+import org.sonarsource.sonarlint.core.commons.progress.TaskManager;
 import org.sonarsource.sonarlint.core.plugin.commons.PluginsLoader;
 import testutils.OnDiskTestClientInputFile;
 
@@ -61,53 +67,37 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
-class AnalysisEngineMediumTests {
+class AnalysisSchedulerMediumTests {
   @RegisterExtension
   private static final SonarLintLogTester logTester = new SonarLintLogTester();
+  private static final Consumer<List<ClientInputFile>> NO_OP_ANALYSIS_STARTED_CONSUMER = inputFiles -> {
+  };
+  private static final Supplier<Boolean> ANALYSIS_READY_SUPPLIER = () -> true;
+  private static final Consumer<Issue> NO_OP_ISSUE_LISTENER = issue -> {
+  };
+  public static final TaskManager TASK_MANAGER = new TaskManager();
 
-  private AnalysisEngine analysisEngine;
+  private AnalysisScheduler analysisScheduler;
   private volatile boolean engineStopped = true;
-  private final ProgressMonitor progressMonitor = new ProgressMonitor(null);
+  private final SonarLintCancelMonitor progressMonitor = new SonarLintCancelMonitor();
 
   @BeforeEach
   void prepare(@TempDir Path workDir) throws IOException {
     var enabledLanguages = Set.of(SonarLanguage.PYTHON);
-    var analysisGlobalConfig = AnalysisEngineConfiguration.builder()
+    var analysisGlobalConfig = AnalysisSchedulerConfiguration.builder()
       .setClientPid(1234L)
       .setWorkDir(workDir)
       .build();
     var result = new PluginsLoader().load(new PluginsLoader.Configuration(Set.of(findPythonJarPath()), enabledLanguages, false, Optional.empty()), Set.of());
-    this.analysisEngine = new AnalysisEngine(analysisGlobalConfig, result.getLoadedPlugins(), logTester.getLogOutput());
+    this.analysisScheduler = new AnalysisScheduler(analysisGlobalConfig, result.getLoadedPlugins(), logTester.getLogOutput());
     engineStopped = false;
   }
 
   @AfterEach
   void cleanUp() {
     if (!engineStopped) {
-      this.analysisEngine.stop();
+      this.analysisScheduler.stop();
     }
-  }
-
-  @Test
-  void should_analyze_a_single_file_outside_of_any_module(@TempDir Path baseDir) throws Exception {
-    var content = """
-      def foo():
-        x = 9; # trailing comment
-      """;
-    var inputFile = preparePythonInputFile(baseDir, content);
-
-    var analysisConfig = AnalysisConfiguration.builder()
-      .addInputFiles(inputFile)
-      .addActiveRules(trailingCommentRule())
-      .setBaseDir(baseDir)
-      .build();
-    List<Issue> issues = new ArrayList<>();
-    analysisEngine.post(new AnalyzeCommand(null, analysisConfig, issues::add, null, null), progressMonitor).get();
-    assertThat(issues).hasSize(1);
-    assertThat(issues)
-      .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
-      .containsOnly(tuple("python:S139", "Move this trailing comment on the previous empty line.", inputFile, List.of(), 2, 9, 2, 27));
-    assertThat(issues.get(0).quickFixes()).hasSize(1);
   }
 
   @Test
@@ -124,8 +114,11 @@ class AnalysisEngineMediumTests {
       .setBaseDir(baseDir)
       .build();
     List<Issue> issues = new ArrayList<>();
-    analysisEngine.post(new RegisterModuleCommand(new ClientModuleInfo("moduleKey", aModuleFileSystem())), progressMonitor).get();
-    analysisEngine.post(new AnalyzeCommand("moduleKey", analysisConfig, issues::add, null, null), progressMonitor).get();
+    analysisScheduler.post(new RegisterModuleCommand(new ClientModuleInfo("moduleKey", aModuleFileSystem())));
+    var analyzeCommand = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> analysisConfig, issues::add, null, progressMonitor, TASK_MANAGER,
+      NO_OP_ANALYSIS_STARTED_CONSUMER, ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    analysisScheduler.post(analyzeCommand);
+    analyzeCommand.getFutureResult().get();
     assertThat(issues).hasSize(1);
     assertThat(issues)
       .extracting("ruleKey", "message", "inputFile", "flows", "textRange.startLine", "textRange.startLineOffset", "textRange.endLine", "textRange.endLineOffset")
@@ -134,85 +127,110 @@ class AnalysisEngineMediumTests {
   }
 
   @Test
-  void should_fail_the_future_if_the_command_execution_fails() {
-    var futureResult = analysisEngine.post((moduleRegistry, progress) -> {
+  void should_fail_the_future_if_the_analyze_command_execution_fails() {
+    var command = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> {
       throw new RuntimeException("Kaboom");
-    }, progressMonitor);
+    }, issue -> {
+    }, null, progressMonitor, TASK_MANAGER, NO_OP_ANALYSIS_STARTED_CONSUMER, ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    analysisScheduler.post(command);
 
-    await().until(futureResult::isCompletedExceptionally);
-    futureResult.exceptionally(e -> assertThat(e)
+    assertThat(command.getFutureResult()).failsWithin(300, TimeUnit.MILLISECONDS)
+      .withThrowableOfType(ExecutionException.class)
+      .havingCause()
       .isInstanceOf(RuntimeException.class)
-      .hasMessage("Kaboom"));
+      .withMessage("Kaboom");
   }
 
   @Test
-  void should_execute_pending_commands_when_gracefully_finishing() {
-    var futureWaitCommand1 = analysisEngine.post(waitCommand(1000L), progressMonitor);
-    var futureWaitCommand2 = analysisEngine.post(waitCommand(1000L), progressMonitor);
-    var futureWaitCommand3 = analysisEngine.post(waitCommand(1000L), progressMonitor);
+  void should_cancel_progress_monitor_of_executing_analyze_command_when_stopping(@TempDir Path baseDir) throws IOException {
+    var content = """
+      def foo():
+        x = 9; # trailing comment
+      """;
+    ClientInputFile inputFile = preparePythonInputFile(baseDir, content);
 
-    analysisEngine.finishGracefully();
+    AnalysisConfiguration analysisConfig = AnalysisConfiguration.builder()
+      .addInputFiles(inputFile)
+      .addActiveRules(trailingCommentRule())
+      .setBaseDir(baseDir)
+      .build();
+    var analyzeCommand = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> analysisConfig, NO_OP_ISSUE_LISTENER, null, progressMonitor, TASK_MANAGER,
+      inputFiles -> pause(300), ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    analysisScheduler.post(analyzeCommand);
+
+    analysisScheduler.stop();
     engineStopped = true;
 
-    await().until(futureWaitCommand3::isDone);
-    assertThat(futureWaitCommand3).isCompletedWithValue("SUCCESS");
-    assertThat(futureWaitCommand1).isCompleted();
-    assertThat(futureWaitCommand2).isCompleted();
+    await().until(analyzeCommand.getFutureResult()::isDone);
+    assertThat(analyzeCommand.getFutureResult())
+      .isCancelled();
+    assertThat(progressMonitor.isCanceled()).isTrue();
   }
 
   @Test
-  void should_cancel_progress_monitor_of_executing_command_when_stopping() {
-    var futureLongCommand = analysisEngine.post((moduleRegistry, progressMonitor) -> {
-      await().atMost(Duration.ofSeconds(5)).until(progressMonitor::isCanceled);
-      return "CANCELED";
-    }, progressMonitor);
-    // let the engine run the command
-    pause(500);
+  void should_cancel_pending_commands_when_stopping(@TempDir Path baseDir) throws IOException {
+    var content = """
+      def foo():
+        x = 9; # trailing comment
+      """;
+    ClientInputFile inputFile = preparePythonInputFile(baseDir, content);
 
-    analysisEngine.stop();
+    AnalysisConfiguration analysisConfig = AnalysisConfiguration.builder()
+      .addInputFiles(inputFile)
+      .addActiveRules(trailingCommentRule())
+      .setBaseDir(baseDir)
+      .build();
+    var analyzeCommand = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> analysisConfig, NO_OP_ISSUE_LISTENER, null, progressMonitor, TASK_MANAGER,
+      inputFiles -> pause(300), ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    var secondAnalyzeCommand = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> analysisConfig, NO_OP_ISSUE_LISTENER, null, progressMonitor,
+      TASK_MANAGER, NO_OP_ANALYSIS_STARTED_CONSUMER, ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    analysisScheduler.post(analyzeCommand);
+    analysisScheduler.post(secondAnalyzeCommand);
+
+    analysisScheduler.stop();
     engineStopped = true;
 
-    await().until(futureLongCommand::isDone);
-    assertThat(futureLongCommand).isCompletedWithValue("CANCELED");
+    await().until(analyzeCommand.getFutureResult()::isDone);
+    assertThat(analyzeCommand.getFutureResult())
+      .isCancelled();
+    assertThat(secondAnalyzeCommand.getFutureResult())
+      .isCancelled();
+    assertThat(progressMonitor.isCanceled()).isTrue();
   }
 
   @Test
-  void should_cancel_pending_commands_when_stopping() {
-    var futureLongCommand = analysisEngine.post((moduleRegistry, progressMonitor) -> {
-      while (!engineStopped) {
-        // make the command block until canceled
-      }
-      return null;
-    }, progressMonitor);
-    var futureRegister = analysisEngine.post(new RegisterModuleCommand(new ClientModuleInfo("moduleKey", aModuleFileSystem())), progressMonitor);
+  void should_interrupt_executing_thread_when_stopping(@TempDir Path baseDir) throws IOException {
+    var content = """
+      def foo():
+        x = 9; # trailing comment
+      """;
+    ClientInputFile inputFile = preparePythonInputFile(baseDir, content);
+
+    AnalysisConfiguration analysisConfig = AnalysisConfiguration.builder()
+      .addInputFiles(inputFile)
+      .addActiveRules(trailingCommentRule())
+      .setBaseDir(baseDir)
+      .build();
+    var threadTermination = new AtomicReference<String>();
+    var analyzeCommand = new AnalyzeCommand("moduleKey", UUID.randomUUID(), TriggerType.FORCED, () -> analysisConfig, NO_OP_ISSUE_LISTENER, null, progressMonitor, TASK_MANAGER,
+      inputFiles -> {
+        try {
+          Thread.sleep(3000);
+        } catch (InterruptedException e) {
+          threadTermination.set("INTERRUPTED");
+          return;
+        }
+        threadTermination.set("FINISHED");
+      }, ANALYSIS_READY_SUPPLIER, List.of(), Map.of());
+    analysisScheduler.post(analyzeCommand);
     // let the engine run the first command
-    pause(500);
+    pause(200);
 
-    analysisEngine.stop();
+    analysisScheduler.stop();
     engineStopped = true;
 
-    await().until(futureLongCommand::isDone);
-    assertThat(futureRegister).isCancelled();
-  }
-
-  @Test
-  void should_interrupt_executing_thread_when_stopping() {
-    var futureLongCommand = analysisEngine.post((moduleRegistry, progressMonitor) -> {
-      try {
-        Thread.sleep(3000);
-      } catch (InterruptedException e) {
-        return "INTERRUPTED";
-      }
-      return "FINISHED";
-    }, progressMonitor);
-    // let the engine run the first command
-    pause(500);
-
-    analysisEngine.stop();
-    engineStopped = true;
-
-    await().until(futureLongCommand::isDone);
-    assertThat(futureLongCommand).isCompletedWithValue("INTERRUPTED");
+    await().until(analyzeCommand.getFutureResult()::isDone);
+    assertThat(threadTermination).hasValue("INTERRUPTED");
   }
 
   @Test
@@ -220,7 +238,7 @@ class AnalysisEngineMediumTests {
     // let the engine block waiting for the first command
     pause(500);
 
-    analysisEngine.stop();
+    analysisScheduler.stop();
 
     // let the engine stop properly
     pause(1000);
@@ -259,13 +277,6 @@ class AnalysisEngineMediumTests {
       public Stream<ClientInputFile> files() {
         return Stream.of();
       }
-    };
-  }
-
-  private static Command<String> waitCommand(long period) {
-    return (moduleRegistry, progressMonitor) -> {
-      pause(period);
-      return "SUCCESS";
     };
   }
 

@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.18.99001</version>
+    <version>10.19.1-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-commons</artifactId>
@@ -58,7 +58,7 @@
     <dependency>
       <groupId>io.sentry</groupId>
       <artifactId>sentry</artifactId>
-      <version>8.0.0</version>
+      <version>${sentry.version}</version>
     </dependency>
     <dependency>
       <groupId>jakarta.inject</groupId>

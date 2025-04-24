@@ -17,25 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.progress;
+package org.sonarsource.sonarlint.core.analysis;
 
-import java.util.UUID;
-import javax.annotation.Nullable;
-import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ProgressUpdateNotification;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.progress.ReportProgressParams;
+import java.net.URI;
+import java.util.List;
+import java.util.Set;
 
-public class ClientProgressNotifier implements ProgressNotifier {
-  private final SonarLintRpcClient client;
-  private final UUID taskId;
-
-  public ClientProgressNotifier(SonarLintRpcClient client, UUID taskId) {
-    this.client = client;
-    this.taskId = taskId;
-  }
-
-  @Override
-  public void notify(@Nullable String message, @Nullable Integer percentage) {
-    client.reportProgress(new ReportProgressParams(taskId.toString(), new ProgressUpdateNotification(message, percentage)));
-  }
+public record AnalysisResult(Set<URI> failedAnalysisFiles, List<RawIssue> rawIssues) {
 }

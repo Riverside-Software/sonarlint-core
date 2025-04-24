@@ -40,7 +40,7 @@ import org.sonarsource.sonarlint.core.SonarProjectsCache;
 import org.sonarsource.sonarlint.core.TokenGeneratorHelper;
 import org.sonarsource.sonarlint.core.UserPaths;
 import org.sonarsource.sonarlint.core.VersionSoonUnsupportedHelper;
-import org.sonarsource.sonarlint.core.analysis.AnalysisEngineCache;
+import org.sonarsource.sonarlint.core.analysis.AnalysisSchedulerCache;
 import org.sonarsource.sonarlint.core.analysis.AnalysisService;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
 import org.sonarsource.sonarlint.core.analysis.UserAnalysisPropertiesRepository;
@@ -79,6 +79,7 @@ import org.sonarsource.sonarlint.core.plugin.PluginsRepository;
 import org.sonarsource.sonarlint.core.plugin.PluginsService;
 import org.sonarsource.sonarlint.core.plugin.skipped.SkippedPluginsNotifierService;
 import org.sonarsource.sonarlint.core.plugin.skipped.SkippedPluginsRepository;
+import org.sonarsource.sonarlint.core.progress.ClientAwareTaskManager;
 import org.sonarsource.sonarlint.core.promotion.PromotionService;
 import org.sonarsource.sonarlint.core.remediation.aicodefix.AiCodeFixService;
 import org.sonarsource.sonarlint.core.reporting.FindingReportingService;
@@ -178,7 +179,7 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   OrganizationsCache.class,
   BindingCandidatesFinder.class,
   SharedConnectedModeSettingsProvider.class,
-  AnalysisEngineCache.class,
+  AnalysisSchedulerCache.class,
   PromotionService.class,
   KnownFindingsStorageService.class,
   TrackingService.class,
@@ -189,7 +190,8 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   OpenFilesRepository.class,
   DogfoodEnvironmentDetectionService.class,
   MonitoringService.class,
-  AiCodeFixService.class
+  AiCodeFixService.class,
+  ClientAwareTaskManager.class,
 })
 public class SonarLintSpringAppConfig {
 

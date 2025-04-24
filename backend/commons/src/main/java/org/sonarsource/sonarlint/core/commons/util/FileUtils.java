@@ -17,30 +17,24 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.commons.progress;
+package org.sonarsource.sonarlint.core.commons.util;
 
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.sonarsource.sonarlint.core.commons.api.progress.CanceledException;
-import org.sonarsource.sonarlint.core.commons.api.progress.ClientProgressMonitor;
+import java.net.URI;
+import java.nio.file.Path;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+public class FileUtils {
 
-class ProgressMonitorTests {
-  private ProgressMonitor progress;
-  private ClientProgressMonitor monitor;
-
-  @BeforeEach
-  void setUp() {
-    monitor = mock(ClientProgressMonitor.class);
-    progress = new ProgressMonitor(monitor);
+  public static Path getFilePathFromUri(URI uri) {
+    try {
+      // In case the path contains non-ASCII characters, Path.of() will fail, we should first try to encode the path via toURL()
+      return Path.of(uri.toURL().getPath());
+    } catch (Exception e) {
+      return Path.of(uri);
+    }
   }
 
-  @Test
-  void testCancel() {
-    when(monitor.isCanceled()).thenReturn(true);
-    assertThrows(CanceledException.class, () -> progress.checkCancel());
+  private FileUtils() {
+    // utility class
   }
+
 }

@@ -30,6 +30,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.Configur
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddConfigurationScopesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidOpenFileParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.IssueSeverity;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
@@ -72,14 +73,15 @@ class AnalysisReadinessMediumTests {
         </project>""");
     var fileUri = filePath.toUri();
     var server = harness.newFakeSonarQubeServer()
-      .withProject("projectKey")
+      .withPlugin(TestPlugin.XML)
+      .withProject("projectKey", project -> project.withQualityProfile("qp"))
+      .withQualityProfile("qp", qualityProfile -> qualityProfile.withLanguage("xml").withActiveRule("xml:S3421", activeRule -> activeRule.withSeverity(IssueSeverity.MAJOR)))
       .start();
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
     var backend = harness.newBackend()
-      .withSonarQubeConnection("connectionId", server.baseUrl(),
-        storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "BLOCKER"))))
+      .withSonarQubeConnection("connectionId", server.baseUrl())
       .withBoundConfigScope(CONFIG_SCOPE_ID, "connectionId", "projectKey")
       .withFullSynchronization()
       .withExtraEnabledLanguagesInConnectedMode(Language.XML)
@@ -87,13 +89,13 @@ class AnalysisReadinessMediumTests {
 
     verify(client, never()).didChangeAnalysisReadiness(Set.of(CONFIG_SCOPE_ID), true);
 
-    //File opened but not analyzed since analysis is not ready yet
+    // File opened but not analyzed since analysis is not ready yet
     backend.getFileService().didOpenFile(new DidOpenFileParams(CONFIG_SCOPE_ID, fileUri));
     verify(client, never()).raiseIssues(eq(CONFIG_SCOPE_ID), any(), eq(false), any());
 
     client.waitForSynchronization();
 
-    //analysis is ready
+    // analysis is ready
     await().atMost(1, TimeUnit.SECONDS)
       .untilAsserted(() -> verify(client).didChangeAnalysisReadiness(Set.of(CONFIG_SCOPE_ID), true));
     await().atMost(1, TimeUnit.SECONDS).untilAsserted(() -> assertThat(client.getRaisedIssuesForScopeId(CONFIG_SCOPE_ID)).isNotEmpty());

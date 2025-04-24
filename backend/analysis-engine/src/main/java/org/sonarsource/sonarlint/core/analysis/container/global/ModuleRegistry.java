@@ -34,7 +34,7 @@ import org.sonarsource.sonarlint.core.plugin.commons.container.SpringComponentCo
 public class ModuleRegistry {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
-  private final ConcurrentHashMap<Object, ModuleContainer> moduleContainersByKey = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<String, ModuleContainer> moduleContainersByKey = new ConcurrentHashMap<>();
   private final SpringComponentContainer parent;
 
   public ModuleRegistry(SpringComponentContainer parent, Supplier<List<ClientModuleInfo>> modulesProvider) {
@@ -42,8 +42,8 @@ public class ModuleRegistry {
     modulesProvider.get().forEach(this::registerModule);
   }
 
-  public ModuleContainer registerModule(ClientModuleInfo moduleInfo) {
-    return moduleContainersByKey.computeIfAbsent(moduleInfo.key(), id -> createContainer(id, moduleInfo.fileSystem()));
+  public void registerModule(ClientModuleInfo moduleInfo) {
+    moduleContainersByKey.computeIfAbsent(moduleInfo.key(), id -> createContainer(id, moduleInfo.fileSystem()));
   }
 
   private ModuleContainer createContainer(Object moduleKey, @Nullable ClientModuleFileSystem clientFileSystem) {
@@ -55,7 +55,6 @@ public class ModuleRegistry {
     moduleContainer.startComponents();
     return moduleContainer;
   }
-
   public ModuleContainer createTransientContainer(Iterable<ClientInputFile> filesToAnalyze) {
     LOG.debug("Creating transient module container");
     var moduleContainer = new ModuleContainer(parent, true);
@@ -64,7 +63,7 @@ public class ModuleRegistry {
     return moduleContainer;
   }
 
-  public void unregisterModule(Object moduleKey) {
+  public void unregisterModule(String moduleKey) {
     if (!moduleContainersByKey.containsKey(moduleKey)) {
       // can this happen ?
       return;
@@ -79,7 +78,7 @@ public class ModuleRegistry {
   }
 
   @CheckForNull
-  public ModuleContainer getContainerFor(Object moduleKey) {
+  public ModuleContainer getContainerFor(String moduleKey) {
     return moduleContainersByKey.get(moduleKey);
   }
 }

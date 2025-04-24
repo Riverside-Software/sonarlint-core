@@ -22,23 +22,21 @@ package org.sonarsource.sonarlint.core.analysis.command;
 import org.sonarsource.sonarlint.core.analysis.api.ClientModuleFileEvent;
 import org.sonarsource.sonarlint.core.analysis.container.global.ModuleRegistry;
 import org.sonarsource.sonarlint.core.analysis.container.module.ModuleFileEventNotifier;
-import org.sonarsource.sonarlint.core.commons.progress.ProgressMonitor;
 
-public class NotifyModuleEventCommand implements Command<Void> {
-  private final Object moduleKey;
+public class NotifyModuleEventCommand extends Command {
+  private final String moduleKey;
   private final ClientModuleFileEvent event;
 
-  public NotifyModuleEventCommand(Object moduleKey, ClientModuleFileEvent event) {
+  public NotifyModuleEventCommand(String moduleKey, ClientModuleFileEvent event) {
     this.moduleKey = moduleKey;
     this.event = event;
   }
 
   @Override
-  public Void execute(ModuleRegistry moduleRegistry, ProgressMonitor progressMonitor) {
+  public void execute(ModuleRegistry moduleRegistry) {
     var moduleContainer = moduleRegistry.getContainerFor(moduleKey);
     if (moduleContainer != null) {
       moduleContainer.getComponentByType(ModuleFileEventNotifier.class).fireModuleFileEvent(event);
     }
-    return null;
   }
 }

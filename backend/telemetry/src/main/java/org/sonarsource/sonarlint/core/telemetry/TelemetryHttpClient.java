@@ -35,8 +35,8 @@ import org.sonarsource.sonarlint.core.http.HttpClientProvider;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryClientConstantAttributesDto;
 import org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresDimension;
-import org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresValue;
 import org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresPayload;
+import org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresValue;
 import org.sonarsource.sonarlint.core.telemetry.payload.HotspotPayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.IssuePayload;
 import org.sonarsource.sonarlint.core.telemetry.payload.ShareConnectedModePayload;
@@ -151,6 +151,9 @@ public class TelemetryHttpClient {
       values.add(new TelemetryMeasuresValue("shared_connected_mode.imported", String.valueOf(data.getImportedAddedBindingsCount()), INTEGER, DAILY));
       values.add(new TelemetryMeasuresValue("shared_connected_mode.auto", String.valueOf(data.getAutoAddedBindingsCount()), INTEGER, DAILY));
       values.add(new TelemetryMeasuresValue("shared_connected_mode.exported", String.valueOf(data.getExportedConnectedModeCount()), INTEGER, DAILY));
+      values.add(new TelemetryMeasuresValue("bindings.server_count", String.valueOf(telemetryLiveAttrs.countSonarQubeServerBindings()), INTEGER, DAILY));
+      values.add(new TelemetryMeasuresValue("bindings.cloud_eu_count", String.valueOf(telemetryLiveAttrs.countSonarQubeCloudEUBindings()), INTEGER, DAILY));
+      values.add(new TelemetryMeasuresValue("bindings.cloud_us_count", String.valueOf(telemetryLiveAttrs.countSonarQubeCloudUSBindings()), INTEGER, DAILY));
     }
 
     data.getHelpAndFeedbackLinkClickedCounter().entrySet().stream()
@@ -162,6 +165,18 @@ public class TelemetryHttpClient {
         DAILY
       ))
       .forEach(values::add);
+
+    var allQuickFixCount = data.getQuickFixCountByRuleKey().values().stream()
+      .mapToInt(Integer::intValue)
+      .sum();
+    if (allQuickFixCount > 0) {
+      values.add(new TelemetryMeasuresValue(
+        "quick_fix.applied_count",
+        Integer.toString(allQuickFixCount),
+        INTEGER,
+        DAILY
+      ));
+    }
 
     return new TelemetryMeasuresPayload(UUID.randomUUID().toString(), platform, data.installTime(), product, TelemetryMeasuresDimension.INSTALLATION, values);
   }

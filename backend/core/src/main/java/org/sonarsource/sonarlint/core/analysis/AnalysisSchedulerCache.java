@@ -29,12 +29,11 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.PreDestroy;
 import org.sonarsource.sonarlint.core.UserPaths;
-import org.sonarsource.sonarlint.core.analysis.api.AnalysisEngineConfiguration;
+import org.sonarsource.sonarlint.core.analysis.api.AnalysisSchedulerConfiguration;
 import org.sonarsource.sonarlint.core.analysis.api.ClientModuleInfo;
 import org.sonarsource.sonarlint.core.analysis.command.RegisterModuleCommand;
 import org.sonarsource.sonarlint.core.analysis.command.UnregisterModuleCommand;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
-import org.sonarsource.sonarlint.core.commons.progress.ProgressMonitor;
 import org.sonarsource.sonarlint.core.event.ConnectionConfigurationRemovedEvent;
 import org.sonarsource.sonarlint.core.fs.ClientFileSystemService;
 import org.sonarsource.sonarlint.core.plugin.PluginsService;
@@ -45,7 +44,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 import org.sonarsource.sonarlint.core.sync.PluginsSynchronizedEvent;
 import org.springframework.context.event.EventListener;
 
-public class AnalysisEngineCache {
+public class AnalysisSchedulerCache {
   private final Path workDir;
   private final ClientFileSystemService clientFileSystemService;
   private final ConfigurationRepository configurationRepository;
@@ -53,10 +52,10 @@ public class AnalysisEngineCache {
   private final NodeJsService nodeJsService;
   private final Map<String, String> extraProperties = new HashMap<>();
   private final Path csharpOssPluginPath;
-  private final AtomicReference<AnalysisEngine> standaloneEngine = new AtomicReference<>();
-  private final Map<String, AnalysisEngine> connectedEnginesByConnectionId = new ConcurrentHashMap<>();
+  private final AtomicReference<AnalysisScheduler> standaloneScheduler = new AtomicReference<>();
+  private final Map<String, AnalysisScheduler> connectedSchedulerByConnectionId = new ConcurrentHashMap<>();
 
-  public AnalysisEngineCache(ConfigurationRepository configurationRepository, NodeJsService nodeJsService, InitializeParams initializeParams, UserPaths userPaths,
+  public AnalysisSchedulerCache(InitializeParams initializeParams, UserPaths userPaths, ConfigurationRepository configurationRepository, NodeJsService nodeJsService,
     PluginsService pluginsService, ClientFileSystemService clientFileSystemService) {
     this.configurationRepository = configurationRepository;
     this.pluginsService = pluginsService;
@@ -81,57 +80,60 @@ public class AnalysisEngineCache {
   }
 
   @CheckForNull
-  public AnalysisEngine getAnalysisEngineIfStarted(String configurationScopeId) {
+  public AnalysisScheduler getAnalysisSchedulerIfStarted(String configurationScopeId) {
     return configurationRepository.getEffectiveBinding(configurationScopeId)
-      .map(binding -> getConnectedEngineIfStarted(binding.connectionId()))
-      .orElseGet(this::getStandaloneEngineIfStarted);
+      .map(binding -> getConnectedSchedulerIfStarted(binding.connectionId()))
+      .orElseGet(this::getStandaloneSchedulerIfStarted);
   }
 
-  public AnalysisEngine getOrCreateAnalysisEngine(String configurationScopeId) {
+  public AnalysisScheduler getOrCreateAnalysisScheduler(String configurationScopeId) {
     return configurationRepository.getEffectiveBinding(configurationScopeId)
-      .map(binding -> getOrCreateConnectedEngine(binding.connectionId()))
-      .orElseGet(this::getOrCreateStandaloneEngine);
+      .map(binding -> getOrCreateConnectedScheduler(binding.connectionId()))
+      .orElseGet(this::getOrCreateStandaloneScheduler);
   }
 
-  private synchronized AnalysisEngine getOrCreateConnectedEngine(String connectionId) {
-    return connectedEnginesByConnectionId.computeIfAbsent(connectionId,
-      k -> createEngine(pluginsService.getPlugins(connectionId), pluginsService.getEffectivePathToCsharpAnalyzer(connectionId)));
+  private synchronized AnalysisScheduler getOrCreateConnectedScheduler(String connectionId) {
+    return connectedSchedulerByConnectionId.computeIfAbsent(connectionId,
+      k -> createScheduler(pluginsService.getPlugins(connectionId), pluginsService.getEffectivePathToCsharpAnalyzer(connectionId)));
   }
 
   @CheckForNull
-  private synchronized AnalysisEngine getConnectedEngineIfStarted(String connectionId) {
-    return connectedEnginesByConnectionId.get(connectionId);
+  private synchronized AnalysisScheduler getConnectedSchedulerIfStarted(String connectionId) {
+    return connectedSchedulerByConnectionId.get(connectionId);
   }
 
-  private synchronized AnalysisEngine getOrCreateStandaloneEngine() {
-    var engine = standaloneEngine.get();
-    if (engine == null) {
-      engine = createEngine(pluginsService.getEmbeddedPlugins(), csharpOssPluginPath);
-      standaloneEngine.set(engine);
+  private synchronized AnalysisScheduler getOrCreateStandaloneScheduler() {
+    var scheduler = standaloneScheduler.get();
+    if (scheduler == null) {
+      scheduler = createScheduler(pluginsService.getEmbeddedPlugins(), csharpOssPluginPath);
+      standaloneScheduler.set(scheduler);
     }
-    return engine;
+    return scheduler;
   }
 
   @CheckForNull
-  private synchronized AnalysisEngine getStandaloneEngineIfStarted() {
-    return standaloneEngine.get();
+  private synchronized AnalysisScheduler getStandaloneSchedulerIfStarted() {
+    return standaloneScheduler.get();
   }
 
-  private AnalysisEngine createEngine(LoadedPlugins plugins, @Nullable Path actualCsharpAnalyzerPath) {
+  private AnalysisScheduler createScheduler(LoadedPlugins plugins, @Nullable Path actualCsharpAnalyzerPath) {
+    return new AnalysisScheduler(createSchedulerConfiguration(actualCsharpAnalyzerPath), plugins, SonarLintLogger.get().getTargetForCopy());
+  }
+
+  private AnalysisSchedulerConfiguration createSchedulerConfiguration(@Nullable Path actualCsharpAnalyzerPath) {
     var activeNodeJs = nodeJsService.getActiveNodeJs();
     var nodeJsPath = activeNodeJs == null ? null : activeNodeJs.getPath();
     var fullExtraProperties = new HashMap<>(extraProperties);
     if (actualCsharpAnalyzerPath != null) {
       fullExtraProperties.put("sonar.cs.internal.analyzerPath", actualCsharpAnalyzerPath.toString());
     }
-    var analysisEngineConfiguration = AnalysisEngineConfiguration.builder()
+    return AnalysisSchedulerConfiguration.builder()
       .setWorkDir(workDir)
       .setClientPid(ProcessHandle.current().pid())
       .setExtraProperties(fullExtraProperties)
       .setNodeJs(nodeJsPath)
       .setModulesProvider(this::getModules)
       .build();
-    return new AnalysisEngine(analysisEngineConfiguration, plugins, SonarLintLogger.get().getTargetForCopy());
   }
 
   private List<ClientModuleInfo> getModules() {
@@ -144,64 +146,76 @@ public class AnalysisEngineCache {
 
   @EventListener
   public void onConnectionRemoved(ConnectionConfigurationRemovedEvent event) {
-    stopEngineGracefully(event.getRemovedConnectionId());
+    stop(event.getRemovedConnectionId());
   }
 
   @EventListener
   public void onPluginsSynchronized(PluginsSynchronizedEvent event) {
-    stopEngineGracefully(event.getConnectionId());
+    var newPlugins = pluginsService.reloadPluginsFromStorage(event.connectionId());
+    resetScheduler(event.connectionId(), newPlugins);
   }
 
   @EventListener
   public void onClientNodeJsPathChanged(ClientNodeJsPathChanged event) {
-    stopAllGracefully();
+    resetStartedSchedulers();
   }
 
   @PreDestroy
   public void shutdown() {
-    stopAll();
-  }
-
-  private synchronized void stopEngineGracefully(String event) {
-    var engine = connectedEnginesByConnectionId.remove(event);
-    if (engine != null) {
-      engine.finishGracefully();
+    try {
+      stopAll();
+    } catch (Exception e) {
+      SonarLintLogger.get().error("Error shutting down analysis scheduler cache", e);
     }
   }
 
-  private synchronized void stopAllGracefully() {
-    var standaloneAnalysisEngine = this.standaloneEngine.get();
-    if (standaloneAnalysisEngine != null) {
-      standaloneAnalysisEngine.finishGracefully();
-      this.standaloneEngine.set(null);
+  private synchronized void resetScheduler(String connectionId, LoadedPlugins newPlugins) {
+    connectedSchedulerByConnectionId.computeIfPresent(connectionId, (k, scheduler) -> {
+      scheduler.reset(createSchedulerConfiguration(pluginsService.getEffectivePathToCsharpAnalyzer(connectionId)), newPlugins);
+      return scheduler;
+    });
+  }
+
+  private synchronized void resetStartedSchedulers() {
+    var standaloneAnalysisScheduler = this.standaloneScheduler.get();
+    if (standaloneAnalysisScheduler != null) {
+      standaloneAnalysisScheduler.reset(createSchedulerConfiguration(csharpOssPluginPath), pluginsService.getEmbeddedPlugins());
     }
-    connectedEnginesByConnectionId.forEach((connectionId, engine) -> engine.finishGracefully());
-    connectedEnginesByConnectionId.clear();
+    connectedSchedulerByConnectionId.forEach(
+      (connectionId, scheduler) -> scheduler.reset(createSchedulerConfiguration(pluginsService.getEffectivePathToCsharpAnalyzer(connectionId)),
+        pluginsService.getPlugins(connectionId)));
   }
 
   private synchronized void stopAll() {
-    var standaloneAnalysisEngine = this.standaloneEngine.get();
-    if (standaloneAnalysisEngine != null) {
-      standaloneAnalysisEngine.stop();
-      this.standaloneEngine.set(null);
+    var standaloneAnalysisScheduler = this.standaloneScheduler.get();
+    if (standaloneAnalysisScheduler != null) {
+      standaloneAnalysisScheduler.stop();
+      this.standaloneScheduler.set(null);
     }
-    connectedEnginesByConnectionId.forEach((connectionId, engine) -> engine.stop());
-    connectedEnginesByConnectionId.clear();
+    connectedSchedulerByConnectionId.forEach((connectionId, scheduler) -> scheduler.stop());
+    connectedSchedulerByConnectionId.clear();
+  }
+
+  private synchronized void stop(String connectionId) {
+    var scheduler = connectedSchedulerByConnectionId.remove(connectionId);
+    if (scheduler != null) {
+      scheduler.stop();
+    }
   }
 
   public void registerModuleIfLeafConfigScope(String scopeId) {
-    var analysisEngine = getAnalysisEngineIfStarted(scopeId);
-    if (analysisEngine != null && configurationRepository.isLeafConfigScope(scopeId)) {
+    var analysisScheduler = getAnalysisSchedulerIfStarted(scopeId);
+    if (analysisScheduler != null && configurationRepository.isLeafConfigScope(scopeId)) {
       var backendModuleFileSystem = new BackendModuleFileSystem(clientFileSystemService, scopeId);
       var clientModuleInfo = new ClientModuleInfo(scopeId, backendModuleFileSystem);
-      analysisEngine.post(new RegisterModuleCommand(clientModuleInfo), new ProgressMonitor(null));
+      analysisScheduler.post(new RegisterModuleCommand(clientModuleInfo));
     }
   }
 
-  public void unregisterModule(String scopeId) {
-    var analysisEngine = getAnalysisEngineIfStarted(scopeId);
-    if (analysisEngine != null && configurationRepository.isLeafConfigScope(scopeId)) {
-      analysisEngine.post(new UnregisterModuleCommand(scopeId), new ProgressMonitor(null));
+  public void unregisterModule(String scopeId, @Nullable String connectionId) {
+    var analysisScheduler = connectionId == null ? getStandaloneSchedulerIfStarted() : getConnectedSchedulerIfStarted(connectionId);
+    if (analysisScheduler != null) {
+      analysisScheduler.post(new UnregisterModuleCommand(scopeId));
     }
   }
 }

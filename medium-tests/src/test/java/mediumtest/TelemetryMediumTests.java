@@ -148,6 +148,7 @@ class TelemetryMediumTests {
       .withSonarQubeConnection("connectionId", "http://localhost:12345", storage -> storage.withProject("projectKey", project -> project.withMainBranch("master")))
       .withBoundConfigScope("scopeId", "connectionId", "projectKey")
       .withTelemetryEnabled(telemetryEndpointMock.baseUrl() + "/sonarlint-telemetry")
+      .withEnabledLanguageInStandaloneMode(Language.JS)
       .start(fakeClient);
 
     backend.getHotspotService().openHotspotInBrowser(new OpenHotspotInBrowserParams("scopeId", "ab12ef45"));
@@ -194,6 +195,7 @@ class TelemetryMediumTests {
 
     var backend = harness.newBackend()
       .withTelemetryEnabled(telemetryEndpointMock.baseUrl() + "/sonarlint-telemetry")
+      .withEnabledLanguageInStandaloneMode(Language.JS)
       .start(fakeClient);
 
     assertThat(backend.getTelemetryService().getStatus().get().isEnabled()).isTrue();
@@ -221,6 +223,7 @@ class TelemetryMediumTests {
 
     var backend = harness.newBackend()
       .withTelemetryEnabled(telemetryEndpointMock.baseUrl() + "/sonarlint-telemetry")
+      .withEnabledLanguageInStandaloneMode(Language.JS)
       .start(fakeClient);
 
     assertThat(backend.getTelemetryService().getStatus().get().isEnabled()).isTrue();
@@ -431,21 +434,26 @@ class TelemetryMediumTests {
   @SonarLintTest
   void it_should_add_issue_uuid_when_ai_fixable(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml", """
-    <?xml version="1.0" encoding="UTF-8"?>
-    <project>
-      <modelVersion>4.0.0</modelVersion>
-      <groupId>com.foo</groupId>
-      <artifactId>bar</artifactId>
-      <version>${pom.version}</version>
-    </project>""");
+      <?xml version="1.0" encoding="UTF-8"?>
+      <project>
+        <modelVersion>4.0.0</modelVersion>
+        <groupId>com.foo</groupId>
+        <artifactId>bar</artifactId>
+        <version>${pom.version}</version>
+      </project>""");
     var fileUri = filePath.toUri();
     var fakeClient = harness.newFakeClient()
       .withInitialFs("configScope", baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), "configScope", false, null, filePath, null, null, true)))
       .build();
+    var server = harness.newFakeSonarCloudServer()
+      .withOrganization("organizationKey", organization -> organization
+        .withProject("projectKey"))
+      .start();
     var backend = harness.newBackend()
       .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
+      .withSonarQubeCloudEuRegionUri(server.baseUrl())
       .withSonarCloudConnection("connectionId", "organizationKey", true, storage -> storage
-        .withProject("projectKey", project -> project.withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "MAJOR")))
+        .withProject("projectKey", project -> project.withMainBranch("main").withRuleSet("xml", ruleSet -> ruleSet.withActiveRule("xml:S3421", "MAJOR")))
         .withAiCodeFixSettings(aiCodeFix -> aiCodeFix
           .withSupportedRules(Set.of("xml:S3421"))
           .organizationEligible(true)

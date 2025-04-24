@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Implementation
+ * SonarLint Core - RPC Implementation
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,14 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.progress;
+package org.sonarsource.sonarlint.core.rpc.impl;
 
-import org.jetbrains.annotations.Nullable;
+import org.sonarsource.sonarlint.core.commons.progress.TaskManager;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.progress.CancelTaskParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.progress.TaskProgressRpcService;
 
-public class NoOpProgressNotifier implements ProgressNotifier {
+public class TaskProgressRpcServiceDelegate extends AbstractRpcServiceDelegate implements TaskProgressRpcService {
+
+  public TaskProgressRpcServiceDelegate(SonarLintRpcServerImpl sonarLintRpcServer) {
+    super(sonarLintRpcServer);
+  }
 
   @Override
-  public void notify(@Nullable String message, @Nullable Integer percentage) {
-    // no-op
+  public void cancelTask(CancelTaskParams params) {
+    notify(() -> getBean(TaskManager.class).cancel(params.getTaskId()));
   }
 }
