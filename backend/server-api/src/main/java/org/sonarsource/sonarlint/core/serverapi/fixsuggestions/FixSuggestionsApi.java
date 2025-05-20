@@ -41,7 +41,8 @@ public class FixSuggestionsApi {
   public AiSuggestionResponseBodyDto getAiSuggestion(AiSuggestionRequestBodyDto dto, SonarLintCancelMonitor cancelMonitor) {
     // avoid Gson replacing characters like < > or = with Unicode representation
     var gson = new GsonBuilder().disableHtmlEscaping().create();
-    try (var response = helper.apiPost("/fix-suggestions/ai-suggestions", JSON_CONTENT_TYPE, gson.toJson(dto), cancelMonitor)) {
+    try (var response = helper.isSonarCloud() ? helper.apiPost("/fix-suggestions/ai-suggestions", JSON_CONTENT_TYPE, gson.toJson(dto), cancelMonitor)
+      : helper.post("/api/v2/fix-suggestions/ai-suggestions", JSON_CONTENT_TYPE, gson.toJson(dto), cancelMonitor)) {
       return gson.fromJson(response.bodyAsString(), AiSuggestionResponseBodyDto.class);
     } catch (Exception e) {
       LOG.error("Error while generating an AI CodeFix", e);
@@ -50,8 +51,9 @@ public class FixSuggestionsApi {
   }
 
   public SupportedRulesResponseDto getSupportedRules(SonarLintCancelMonitor cancelMonitor) {
-
-    try (var response = helper.apiGet("/fix-suggestions/supported-rules", cancelMonitor)) {
+    try (
+      var response = helper.isSonarCloud() ? helper.apiGet("/fix-suggestions/supported-rules", cancelMonitor)
+        : helper.get("/api/v2/fix-suggestions/supported-rules", cancelMonitor)) {
       return new Gson().fromJson(response.bodyAsString(), SupportedRulesResponseDto.class);
     } catch (Exception e) {
       LOG.error("Error while fetching the list of AI CodeFix supported rules", e);

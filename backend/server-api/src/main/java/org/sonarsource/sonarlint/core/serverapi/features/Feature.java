@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Implementation
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,25 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.impl;
+package org.sonarsource.sonarlint.core.serverapi.features;
 
-import java.util.concurrent.CompletableFuture;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.RevokeTokenParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.UserTokenRpcService;
-import org.sonarsource.sonarlint.core.usertoken.UserTokenService;
+import java.util.Arrays;
+import java.util.Optional;
 
-public class UserTokenRpcServiceDelegate extends AbstractRpcServiceDelegate implements UserTokenRpcService {
+public enum Feature {
+  AI_CODE_FIX("fix-suggestions");
 
-  public UserTokenRpcServiceDelegate(SonarLintRpcServerImpl server) {
-    super(server);
+  public static Optional<Feature> fromKey(String key) {
+    return Arrays.stream(values()).filter(f -> f.key.equals(key)).findFirst();
   }
 
-  @Override
-  public CompletableFuture<Void> revokeToken(RevokeTokenParams params) {
-    return requestAsync(cancelMonitor -> {
-      getBean(UserTokenService.class).revokeToken(params, cancelMonitor);
-      return null;
-    });
+  private final String key;
+
+  Feature(String key) {
+    this.key = key;
   }
 
+  public String getKey() {
+    return key;
+  }
 }

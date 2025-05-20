@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Plugin Commons
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,7 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-@ParametersAreNonnullByDefault
-package org.sonar.api.profiles;
+package org.sonarsource.sonarlint.core.serverapi.component;
 
-import javax.annotation.ParametersAreNonnullByDefault;
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ServerProjectTests {
+  @Test
+  void testGetters() {
+    ServerProject project = new ServerProject("key", "name", false);
+
+    assertThat(project.key()).isEqualTo("key");
+    assertThat(project.name()).isEqualTo("name");
+  }
+
+}

@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Plugin Commons
+ * SonarLint Core - Implementation
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,17 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonar.api.profiles;
+package org.sonarsource.sonarlint.core.event;
 
-import org.sonar.api.utils.ValidationMessages;
-
-/**
- * This class was removed from the plugin API but still used in Cobol analyzer 4.4
- *
- */
-@Deprecated
-public abstract class ProfileDefinition {
-
-  public abstract RulesProfile createProfile(ValidationMessages validation);
-
+public record MatchingSessionEndedEvent(long newIssuesFound, long issuesFixed) {
 }

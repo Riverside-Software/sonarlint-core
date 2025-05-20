@@ -19,32 +19,14 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-public class FixSuggestionReceivedParams {
-  private final String suggestionId;
-  private final AiSuggestionSource aiSuggestionsSource;
-  private final int snippetsCount;
-  private final boolean wasGeneratedFromIde;
+public class AnalysisReportingTriggeredParams {
+  private final AnalysisReportingType analysisType;
 
-  public FixSuggestionReceivedParams(String suggestionId, AiSuggestionSource aiSuggestionsSource, int snippetsCount, boolean wasGeneratedFromIde) {
-    this.suggestionId = suggestionId;
-    this.aiSuggestionsSource = aiSuggestionsSource;
-    this.snippetsCount = snippetsCount;
-    this.wasGeneratedFromIde = wasGeneratedFromIde;
+  public AnalysisReportingTriggeredParams(AnalysisReportingType analysisType) {
+    this.analysisType = analysisType;
   }
 
-  public String getSuggestionId() {
-    return suggestionId;
-  }
-
-  public AiSuggestionSource getAiSuggestionsSource() {
-    return aiSuggestionsSource;
-  }
-
-  public int getSnippetsCount() {
-    return snippetsCount;
-  }
-
-  public boolean wasGeneratedFromIde() {
-    return wasGeneratedFromIde;
+  public AnalysisReportingType getAnalysisType() {
+    return analysisType;
   }
 }

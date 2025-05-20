@@ -38,7 +38,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.eclipse.jgit.util.FileUtils.RECURSIVE;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.Mockito.doReturn;
@@ -108,9 +108,9 @@ class NativeGitWrapperTests {
     var line2Date = blameResult.getLatestChangeDateForLinesInFile(fileA, List.of(2)).get();
     var line3Date = blameResult.getLatestChangeDateForLinesInFile(fileA, List.of(3)).get();
 
-    assertThat(ChronoUnit.MINUTES.between(line1Date.toInstant(), oneYearAndFourMonthsAgo)).isZero();
-    assertThat(ChronoUnit.MINUTES.between(line2Date.toInstant(), oneYearAndFourMonthsAgo)).isZero();
-    assertThat(ChronoUnit.MINUTES.between(line3Date.toInstant(), oneYearAndFourMonthsAgo)).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line1Date, oneYearAndFourMonthsAgo)).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line2Date, oneYearAndFourMonthsAgo)).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line3Date, oneYearAndFourMonthsAgo)).isZero();
   }
 
   @Test
@@ -148,11 +148,22 @@ class NativeGitWrapperTests {
     var line3Date = blameResult.getLatestChangeDateForLinesInFile(fileA, List.of(3)).get();
     // provided blame time limit is 180 days, but effective period will be 1 year
     // line 1 was committed 1 year ago but should have commit date of the first commit made earlier than blame time window - 8 months ago
-    assertThat(ChronoUnit.MINUTES.between(line2Date.toInstant(), line1Date.toInstant())).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line2Date, line1Date)).isZero();
     // line 2 was committed 8 months ago, it's outside the blame time window, but it's a first commit outside the range, so it has real commit date
-    assertThat(ChronoUnit.MINUTES.between(line2Date.toInstant(), eightMonthsAgo)).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line2Date, eightMonthsAgo)).isZero();
     // line 3 was committed 4 months ago, it's inside the blame time window, so it has real commit date
-    assertThat(ChronoUnit.MINUTES.between(line3Date.toInstant(), fourMonthsAgo)).isZero();
+    assertThat(ChronoUnit.MINUTES.between(line3Date, fourMonthsAgo)).isZero();
   }
 
+  @Test
+  void it_should_not_blame_file_on_git_command_error() {
+    assumeTrue(new NativeGitWrapper().getNativeGitExecutable().isPresent());
+    var fileAStr = "fileA";
+    var fileA = projectDirPath.resolve(fileAStr);
+
+    var blameResult = underTest.blameFromNativeCommand(projectDirPath, Set.of(fileA.toUri()), Instant.now());
+
+    assertThat(logTester.logs()).contains("Command failed with code: 128 and output fatal: no such path 'fileA' in HEAD");
+    assertThat(blameResult.isEmpty()).isTrue();
+  }
 }

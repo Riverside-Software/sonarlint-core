@@ -17,28 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-public class RevokeTokenParams {
-  private final String baseUrl;
-  private final String tokenName;
-  private final String tokenValue;
+public enum AnalysisReportingType {
+  VCS_CHANGED_ANALYSIS_TYPE("trigger_count_vcs_changed_files"),
+  ALL_FILES_ANALYSIS_TYPE("trigger_count_all_project_files"),
+  PRE_COMMIT_ANALYSIS_TYPE("trigger_count_pre_commit");
 
-  public RevokeTokenParams(String baseUrl, String tokenName, String tokenValue) {
-    this.baseUrl = baseUrl;
-    this.tokenName = tokenName;
-    this.tokenValue = tokenValue;
+  private final String id;
+
+  AnalysisReportingType(String id) {
+    this.id = id;
   }
 
-  public String getBaseUrl() {
-    return baseUrl;
-  }
-
-  public String getTokenName() {
-    return tokenName;
-  }
-
-  public String getTokenValue() {
-    return tokenValue;
+  public String getId() {
+    return id;
   }
 }

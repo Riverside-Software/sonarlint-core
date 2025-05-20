@@ -17,17 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.check;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize;
 
-public class CheckSmartNotificationsSupportedResponse {
-
-  private final boolean success;
-
-  public CheckSmartNotificationsSupportedResponse(boolean success) {
-    this.success = success;
-  }
-
-  public boolean isSuccess() {
-    return success;
-  }
+public enum BackendCapability {
+  SMART_NOTIFICATIONS,
+  PROJECT_SYNCHRONIZATION,
+  EMBEDDED_SERVER,
+  SECURITY_HOTSPOTS,
+  SERVER_SENT_EVENTS,
+  DATAFLOW_BUG_DETECTION,
+  FULL_SYNCHRONIZATION,
+  TELEMETRY,
+  MONITORING
 }

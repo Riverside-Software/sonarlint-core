@@ -34,6 +34,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.OpenHotspotInBrowserParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryMigrationDto;
@@ -41,6 +42,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddQuickFixAppliedForRuleParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddReportedRulesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisDoneOnSingleLanguageParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisReportingTriggeredParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisReportingType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.DevNotificationsClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
@@ -68,6 +71,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.sonarsource.sonarlint.core.telemetry.TelemetrySpringConfig.PROPERTY_TELEMETRY_ENDPOINT;
 import static utils.AnalysisUtils.analyzeFileAndGetIssue;
+import static utils.AnalysisUtils.analyzeFileAndGetIssues;
 
 class TelemetryMediumTests {
 
@@ -349,6 +353,15 @@ class TelemetryMediumTests {
   }
 
   @SonarLintTest
+  void it_should_record_anaysisReportingTriggered(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().analysisReportingTriggered(new AnalysisReportingTriggeredParams(AnalysisReportingType.ALL_FILES_ANALYSIS_TYPE));
+    await().untilAsserted(() -> assertThat(backend.telemetryFilePath()).content().asBase64Decoded().asString().contains(
+      "\"analysisReportingCountersByType\":{\"ALL_FILES_ANALYSIS_TYPE\":{\"analysisReportingCount\":1}}"));
+  }
+
+  @SonarLintTest
   void it_should_record_fixSuggestionResolved(SonarLintTestHarness harness) {
     var backend = setupClientAndBackend(harness);
 
@@ -475,6 +488,46 @@ class TelemetryMediumTests {
       .start();
 
     assertThat(backend.getTelemetryService().getStatus().get().isEnabled()).isFalse();
+  }
+
+
+  @SonarLintTest
+  void it_should_count_new_and_fixed_issues(SonarLintTestHarness harness, @TempDir Path baseDir) {
+    var filePath = createFile(baseDir, "sample.py", """
+      def empty_function1():
+        pass
+      
+      def empty_function2():
+        pass
+      """);
+
+    var fileUri = filePath.toUri();
+    var configScope = "configScope";
+    var fakeClient = harness.newFakeClient()
+      .withInitialFs(configScope, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), configScope, false, null, filePath, null, Language.PYTHON, true)))
+      .build();
+    var backend = harness.newBackend()
+      .withConnectedEmbeddedPluginAndEnabledLanguage(TestPlugin.PYTHON)
+      .withUnboundConfigScope(configScope)
+      .withTelemetryEnabled()
+      .start(fakeClient);
+
+    var issuesBefore = analyzeFileAndGetIssues(fileUri, fakeClient, backend, configScope);
+    assertThat(issuesBefore).hasSize(2);
+
+    var newContent = """
+      def empty_function2():
+        pass
+      """;
+    var updatedFile = new ClientFileDto(fileUri, baseDir.relativize(filePath), configScope, false, null, filePath, newContent, Language.PYTHON, true);
+    backend.getFileService().didUpdateFileSystem(new DidUpdateFileSystemParams(List.of(), List.of(updatedFile), List.of()));
+
+    var issuesAfter = analyzeFileAndGetIssues(fileUri, fakeClient, backend, configScope);
+    assertThat(issuesAfter).hasSize(1);
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFilePath()).content().asBase64Decoded().asString()
+      .contains("""
+        "newIssuesFoundCount":2,"issuesFixedCount":1"""));
   }
 
   private SonarLintTestRpcServer setupClientAndBackend(SonarLintTestHarness harness) {
