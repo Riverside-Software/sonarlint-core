@@ -28,7 +28,7 @@ class UserPathsTests {
 
   @Test
   void default_home_should_be_in_user_home() {
-    assertThat(UserPaths.computeUserHome(null)).isEqualTo(Paths.get(System.getProperty("user.home")).resolve(".sonarlint"));
+    assertThat(UserPaths.computeUserHome(null)).isEqualTo(Paths.get(System.getProperty("user.home")).resolve(".sonarlint-cabl"));
   }
 
   @Test
