@@ -46,6 +46,7 @@ import org.sonarsource.sonarlint.core.commons.SonarLintBlameResult;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.git.GitService;
 import org.sonarsource.sonarlint.core.commons.util.git.exceptions.GitException;
+import org.sonarsource.sonarlint.core.event.MatchingSessionEndedEvent;
 import org.sonarsource.sonarlint.core.file.PathTranslationService;
 import org.sonarsource.sonarlint.core.local.only.LocalOnlyIssueStorageService;
 import org.sonarsource.sonarlint.core.newcode.NewCodeService;
@@ -64,6 +65,7 @@ import org.sonarsource.sonarlint.core.tracking.matching.MatchingSession;
 import org.sonarsource.sonarlint.core.tracking.matching.ServerHotspotMatchingAttributesMapper;
 import org.sonarsource.sonarlint.core.tracking.matching.ServerIssueMatchingAttributesMapper;
 import org.sonarsource.sonarlint.core.tracking.matching.TrackedIssueFindingMatchingAttributeMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
 import static java.util.Objects.requireNonNull;
@@ -83,11 +85,12 @@ public class TrackingService {
   private final LocalOnlyIssueStorageService localOnlyIssueStorageService;
   private final FindingsSynchronizationService findingsSynchronizationService;
   private final NewCodeService newCodeService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public TrackingService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, SonarProjectBranchTrackingService branchTrackingService,
     PathTranslationService pathTranslationService, FindingReportingService reportingService, KnownFindingsStorageService knownFindingsStorageService, StorageService storageService,
     LocalOnlyIssueRepository localOnlyIssueRepository, LocalOnlyIssueStorageService localOnlyIssueStorageService, FindingsSynchronizationService findingsSynchronizationService,
-    NewCodeService newCodeService) {
+    NewCodeService newCodeService, ApplicationEventPublisher eventPublisher) {
     this.client = client;
     this.configurationRepository = configurationRepository;
     this.branchTrackingService = branchTrackingService;
@@ -99,6 +102,7 @@ public class TrackingService {
     this.localOnlyIssueStorageService = localOnlyIssueStorageService;
     this.findingsSynchronizationService = findingsSynchronizationService;
     this.newCodeService = newCodeService;
+    this.eventPublisher = eventPublisher;
   }
 
   @EventListener
@@ -177,6 +181,7 @@ public class TrackingService {
     }
     issuesToReport.forEach((clientRelativePath, trackedIssues) -> storeTrackedIssues(knownFindingsStore, configurationScopeId, clientRelativePath, trackedIssues));
     hotspotsToReport.forEach((clientRelativePath, trackedHotspots) -> storeTrackedSecurityHotspots(knownFindingsStore, configurationScopeId, clientRelativePath, trackedHotspots));
+    eventPublisher.publishEvent(new MatchingSessionEndedEvent(matchingSession.countNewIssues(), matchingSession.countRemainingUnmatchedIssues()));
     return new MatchingResult(issuesToReport, hotspotsToReport);
   }
 
@@ -195,10 +200,10 @@ public class TrackingService {
 
   private List<TrackedIssue> matchWithServerIssues(Path serverRelativePath, List<ServerIssue<?>> serverIssues,
     List<LocalOnlyIssue> localOnlyIssues, Collection<TrackedIssue> trackedIssues) {
-    var serverIssueMatcher = new IssueMatcher<>(new TrackedIssueFindingMatchingAttributeMapper(), new ServerIssueMatchingAttributesMapper());
-    var serverMatchingResult = serverIssueMatcher.match(trackedIssues, serverIssues);
-    var localIssueMatcher = new IssueMatcher<>(new TrackedIssueFindingMatchingAttributeMapper(), new LocalOnlyIssueMatchingAttributesMapper());
-    var localMatchingResult = localIssueMatcher.match(trackedIssues, localOnlyIssues);
+    var serverIssueMatcher = new IssueMatcher<TrackedIssue, ServerIssue<?>>(new ServerIssueMatchingAttributesMapper(), serverIssues);
+    var serverMatchingResult = serverIssueMatcher.matchWith(new TrackedIssueFindingMatchingAttributeMapper(), trackedIssues);
+    var localIssueMatcher = new IssueMatcher<TrackedIssue, LocalOnlyIssue>(new LocalOnlyIssueMatchingAttributesMapper(), localOnlyIssues);
+    var localMatchingResult = localIssueMatcher.matchWith(new TrackedIssueFindingMatchingAttributeMapper(), trackedIssues);
     var matches = trackedIssues.stream().map(trackedIssue -> {
       var matchToServer = serverMatchingResult.getMatch(trackedIssue);
       if (matchToServer != null) {
@@ -217,8 +222,8 @@ public class TrackingService {
   }
 
   private static List<TrackedIssue> matchWithServerHotspots(Collection<ServerHotspot> serverHotspots, Collection<TrackedIssue> trackedIssues) {
-    var serverIssueMatcher = new IssueMatcher<>(new TrackedIssueFindingMatchingAttributeMapper(), new ServerHotspotMatchingAttributesMapper());
-    var serverMatchingResult = serverIssueMatcher.match(trackedIssues, serverHotspots);
+    var serverIssueMatcher = new IssueMatcher<TrackedIssue, ServerHotspot>(new ServerHotspotMatchingAttributesMapper(), serverHotspots);
+    var serverMatchingResult = serverIssueMatcher.matchWith(new TrackedIssueFindingMatchingAttributeMapper(), trackedIssues);
     return trackedIssues.stream().map(trackedIssue -> {
       var matchToServer = serverMatchingResult.getMatch(trackedIssue);
       if (matchToServer != null) {
@@ -313,13 +318,7 @@ public class TrackingService {
       .orElse(Instant.now());
   }
 
-  private static class MatchingResult {
-    public final Map<Path, List<TrackedIssue>> issuesToReport;
-    public final Map<Path, List<TrackedIssue>> hotspotsToReport;
-
-    public MatchingResult(Map<Path, List<TrackedIssue>> issuesToReport, Map<Path, List<TrackedIssue>> hotspotsToReport) {
-      this.issuesToReport = issuesToReport;
-      this.hotspotsToReport = hotspotsToReport;
-    }
+  private record MatchingResult(Map<Path, List<TrackedIssue>> issuesToReport,
+                                       Map<Path, List<TrackedIssue>> hotspotsToReport) {
   }
 }

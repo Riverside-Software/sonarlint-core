@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Implementation
+ * SonarLint Core - Implementation
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,25 +17,8 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.impl;
+package org.sonarsource.sonarlint.core.connection;
 
-import java.util.concurrent.CompletableFuture;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.RevokeTokenParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.UserTokenRpcService;
-import org.sonarsource.sonarlint.core.usertoken.UserTokenService;
-
-public class UserTokenRpcServiceDelegate extends AbstractRpcServiceDelegate implements UserTokenRpcService {
-
-  public UserTokenRpcServiceDelegate(SonarLintRpcServerImpl server) {
-    super(server);
-  }
-
-  @Override
-  public CompletableFuture<Void> revokeToken(RevokeTokenParams params) {
-    return requestAsync(cancelMonitor -> {
-      getBean(UserTokenService.class).revokeToken(params, cancelMonitor);
-      return null;
-    });
-  }
-
+public enum SonarQubeClientState {
+  ACTIVE, INVALID_CREDENTIALS, MISSING_PERMISSION
 }

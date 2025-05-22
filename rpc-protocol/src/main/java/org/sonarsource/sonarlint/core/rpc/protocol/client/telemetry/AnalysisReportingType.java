@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server API
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,19 +17,20 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverapi.component;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-import org.junit.jupiter.api.Test;
+public enum AnalysisReportingType {
+  VCS_CHANGED_ANALYSIS_TYPE("trigger_count_vcs_changed_files"),
+  ALL_FILES_ANALYSIS_TYPE("trigger_count_all_project_files"),
+  PRE_COMMIT_ANALYSIS_TYPE("trigger_count_pre_commit");
 
-import static org.assertj.core.api.Assertions.assertThat;
+  private final String id;
 
-class DefaultRemoteProjectTests {
-  @Test
-  void testGetters() {
-    ServerProject project = new DefaultRemoteProject("key", "name");
-
-    assertThat(project.getKey()).isEqualTo("key");
-    assertThat(project.getName()).isEqualTo("name");
+  AnalysisReportingType(String id) {
+    this.id = id;
   }
 
+  public String getId() {
+    return id;
+  }
 }

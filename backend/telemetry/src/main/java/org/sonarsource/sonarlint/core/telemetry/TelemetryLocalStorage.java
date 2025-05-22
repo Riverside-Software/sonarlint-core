@@ -34,6 +34,7 @@ import java.util.UUID;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AiSuggestionSource;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisReportingType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
 
 import static java.time.temporal.ChronoUnit.DAYS;
@@ -60,6 +61,7 @@ public class TelemetryLocalStorage {
   private final Set<String> quickFixesApplied;
   private final Map<String, Integer> quickFixCountByRuleKey;
   private final Map<String, TelemetryHelpAndFeedbackCounter> helpAndFeedbackLinkClickedCount;
+  private final Map<AnalysisReportingType, TelemetryAnalysisReportingCounter> analysisReportingCountersByType;
   private final Map<String, TelemetryFixSuggestionReceivedCounter> fixSuggestionReceivedCounter;
   private final Map<String, List<TelemetryFixSuggestionResolvedStatus>> fixSuggestionResolved;
   private final Set<UUID> issuesUuidAiFixableSeen;
@@ -69,6 +71,8 @@ public class TelemetryLocalStorage {
   private int importedAddedBindingsCount;
   private int autoAddedBindingsCount;
   private int exportedConnectedModeCount;
+  private long newIssuesFoundCount;
+  private long issuesFixedCount;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -80,6 +84,7 @@ public class TelemetryLocalStorage {
     quickFixesApplied = new HashSet<>();
     quickFixCountByRuleKey = new LinkedHashMap<>();
     helpAndFeedbackLinkClickedCount = new LinkedHashMap<>();
+    analysisReportingCountersByType = new LinkedHashMap<>();
     fixSuggestionReceivedCounter = new LinkedHashMap<>();
     fixSuggestionResolved = new LinkedHashMap<>();
     issuesUuidAiFixableSeen = new HashSet<>();
@@ -98,6 +103,7 @@ public class TelemetryLocalStorage {
   }
 
   public void addQuickFixAppliedForRule(String ruleKey) {
+    markSonarLintAsUsedToday();
     this.quickFixesApplied.add(ruleKey);
     var currentCountForKey = this.quickFixCountByRuleKey.getOrDefault(ruleKey, 0);
     this.quickFixCountByRuleKey.put(ruleKey, currentCountForKey + 1);
@@ -117,7 +123,7 @@ public class TelemetryLocalStorage {
     return installDate;
   }
 
-  OffsetDateTime installTime() {
+  public OffsetDateTime installTime() {
     return installTime;
   }
 
@@ -144,6 +150,10 @@ public class TelemetryLocalStorage {
 
   public Map<String, TelemetryHelpAndFeedbackCounter> getHelpAndFeedbackLinkClickedCounter() {
     return helpAndFeedbackLinkClickedCount;
+  }
+
+  public Map<AnalysisReportingType, TelemetryAnalysisReportingCounter> getAnalysisReportingCountersByType() {
+    return analysisReportingCountersByType;
   }
 
   public Map<String, TelemetryFixSuggestionReceivedCounter> getFixSuggestionReceivedCounter() {
@@ -198,6 +208,7 @@ public class TelemetryLocalStorage {
     quickFixesApplied.clear();
     quickFixCountByRuleKey.clear();
     helpAndFeedbackLinkClickedCount.clear();
+    analysisReportingCountersByType.clear();
     fixSuggestionReceivedCounter.clear();
     fixSuggestionResolved.clear();
     issuesUuidAiFixableSeen.clear();
@@ -206,6 +217,8 @@ public class TelemetryLocalStorage {
     importedAddedBindingsCount = 0;
     autoAddedBindingsCount = 0;
     exportedConnectedModeCount = 0;
+    newIssuesFoundCount = 0;
+    issuesFixedCount = 0;
   }
 
   long numUseDays() {
@@ -371,6 +384,10 @@ public class TelemetryLocalStorage {
     this.helpAndFeedbackLinkClickedCount.computeIfAbsent(itemId, k -> new TelemetryHelpAndFeedbackCounter()).incrementHelpAndFeedbackLinkClickedCount();
   }
 
+  public void analysisReportingTriggered(AnalysisReportingType analysisType) {
+    this.analysisReportingCountersByType.computeIfAbsent(analysisType, k -> new TelemetryAnalysisReportingCounter()).incrementAnalysisReportingCount();
+  }
+
   public void incrementHotspotStatusChangedCount() {
     markSonarLintAsUsedToday();
     hotspotStatusChangedCount++;
@@ -441,4 +458,21 @@ public class TelemetryLocalStorage {
     return exportedConnectedModeCount;
   }
 
+  public void addNewlyFoundIssues(long newIssues) {
+    markSonarLintAsUsedToday();
+    newIssuesFoundCount += newIssues;
+  }
+
+  public long getNewIssuesFoundCount() {
+    return newIssuesFoundCount;
+  }
+
+  public void addFixedIssues(long fixedIssues) {
+    markSonarLintAsUsedToday();
+    issuesFixedCount += fixedIssues;
+  }
+
+  public long getIssuesFixedCount() {
+    return issuesFixedCount;
+  }
 }

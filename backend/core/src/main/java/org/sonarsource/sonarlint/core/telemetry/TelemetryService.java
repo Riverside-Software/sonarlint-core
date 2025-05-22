@@ -35,12 +35,14 @@ import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
 import org.sonarsource.sonarlint.core.event.FixSuggestionReceivedEvent;
 import org.sonarsource.sonarlint.core.event.LocalOnlyIssueStatusChangedEvent;
+import org.sonarsource.sonarlint.core.event.MatchingSessionEndedEvent;
 import org.sonarsource.sonarlint.core.event.ServerIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.GetStatusResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedFindingDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisReportingTriggeredParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.HelpAndFeedbackClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
@@ -48,6 +50,7 @@ import org.springframework.context.event.EventListener;
 
 import static java.util.Optional.ofNullable;
 import static java.util.concurrent.TimeUnit.MINUTES;
+import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.TELEMETRY;
 
 public class TelemetryService {
 
@@ -62,7 +65,7 @@ public class TelemetryService {
 
   public TelemetryService(InitializeParams initializeParams, SonarLintRpcClient sonarlintClient,
     TelemetryServerAttributesProvider telemetryServerAttributesProvider, TelemetryManager telemetryManager) {
-    this.isTelemetryFeatureEnabled = initializeParams.getFeatureFlags().isEnableTelemetry();
+    this.isTelemetryFeatureEnabled = initializeParams.getBackendCapabilities().contains(TELEMETRY);
     this.client = sonarlintClient;
     this.telemetryServerAttributesProvider = telemetryServerAttributesProvider;
     this.telemetryManager = telemetryManager;
@@ -163,6 +166,10 @@ public class TelemetryService {
     updateTelemetry(localStorage -> localStorage.helpAndFeedbackLinkClicked(params.getItemId()));
   }
 
+  public void analysisReportingTriggered(AnalysisReportingTriggeredParams params) {
+    updateTelemetry(localStorage -> localStorage.analysisReportingTriggered(params.getAnalysisType()));
+  }
+
   public void fixSuggestionResolved(FixSuggestionResolvedParams params) {
     updateTelemetry(localStorage -> localStorage.fixSuggestionResolved(params.getSuggestionId(), params.getStatus(), params.getSnippetIndex()));
   }
@@ -224,6 +231,14 @@ public class TelemetryService {
 
   public void exportedConnectedMode() {
     updateTelemetry(TelemetryLocalStorage::incrementExportedConnectedModeCount);
+  }
+
+  @EventListener
+  public void onMatchingSessionEnded(MatchingSessionEndedEvent event) {
+    updateTelemetry(telemetryLocalStorage -> {
+      telemetryLocalStorage.addNewlyFoundIssues(event.newIssuesFound());
+      telemetryLocalStorage.addFixedIssues(event.issuesFixed());
+    });
   }
 
   @EventListener

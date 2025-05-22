@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server API
+ * SonarLint Core - Telemetry
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,24 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverapi.component;
+package org.sonarsource.sonarlint.core.telemetry;
 
-public class DefaultRemoteProject implements ServerProject {
-  private final String key;
-  private final String name;
+public class TelemetryAnalysisReportingCounter {
+  private int analysisReportingCount;
 
-  public DefaultRemoteProject(String key, String name) {
-    this.key = key;
-    this.name = name;
+  public TelemetryAnalysisReportingCounter() {
   }
 
-  @Override
-  public String getKey() {
-    return key;
+  public TelemetryAnalysisReportingCounter(int analysisReportingTriggered) {
+    this.analysisReportingCount = analysisReportingTriggered;
   }
 
-  @Override
-  public String getName() {
-    return name;
+  public int getAnalysisReportingCount() {
+    return analysisReportingCount;
+  }
+
+  public void incrementAnalysisReportingCount() {
+    this.analysisReportingCount++;
   }
 }

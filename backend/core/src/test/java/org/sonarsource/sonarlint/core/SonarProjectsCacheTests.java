@@ -21,13 +21,13 @@ package org.sonarsource.sonarlint.core;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.mockito.Mockito;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
-import org.sonarsource.sonarlint.core.connection.ServerConnection;
 import org.sonarsource.sonarlint.core.event.ConnectionConfigurationRemovedEvent;
 import org.sonarsource.sonarlint.core.event.ConnectionConfigurationUpdatedEvent;
 import org.sonarsource.sonarlint.core.serverapi.ServerApi;
@@ -36,12 +36,10 @@ import org.sonarsource.sonarlint.core.serverapi.component.ServerProject;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static testutils.TestUtils.mockServerApiProvider;
 
 class SonarProjectsCacheTests {
   @RegisterExtension
@@ -52,48 +50,17 @@ class SonarProjectsCacheTests {
   public static final String PROJECT_KEY_2 = "projectKey2";
   public static final String PROJECT_NAME_1 = "Project 1";
   public static final String PROJECT_NAME_2 = "Project 2";
-  public static final ServerProject PROJECT_1 = new ServerProject() {
-    @Override
-    public String getKey() {
-      return PROJECT_KEY_1;
-    }
-
-    @Override
-    public String getName() {
-      return PROJECT_NAME_1;
-    }
-  };
-  public static final ServerProject PROJECT_1_CHANGED = new ServerProject() {
-    @Override
-    public String getKey() {
-      return PROJECT_KEY_1;
-    }
-
-    @Override
-    public String getName() {
-      return PROJECT_NAME_2;
-    }
-  };
-  public static final ServerProject PROJECT_2 = new ServerProject() {
-    @Override
-    public String getKey() {
-      return PROJECT_KEY_2;
-    }
-
-    @Override
-    public String getName() {
-      return PROJECT_NAME_2;
-    }
-  };
-  private final ConnectionManager connectionManager = mockServerApiProvider();
+  public static final ServerProject PROJECT_1 = new ServerProject(PROJECT_KEY_1, PROJECT_NAME_1, false);
+  public static final ServerProject PROJECT_1_CHANGED = new ServerProject(PROJECT_KEY_1, PROJECT_NAME_2, false);
+  public static final ServerProject PROJECT_2 = new ServerProject(PROJECT_KEY_2, PROJECT_NAME_2, false);
   private final ServerApi serverApi = mock(ServerApi.class, Mockito.RETURNS_DEEP_STUBS);
-  private final SonarProjectsCache underTest = new SonarProjectsCache(connectionManager);
+  private final SonarQubeClientManager sonarQubeClientManager = mock(SonarQubeClientManager.class);
+  private final SonarProjectsCache underTest = new SonarProjectsCache(sonarQubeClientManager);
 
   @BeforeEach
-  public void setup() {
-    doReturn(Optional.of(serverApi)).when(connectionManager).getServerApi(SQ_1);
-    var serverConnection = new ServerConnection(SQ_1, serverApi, null);
-    doReturn(Optional.of(serverConnection)).when(connectionManager).tryGetConnection(SQ_1);
+  void setup() {
+    when(sonarQubeClientManager.withActiveClientAndReturn(any(), any())).thenAnswer(
+      invocation -> Optional.ofNullable(((Function<ServerApi, Object>) invocation.getArguments()[1]).apply(serverApi)));
   }
 
   @Test
@@ -105,15 +72,14 @@ class SonarProjectsCacheTests {
     var sonarProjectCall1 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall1).isPresent();
-    assertThat(sonarProjectCall1.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall1.get().getName()).isEqualTo(PROJECT_NAME_1);
+    assertThat(sonarProjectCall1.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall1.get().name()).isEqualTo(PROJECT_NAME_1);
 
     var sonarProjectCall2 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall2).isPresent();
-    assertThat(sonarProjectCall2.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall2.get().getName()).isEqualTo(PROJECT_NAME_1);
-
+    assertThat(sonarProjectCall2.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall2.get().name()).isEqualTo(PROJECT_NAME_1);
     verify(serverApi.component(), times(1)).getProject(eq(PROJECT_KEY_1), any(SonarLintCancelMonitor.class));
   }
 
@@ -130,7 +96,6 @@ class SonarProjectsCacheTests {
     var sonarProjectCall2 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall2).isEmpty();
-
     verify(serverApi.component(), times(1)).getProject(eq(PROJECT_KEY_1), any(SonarLintCancelMonitor.class));
   }
 
@@ -142,17 +107,16 @@ class SonarProjectsCacheTests {
     var sonarProjectCall1 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall1).isPresent();
-    assertThat(sonarProjectCall1.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall1.get().getName()).isEqualTo(PROJECT_NAME_1);
+    assertThat(sonarProjectCall1.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall1.get().name()).isEqualTo(PROJECT_NAME_1);
 
     underTest.connectionRemoved(new ConnectionConfigurationRemovedEvent(SQ_1));
 
     var sonarProjectCall2 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall2).isPresent();
-    assertThat(sonarProjectCall2.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall2.get().getName()).isEqualTo(PROJECT_NAME_1);
-
+    assertThat(sonarProjectCall2.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall2.get().name()).isEqualTo(PROJECT_NAME_1);
     verify(serverApi.component(), times(2)).getProject(eq(PROJECT_KEY_1), any(SonarLintCancelMonitor.class));
   }
 
@@ -165,17 +129,16 @@ class SonarProjectsCacheTests {
     var sonarProjectCall1 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall1).isPresent();
-    assertThat(sonarProjectCall1.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall1.get().getName()).isEqualTo(PROJECT_NAME_1);
+    assertThat(sonarProjectCall1.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall1.get().name()).isEqualTo(PROJECT_NAME_1);
 
     underTest.connectionUpdated(new ConnectionConfigurationUpdatedEvent(SQ_1));
 
     var sonarProjectCall2 = underTest.getSonarProject(SQ_1, PROJECT_KEY_1, new SonarLintCancelMonitor());
 
     assertThat(sonarProjectCall2).isPresent();
-    assertThat(sonarProjectCall2.get().getKey()).isEqualTo(PROJECT_KEY_1);
-    assertThat(sonarProjectCall2.get().getName()).isEqualTo(PROJECT_NAME_2);
-
+    assertThat(sonarProjectCall2.get().key()).isEqualTo(PROJECT_KEY_1);
+    assertThat(sonarProjectCall2.get().name()).isEqualTo(PROJECT_NAME_2);
     verify(serverApi.component(), times(2)).getProject(eq(PROJECT_KEY_1), any(SonarLintCancelMonitor.class));
   }
 
@@ -192,7 +155,6 @@ class SonarProjectsCacheTests {
     var searchIndex2 = underTest.getTextSearchIndex(SQ_1, new SonarLintCancelMonitor());
 
     assertThat(searchIndex2.size()).isEqualTo(2);
-
     verify(serverApi.component(), times(1)).getAllProjects(any());
   }
 
@@ -206,10 +168,9 @@ class SonarProjectsCacheTests {
 
     assertThat(searchIndex1.isEmpty()).isTrue();
 
-    var searchIndex2 = underTest.getTextSearchIndex(SQ_1, new SonarLintCancelMonitor());
+    underTest.getTextSearchIndex(SQ_1, new SonarLintCancelMonitor());
 
     assertThat(searchIndex1.isEmpty()).isTrue();
-
     verify(serverApi.component(), times(1)).getAllProjects(any());
   }
 
@@ -223,10 +184,9 @@ class SonarProjectsCacheTests {
 
     assertThat(searchIndex1.isEmpty()).isTrue();
 
-    var searchIndex2 = underTest.getTextSearchIndex(SQ_1, new SonarLintCancelMonitor());
+    underTest.getTextSearchIndex(SQ_1, new SonarLintCancelMonitor());
 
     assertThat(searchIndex1.isEmpty()).isTrue();
-
     verify(serverApi.component(), times(1)).getAllProjects(any());
   }
 }

@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Implementation
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,28 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.usertoken;
+package org.sonarsource.sonarlint.core.serverapi.features;
 
-import org.sonarsource.sonarlint.core.ConnectionManager;
+import com.google.gson.Gson;
+import java.util.Arrays;
+import java.util.Set;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.RevokeTokenParams;
+import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
+import org.sonarsource.sonarlint.core.serverapi.exception.UnexpectedBodyException;
 
-public class UserTokenService {
-
+public class FeaturesApi {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
 
-  private final ConnectionManager connectionManager;
+  private final ServerApiHelper helper;
 
-  public UserTokenService(ConnectionManager connectionManager) {
-    this.connectionManager = connectionManager;
+  public FeaturesApi(ServerApiHelper helper) {
+    this.helper = helper;
   }
 
-  public void revokeToken(RevokeTokenParams params, SonarLintCancelMonitor cancelMonitor) {
-    LOG.debug(String.format("Revoking token '%s'", params.getTokenName()));
-    connectionManager.getServerApi(params.getBaseUrl(), null, params.getTokenValue())
-      .userTokens()
-      .revoke(params.getTokenName(), cancelMonitor);
+  public Set<String> list(SonarLintCancelMonitor cancelMonitor) {
+    try (var response = helper.rawGet("api/features/list", cancelMonitor)) {
+      var responseStr = response.bodyAsString();
+      var features = new Gson().fromJson(responseStr, String[].class);
+      return Set.copyOf(Arrays.asList(features));
+    } catch (Exception e) {
+      LOG.error("Error while fetching the list of features", e);
+      throw new UnexpectedBodyException(e);
+    }
   }
-
 }

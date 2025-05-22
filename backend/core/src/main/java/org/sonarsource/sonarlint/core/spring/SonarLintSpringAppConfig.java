@@ -30,7 +30,7 @@ import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingClueProvider;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
 import org.sonarsource.sonarlint.core.ConfigurationService;
-import org.sonarsource.sonarlint.core.ConnectionManager;
+import org.sonarsource.sonarlint.core.SonarQubeClientManager;
 import org.sonarsource.sonarlint.core.ConnectionService;
 import org.sonarsource.sonarlint.core.ConnectionSuggestionProvider;
 import org.sonarsource.sonarlint.core.OrganizationsCache;
@@ -105,7 +105,6 @@ import org.sonarsource.sonarlint.core.tracking.KnownFindingsStorageService;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
 import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TrackingService;
-import org.sonarsource.sonarlint.core.usertoken.UserTokenService;
 import org.sonarsource.sonarlint.core.websocket.WebSocketService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -116,6 +115,7 @@ import org.springframework.scheduling.support.TaskUtils;
 
 import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_PASSWORD;
 import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_STORE_TYPE;
+import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.MONITORING;
 
 @Configuration
 // Can't use classpath scanning in OSGi, so waiting to move out of process, we have to declare our beans manually
@@ -128,7 +128,7 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   ConfigurationService.class,
   ConfigurationRepository.class,
   RulesService.class,
-  ConnectionManager.class,
+  SonarQubeClientManager.class,
   ConnectionConfigurationRepository.class,
   RulesRepository.class,
   RulesExtractionHelper.class,
@@ -164,7 +164,6 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_S
   StorageService.class,
   SeverityModeService.class,
   NewCodeService.class,
-  UserTokenService.class,
   RequestHandlerBindingAssistant.class,
   TaintVulnerabilityTrackingService.class,
   SonarProjectBranchesSynchronizationService.class,
@@ -223,7 +222,7 @@ public class SonarLintSpringAppConfig {
 
   @Bean
   MonitoringInitializationParams provideMonitoringInitParams(InitializeParams params) {
-    return new MonitoringInitializationParams(params.getFeatureFlags().isEnableMonitoring(),
+    return new MonitoringInitializationParams(params.getBackendCapabilities().contains(MONITORING),
       params.getTelemetryConstantAttributes().getProductKey(),
       params.getTelemetryConstantAttributes().getProductVersion(),
       params.getTelemetryConstantAttributes().getIdeVersion());

@@ -19,5 +19,17 @@
  */
 package org.sonarsource.sonarlint.core.serverapi.component;
 
-public record Component(String key, String name, boolean isAiCodeFixEnabled) {
+import org.junit.jupiter.api.Test;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ServerProjectTests {
+  @Test
+  void testGetters() {
+    ServerProject project = new ServerProject("key", "name", false);
+
+    assertThat(project.key()).isEqualTo("key");
+    assertThat(project.name()).isEqualTo("name");
+  }
+
 }
