@@ -103,7 +103,24 @@ public class AnalysisConfiguration {
 
   protected void generateToStringCommon(StringBuilder sb) {
     sb.append("  baseDir: ").append(baseDir()).append("\n");
-    sb.append("  extraProperties: ").append(extraProperties()).append("\n");
+    sb.append("  extraProperties: ").append(generateExtraPropertiesString()).append("\n");
+  }
+
+  protected String generateExtraPropertiesString() {
+    var sb = new StringBuilder("{");
+    int pos = 0;
+    for (var entry : extraProperties.entrySet()) {
+      if (pos++ > 0) {
+        sb.append(", ");
+      }
+      sb.append(entry.getKey()) //
+      .append("=") //
+      .append("sonar.oe.license".equals(entry.getKey()) && entry.getValue().length() > 20 ? entry.getValue().substring(0, 20) : entry.getValue());
+
+    }
+    sb.append("}");
+
+    return sb.toString();
   }
 
   protected void generateToStringInputFiles(StringBuilder sb) {
