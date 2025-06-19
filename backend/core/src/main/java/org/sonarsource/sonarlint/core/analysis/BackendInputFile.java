@@ -32,9 +32,15 @@ import org.sonarsource.sonarlint.core.fs.ClientFile;
 
 public class BackendInputFile implements ClientInputFile {
   private final ClientFile clientFile;
+  private final Charset charset;
 
   public BackendInputFile(ClientFile clientFile) {
+    this(clientFile, StandardCharsets.UTF_8);
+  }
+
+  public BackendInputFile(ClientFile clientFile, Charset charset) {
     this.clientFile = clientFile;
+    this.charset = charset == null ? StandardCharsets.UTF_8 : charset;
   }
 
   @Override
@@ -50,7 +56,7 @@ public class BackendInputFile implements ClientInputFile {
   @Nullable
   @Override
   public Charset getCharset() {
-    return StandardCharsets.UTF_8;
+    return charset;
   }
 
   @Override
@@ -60,7 +66,6 @@ public class BackendInputFile implements ClientInputFile {
 
   @Override
   public InputStream inputStream() {
-    var charset = getCharset();
     return new ByteArrayInputStream(clientFile.getContent().getBytes(charset == null ? Charset.defaultCharset() : charset));
   }
 

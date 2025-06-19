@@ -20,6 +20,10 @@
 package org.sonarsource.sonarlint.core.analysis;
 
 import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.charset.IllegalCharsetNameException;
+import java.nio.charset.StandardCharsets;
+import java.nio.charset.UnsupportedCharsetException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
@@ -250,8 +254,22 @@ public class AnalysisService {
     var inferredAnalysisProperties = client
       .getInferredAnalysisProperties(new GetInferredAnalysisPropertiesParams(configScopeId, filesToAnalyze.stream().map(ClientFile::getUri).toList())).join().getProperties();
     analysisProperties.putAll(inferredAnalysisProperties);
+
+    // Sonarlint VSCode (CABL version) always set property sonar.sourceEncoding based on the value of the 'charset' attribute in openedge-project.json
+    var sourceEncodingProp = inferredAnalysisProperties.get("sonar.sourceEncoding");
+    Charset sourceEncoding = null;
+    if (sourceEncodingProp != null) {
+      try {
+        sourceEncoding = Charset.forName(sourceEncodingProp);
+      } catch (IllegalArgumentException uncaught) {
+        // Nothing...
+      }
+    }
+    final var fSrcEncoding = sourceEncoding != null ? sourceEncoding : StandardCharsets.UTF_8;
+    LOG.debug("Charset from analyzer properties: {}", fSrcEncoding);
+
     return AnalysisConfiguration.builder()
-      .addInputFiles(filesToAnalyze.stream().map(BackendInputFile::new).toList())
+      .addInputFiles(filesToAnalyze.stream().map(it -> new BackendInputFile(it, fSrcEncoding)).toList())
       .putAllExtraProperties(analysisProperties)
       // properties sent by client using new API were merged above
       // but this line is important for backward compatibility for clients directly triggering analysis
