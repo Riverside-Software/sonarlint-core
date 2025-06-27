@@ -210,11 +210,13 @@ public interface SonarLintRpcClient {
   CompletableFuture<MatchSonarProjectBranchResponse> matchSonarProjectBranch(MatchSonarProjectBranchParams params);
 
   /**
-   * Used for checking whether a locally checked out branch matches a candidate branch name (not necessarily a Sonar branch).
-   * For example, in "show fix suggestion" use-case, to match a local branch with a PR branch that originated a fix suggestion
+   * @deprecated Should not be implemented as it is not used anymore
    */
+  @Deprecated(since = "10.23", forRemoval = true)
   @JsonRequest
-  CompletableFuture<MatchProjectBranchResponse> matchProjectBranch(MatchProjectBranchParams params);
+  default CompletableFuture<MatchProjectBranchResponse> matchProjectBranch(MatchProjectBranchParams params) {
+    return CompletableFuture.completedFuture(new MatchProjectBranchResponse(true));
+  }
 
   @JsonNotification
   void didChangeMatchedSonarProjectBranch(DidChangeMatchedSonarProjectBranchParams params);

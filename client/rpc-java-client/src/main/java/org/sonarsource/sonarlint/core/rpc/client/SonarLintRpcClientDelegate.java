@@ -158,6 +158,7 @@ public interface SonarLintRpcClientDelegate {
    */
   boolean checkServerTrusted(List<X509CertificateDto> chain, String authType);
 
+  @Deprecated(since = "10.3")
   default void didReceiveServerHotspotEvent(DidReceiveServerHotspotEvent params) {
     // no-op
   }
@@ -169,7 +170,10 @@ public interface SonarLintRpcClientDelegate {
   String matchSonarProjectBranch(String configurationScopeId, String mainBranchName, Set<String> allBranchesNames,
     SonarLintCancelChecker cancelChecker) throws ConfigScopeNotFoundException;
 
-  boolean matchProjectBranch(String configurationScopeId, String branchNameToMatch, SonarLintCancelChecker cancelChecker) throws ConfigScopeNotFoundException;
+  @Deprecated(since = "10.23", forRemoval = true)
+  default boolean matchProjectBranch(String configurationScopeId, String branchNameToMatch, SonarLintCancelChecker cancelChecker) {
+    return true;
+  }
 
   void didChangeMatchedSonarProjectBranch(String configScopeId, String newMatchedBranchName);
 

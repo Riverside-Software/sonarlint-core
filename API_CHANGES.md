@@ -1,3 +1,9 @@
+# 10.23
+
+## Deprecation
+
+* Deprecate the `org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient#matchProjectBranch` method since it is not used anymore.
+
 # 10.22
 
 ## New features
