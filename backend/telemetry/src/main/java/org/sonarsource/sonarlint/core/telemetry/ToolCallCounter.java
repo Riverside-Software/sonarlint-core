@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server API
+ * SonarLint Core - Telemetry
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,7 +17,33 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverapi.fixsuggestions;
+package org.sonarsource.sonarlint.core.telemetry;
 
-public record OrganizationConfigsResponseDto(String organizationId, AiCodeFixConfiguration aiCodeFix) {
+public class ToolCallCounter {
+  private int success;
+  private int error;
+
+  public ToolCallCounter() {
+  }
+
+  public ToolCallCounter(int success, int error) {
+    this.success = success;
+    this.error = error;
+  }
+
+  public void incrementCount(boolean succeeded) {
+    if (succeeded) {
+      success++;
+    } else {
+      error++;
+    }
+  }
+
+  public int getSuccess() {
+    return success;
+  }
+
+  public int getError() {
+    return error;
+  }
 }

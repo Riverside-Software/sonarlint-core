@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server API
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,7 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverapi.fixsuggestions;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-public record OrganizationConfigsResponseDto(String organizationId, AiCodeFixConfiguration aiCodeFix) {
+public class ToolCalledParams {
+  private final String toolName;
+  private final boolean succeeded;
+
+  public ToolCalledParams(String toolName, boolean succeeded) {
+    this.toolName = toolName;
+    this.succeeded = succeeded;
+  }
+
+  public String getToolName() {
+    return toolName;
+  }
+
+  public boolean isSucceeded() {
+    return succeeded;
+  }
 }
