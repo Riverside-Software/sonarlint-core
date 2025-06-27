@@ -75,6 +75,14 @@ public class TelemetryLocalStorage {
   private int exportedConnectedModeCount;
   private long newIssuesFoundCount;
   private long issuesFixedCount;
+  private int biggestNumberOfFilesInConfigScope;
+  private long listingTimeForBiggestNumberConfigScopeFiles;
+  private long longestListingTimeForConfigScopeFiles;
+  private int numberOfFilesForLongestFilesListingTimeConfigScope;
+  private int taintInvestigatedLocallyCount;
+  private int taintInvestigatedRemotelyCount;
+  private int hotspotInvestigatedLocallyCount;
+  private int hotspotInvestigatedRemotelyCount;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -222,6 +230,7 @@ public class TelemetryLocalStorage {
     exportedConnectedModeCount = 0;
     newIssuesFoundCount = 0;
     issuesFixedCount = 0;
+    biggestNumberOfFilesInConfigScope = 0;
     calledToolsByName.clear();
   }
 
@@ -487,5 +496,68 @@ public class TelemetryLocalStorage {
 
   public Map<String, ToolCallCounter> getCalledToolsByName() {
     return calledToolsByName;
+  }
+
+  public void updateListFilesPerformance(int size, long timeMs) {
+    if (size > biggestNumberOfFilesInConfigScope) {
+      biggestNumberOfFilesInConfigScope = size;
+      listingTimeForBiggestNumberConfigScopeFiles = timeMs;
+    }
+    if (timeMs > longestListingTimeForConfigScopeFiles) {
+      longestListingTimeForConfigScopeFiles = timeMs;
+      numberOfFilesForLongestFilesListingTimeConfigScope = size;
+    }
+  }
+
+  public int getBiggestNumberOfFilesInConfigScope() {
+    return biggestNumberOfFilesInConfigScope;
+  }
+
+  public long getListingTimeForBiggestNumberConfigScopeFiles() {
+    return listingTimeForBiggestNumberConfigScopeFiles;
+  }
+
+  public int getNumberOfFilesForLongestFilesListingTimeConfigScope() {
+    return numberOfFilesForLongestFilesListingTimeConfigScope;
+  }
+
+  public long getLongestListingTimeForConfigScopeFiles() {
+    return longestListingTimeForConfigScopeFiles;
+  }
+
+  public void incrementHotspotInvestigatedLocallyCount() {
+    markSonarLintAsUsedToday();
+    hotspotInvestigatedLocallyCount++;
+  }
+
+  public void incrementHotspotInvestigatedRemotelyCount() {
+    markSonarLintAsUsedToday();
+    hotspotInvestigatedRemotelyCount++;
+  }
+
+  public void incrementTaintInvestigatedLocallyCount() {
+    markSonarLintAsUsedToday();
+    taintInvestigatedLocallyCount++;
+  }
+
+  public void incrementTaintInvestigatedRemotelyCount() {
+    markSonarLintAsUsedToday();
+    taintInvestigatedRemotelyCount++;
+  }
+
+  public int getHotspotInvestigatedRemotelyCount() {
+    return hotspotInvestigatedRemotelyCount;
+  }
+
+  public int getHotspotInvestigatedLocallyCount() {
+    return hotspotInvestigatedLocallyCount;
+  }
+
+  public int getTaintInvestigatedRemotelyCount() {
+    return taintInvestigatedRemotelyCount;
+  }
+
+  public int getTaintInvestigatedLocallyCount() {
+    return taintInvestigatedLocallyCount;
   }
 }

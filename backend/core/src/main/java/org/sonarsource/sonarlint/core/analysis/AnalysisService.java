@@ -63,6 +63,7 @@ import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.monitoring.MonitoringService;
+import org.sonarsource.sonarlint.core.commons.monitoring.Trace;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.commons.progress.TaskManager;
 import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
@@ -245,16 +246,24 @@ public class AnalysisService {
       isDataflowBugDetectionEnabled);
   }
 
-  private AnalysisConfiguration getAnalysisConfigForEngine(String configScopeId, List<URI> filesUrisToAnalyze, Map<String, String> extraProperties, boolean hotspotsOnly,
-    TriggerType triggerType) {
+  private AnalysisConfiguration getAnalysisConfigForEngine(String configScopeId, Set<URI> filesUrisToAnalyze, Map<String, String> extraProperties, boolean hotspotsOnly,
+    TriggerType triggerType, Trace trace) {
+    trace.setData("trigger", triggerType);
     var baseDir = fileSystemService.getBaseDir(configScopeId);
     var filesToAnalyze = fileExclusionService.refineAnalysisScope(configScopeId, filesUrisToAnalyze, triggerType, baseDir);
     var actualBaseDir = baseDir == null ? findCommonPrefix(filesUrisToAnalyze) : baseDir;
-    var analysisConfig = getAnalysisConfig(configScopeId, hotspotsOnly);
+    var analysisConfig = getAnalysisConfig(configScopeId, hotspotsOnly, trace);
     var analysisProperties = analysisConfig.getAnalysisProperties();
     var inferredAnalysisProperties = client
       .getInferredAnalysisProperties(new GetInferredAnalysisPropertiesParams(configScopeId, filesToAnalyze.stream().map(ClientFile::getUri).toList())).join().getProperties();
     analysisProperties.putAll(inferredAnalysisProperties);
+    var activeRules = analysisConfig.getActiveRules().stream().map(r -> {
+      var ar = new ActiveRule(r.getRuleKey(), r.getLanguageKey());
+      ar.setParams(r.getParams());
+      ar.setTemplateRuleKey(r.getTemplateRuleKey());
+      return ar;
+    }).toList();
+    trace.setData("activeRulesCount", activeRules.size());
 
     // Sonarlint VSCode (CABL version) always set property sonar.sourceEncoding based on the value of the 'charset' attribute in openedge-project.json
     var sourceEncodingProp = inferredAnalysisProperties.get("sonar.sourceEncoding");
@@ -275,17 +284,12 @@ public class AnalysisService {
       // properties sent by client using new API were merged above
       // but this line is important for backward compatibility for clients directly triggering analysis
       .putAllExtraProperties(extraProperties)
-      .addActiveRules(analysisConfig.getActiveRules().stream().map(r -> {
-        var ar = new ActiveRule(r.getRuleKey(), r.getLanguageKey());
-        ar.setParams(r.getParams());
-        ar.setTemplateRuleKey(r.getTemplateRuleKey());
-        return ar;
-      }).toList())
+      .addActiveRules(activeRules)
       .setBaseDir(actualBaseDir)
       .build();
   }
 
-  public GetAnalysisConfigResponse getAnalysisConfig(String configScopeId, boolean hotspotsOnly) {
+  public GetAnalysisConfigResponse getAnalysisConfig(String configScopeId, boolean hotspotsOnly, @Nullable Trace trace) {
     var bindingOpt = configurationRepository.getEffectiveBinding(configScopeId);
     var activeNodeJs = nodeJsService.getActiveNodeJs();
     var userAnalysisProperties = userAnalysisPropertiesRepository.getUserProperties(configScopeId);
@@ -294,6 +298,12 @@ public class AnalysisService {
       userAnalysisProperties.put(SONAR_INTERNAL_BUNDLE_PATH_ANALYSIS_PROP, this.esLintBridgeServerPath.toString());
     }
     var nodeJsDetailsDto = activeNodeJs == null ? null : new NodeJsDetailsDto(activeNodeJs.getPath(), activeNodeJs.getVersion().toString());
+    if (trace != null) {
+      if (activeNodeJs != null) {
+        trace.setData("nodeJsVersion", activeNodeJs.getVersion().toString());
+      }
+      trace.setData("connected", bindingOpt.isPresent());
+    }
     return bindingOpt.map(binding -> {
       var serverProperties = storageService.binding(binding).analyzerConfiguration().read().getSettings().getAll();
       var analysisProperties = new HashMap<>(serverProperties);
@@ -305,7 +315,7 @@ public class AnalysisService {
         Set.copyOf(pluginsService.getEmbeddedPluginPaths())));
   }
 
-  private static Path findCommonPrefix(List<URI> uris) {
+  private static Path findCommonPrefix(Set<URI> uris) {
     var paths = uris.stream().map(Paths::get).toList();
     Path currentPrefixCandidate = paths.get(0).getParent();
     while (currentPrefixCandidate.getNameCount() > 0 && !isPrefixForAll(currentPrefixCandidate, paths)) {
@@ -543,7 +553,7 @@ public class AnalysisService {
 
   @EventListener
   public void onFileOpened(FileOpenedEvent event) {
-    scheduleAutomaticAnalysis(event.configurationScopeId(), List.of(event.fileUri()));
+    scheduleAutomaticAnalysis(event.configurationScopeId(), Set.of(event.fileUri()));
   }
 
   @EventListener
@@ -693,11 +703,11 @@ public class AnalysisService {
 
   public UUID analyzeFullProject(String configScopeId, boolean hotspotsOnly) {
     var files = clientFileSystemService.getFiles(configScopeId);
-    return scheduleForcedAnalysis(configScopeId, files.stream().map(ClientFile::getUri).toList(), hotspotsOnly);
+    return scheduleForcedAnalysis(configScopeId, files.stream().map(ClientFile::getUri).collect(toSet()), hotspotsOnly);
   }
 
   public UUID analyzeFileList(String configScopeId, List<URI> filesToAnalyze) {
-    return scheduleForcedAnalysis(configScopeId, filesToAnalyze, false);
+    return scheduleForcedAnalysis(configScopeId, Set.copyOf(filesToAnalyze), false);
   }
 
   public UUID analyzeVCSChangedFiles(String configScopeId) {
@@ -710,7 +720,7 @@ public class AnalysisService {
       .forEach((configurationScopeId, files) -> scheduleForcedAnalysis(configurationScopeId, files, false));
   }
 
-  public UUID scheduleForcedAnalysis(String configurationScopeId, List<URI> files, boolean hotspotsOnly) {
+  public UUID scheduleForcedAnalysis(String configurationScopeId, Set<URI> files, boolean hotspotsOnly) {
     var analysisId = UUID.randomUUID();
     var rawIssues = new ArrayList<RawIssue>();
     schedule(configurationScopeId, getAnalyzeCommand(configurationScopeId, files, rawIssues, hotspotsOnly, TriggerType.FORCED, analysisId), analysisId, rawIssues, true)
@@ -723,19 +733,29 @@ public class AnalysisService {
     return analysisId;
   }
 
-  public CompletableFuture<AnalysisResult> scheduleAnalysis(String configurationScopeId, UUID analysisId, List<URI> files, Map<String, String> extraProperties,
+  public CompletableFuture<AnalysisResult> scheduleAnalysis(String configurationScopeId, UUID analysisId, Set<URI> files, Map<String, String> extraProperties,
     boolean shouldFetchServerIssues, TriggerType triggerType, SonarLintCancelMonitor cancelChecker) {
     var ruleDetailsCache = new ConcurrentHashMap<String, RuleDetailsForAnalysis>();
     var rawIssues = new ArrayList<RawIssue>();
+    var trace = newAnalysisTrace();
     var analysisTask = new AnalyzeCommand(configurationScopeId, analysisId, triggerType,
-      () -> getAnalysisConfigForEngine(configurationScopeId, files, extraProperties, false, triggerType),
-      issue -> streamIssue(configurationScopeId, analysisId, ruleDetailsCache, rawIssues, issue), monitoringService.newTrace("AnalysisService", "analyze"), cancelChecker,
+      () -> getAnalysisConfigForEngine(configurationScopeId, files, extraProperties, false, triggerType, trace),
+      issue -> streamIssue(configurationScopeId, analysisId, ruleDetailsCache, rawIssues, issue), trace, cancelChecker,
       taskManager, inputFiles -> analysisStarted(configurationScopeId, analysisId, inputFiles), () -> analysisReadinessByConfigScopeId.getOrDefault(configurationScopeId, false),
       files, extraProperties);
     return schedule(configurationScopeId, analysisTask, analysisId, rawIssues, shouldFetchServerIssues);
   }
 
-  private void scheduleAutomaticAnalysis(String configScopeId, List<URI> filesToAnalyze) {
+  private Trace newAnalysisTrace() {
+    var newTrace = monitoringService.newTrace("AnalysisService", "analyze");
+    var currentRuntime = Runtime.getRuntime();
+    newTrace.setData("availableProcessors", currentRuntime.availableProcessors());
+    newTrace.setData("totalMemory", currentRuntime.totalMemory());
+    newTrace.setData("maxMemory", currentRuntime.maxMemory());
+    return newTrace;
+  }
+
+  private void scheduleAutomaticAnalysis(String configScopeId, Set<URI> filesToAnalyze) {
     if (automaticAnalysisEnabled && !filesToAnalyze.isEmpty()) {
       var rawIssues = new ArrayList<RawIssue>();
       var analysisId = UUID.randomUUID();
@@ -780,11 +800,13 @@ public class AnalysisService {
       });
   }
 
-  private AnalyzeCommand getAnalyzeCommand(String configurationScopeId, List<URI> files, ArrayList<RawIssue> rawIssues, boolean hotspotsOnly, TriggerType triggerType,
+  private AnalyzeCommand getAnalyzeCommand(String configurationScopeId, Set<URI> files, ArrayList<RawIssue> rawIssues, boolean hotspotsOnly, TriggerType triggerType,
     UUID analysisId) {
     var ruleDetailsCache = new ConcurrentHashMap<String, RuleDetailsForAnalysis>();
-    return new AnalyzeCommand(configurationScopeId, analysisId, triggerType, () -> getAnalysisConfigForEngine(configurationScopeId, files, Map.of(), hotspotsOnly, triggerType),
-      issue -> streamIssue(configurationScopeId, analysisId, ruleDetailsCache, rawIssues, issue), monitoringService.newTrace("AnalysisService", "analyze"),
+    var trace = newAnalysisTrace();
+    return new AnalyzeCommand(configurationScopeId, analysisId, triggerType,
+      () -> getAnalysisConfigForEngine(configurationScopeId, files, Map.of(), hotspotsOnly, triggerType, trace),
+      issue -> streamIssue(configurationScopeId, analysisId, ruleDetailsCache, rawIssues, issue), trace,
       new SonarLintCancelMonitor(), taskManager, inputFiles -> analysisStarted(configurationScopeId, analysisId, inputFiles),
       () -> analysisReadinessByConfigScopeId.getOrDefault(configurationScopeId, false), files, Map.of());
   }

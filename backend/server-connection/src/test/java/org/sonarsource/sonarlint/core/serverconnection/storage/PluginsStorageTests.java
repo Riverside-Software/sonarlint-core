@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Commons
+ * SonarLint Core - Server Connection
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,33 +17,29 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.commons;
+package org.sonarsource.sonarlint.core.serverconnection.storage;
 
 import java.nio.file.Path;
-import org.eclipse.jgit.ignore.IgnoreNode;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-public class SonarLintGitIgnore {
-  private final IgnoreNode ignoreNode;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-  public SonarLintGitIgnore(IgnoreNode ignoreNode) {
-    this.ignoreNode = ignoreNode;
+class PluginsStorageTests {
+
+  @TempDir
+  Path storageRoot;
+  PluginsStorage underTest;
+
+  @BeforeEach
+  void setUp() {
+    underTest = new PluginsStorage(storageRoot);
   }
 
-  public boolean isIgnored(Path clientRelativeFilePath) {
-    var normalizedUnixPath = clientRelativeFilePath.toString().replace("\\", "/");
-    var rules = ignoreNode.getRules();
-    // Parse rules in the reverse order that they were read because later rules have higher priority
-    for (var i = rules.size() - 1; i > -1; i--) {
-      var rule = rules.get(i);
-      if (rule.isMatch(normalizedUnixPath, false)) {
-        return rule.getResult();
-      }
-    }
-    return false;
-  }
-
-  public boolean isFileIgnored(Path clientFileRelativePath) {
-    return isIgnored(clientFileRelativePath);
+  @Test
+  void should_consider_storage_invalid_if_file_doesnt_exist() {
+    assertFalse(underTest.isValid());
   }
 
 }

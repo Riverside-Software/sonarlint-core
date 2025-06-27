@@ -63,11 +63,13 @@ class TelemetryMeasuresPayloadTests {
       "{\"key\":\"shared_connected_mode.imported\",\"value\":\"2\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"shared_connected_mode.auto\",\"value\":\"3\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"shared_connected_mode.exported\",\"value\":\"4\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
+      "{\"key\":\"bindings.child_count\",\"value\":\"1\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"bindings.server_count\",\"value\":\"2\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"bindings.cloud_eu_count\",\"value\":\"0\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"bindings.cloud_us_count\",\"value\":\"0\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"help_and_feedback.doc_link\",\"value\":\"5\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
-      "{\"key\":\"analysis_reporting.trigger_count_vcs_changed_files\",\"value\":\"7\",\"type\":\"integer\",\"granularity\":\"daily\"" +
+      "{\"key\":\"analysis_reporting.trigger_count_vcs_changed_files\",\"value\":\"7\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
+      "{\"key\":\"performance.biggest_size_config_scope_files\",\"value\":\"12345\",\"type\":\"integer\",\"granularity\":\"daily\"" +
       "}]" +
       "}");
 
@@ -87,6 +89,7 @@ class TelemetryMeasuresPayloadTests {
     values.add(new TelemetryMeasuresValue("shared_connected_mode.auto", String.valueOf(3), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("shared_connected_mode.exported", String.valueOf(4), INTEGER, DAILY));
 
+    values.add(new TelemetryMeasuresValue("bindings.child_count", String.valueOf(1), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("bindings.server_count", String.valueOf(2), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("bindings.cloud_eu_count", String.valueOf(0), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("bindings.cloud_us_count", String.valueOf(0), INTEGER, DAILY));
@@ -94,6 +97,8 @@ class TelemetryMeasuresPayloadTests {
     values.add(new TelemetryMeasuresValue("help_and_feedback.doc_link", String.valueOf(5), INTEGER, DAILY));
 
     values.add(new TelemetryMeasuresValue("analysis_reporting.trigger_count_vcs_changed_files", String.valueOf(7), INTEGER, DAILY));
+
+    values.add(new TelemetryMeasuresValue("performance.biggest_size_config_scope_files", String.valueOf(12345), INTEGER, DAILY));
 
     return values;
   }

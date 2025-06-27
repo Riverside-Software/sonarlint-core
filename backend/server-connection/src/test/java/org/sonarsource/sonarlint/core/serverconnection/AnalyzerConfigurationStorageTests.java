@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Analysis Engine
+ * SonarLint Core - Server Connection
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,32 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.analysis;
+package org.sonarsource.sonarlint.core.serverconnection;
 
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.sonarsource.sonarlint.core.analysis.command.AnalyzeCommand;
-import org.sonarsource.sonarlint.core.analysis.command.RegisterModuleCommand;
+import org.junit.jupiter.api.io.TempDir;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-class AnalysisQueueTest {
+class AnalyzerConfigurationStorageTests {
   @RegisterExtension
   private static final SonarLintLogTester logTester = new SonarLintLogTester();
 
   @Test
-  void it_should_prioritize_register_module_commands_over_analyses() throws InterruptedException {
-    var analysisQueue = new AnalysisQueue();
-    analysisQueue.post(new AnalyzeCommand(null, UUID.randomUUID(), null, null, null, null, null, null, null, () -> true, Set.of(), Map.of()));
-    var registerModuleCommand = new RegisterModuleCommand(null);
-    analysisQueue.post(registerModuleCommand);
+  void should_consider_config_storage_invalid_if_not_readable_and_do_not_log_exception(@TempDir Path tempDir) {
+    var analyzerConfigurationStorage = new AnalyzerConfigurationStorage(tempDir);
 
-    var command = analysisQueue.takeNextCommand();
+    var valid = analyzerConfigurationStorage.isValid();
 
-    assertThat(command).isEqualTo(registerModuleCommand);
+    assertFalse(valid);
+    assertThat(logTester.logs()).contains("Analyzer configuration storage doesn't exist: " + tempDir.toAbsolutePath().resolve("analyzer_config.pb"));
   }
 }
