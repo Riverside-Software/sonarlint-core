@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Rule Extractor
+ * SonarLint Core - Commons
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,29 +17,41 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rule.extractor;
+package org.sonarsource.sonarlint.core.commons.validation;
 
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-class EmptySettingsTest {
-  @Test
-  void should_be_empty() {
-    var emptySettings = new EmptySettings();
+class InvalidFieldsTest {
 
-    assertThat(emptySettings.hasKey("")).isFalse();
-    assertThat(emptySettings.getString("")).isNull();
-    assertThat(emptySettings.getBoolean("")).isFalse();
-    assertThat(emptySettings.getInt("")).isZero();
-    assertThat(emptySettings.getLong("")).isZero();
-    assertThat(emptySettings.getDate("")).isNull();
-    assertThat(emptySettings.getDateTime("")).isNull();
-    assertThat(emptySettings.getFloat("")).isNull();
-    assertThat(emptySettings.getDouble("")).isNull();
-    assertThat(emptySettings.getStringArray("")).isEmpty();
-    assertThat(emptySettings.getStringLines("")).isEmpty();
-    assertThat(emptySettings.getStringArrayBySeparator("", "")).isEmpty();
-    assertThat(emptySettings.getKeysStartingWith("")).isEmpty();
+  public static final String[] EXPECTED = {"name1", "name2", "name3"};
+
+  @Test
+  void should_have_no_invalid_fields_initially() {
+    InvalidFields tested = new InvalidFields();
+
+    assertThat(tested.hasInvalidFields()).isFalse();
+  }
+
+  @Test
+  void should_have_invalid_fields_after_adding_one() {
+    InvalidFields tested = new InvalidFields();
+
+    tested.add("name1");
+
+    assertThat(tested.hasInvalidFields()).isTrue();
+  }
+
+  @Test
+  void should_include_all_added_fields() {
+    InvalidFields tested = new InvalidFields();
+
+    tested.add("name1");
+    tested.add("name2");
+    tested.add("name3");
+    String[] names = tested.getNames();
+
+    assertThat(names).containsExactly(EXPECTED);
   }
 }

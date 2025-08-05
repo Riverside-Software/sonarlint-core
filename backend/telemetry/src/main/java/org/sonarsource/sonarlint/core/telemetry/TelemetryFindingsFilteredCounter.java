@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Analysis Engine
+ * SonarLint Core - Telemetry
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,36 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.analysis.sonarapi;
+package org.sonarsource.sonarlint.core.telemetry;
 
-import java.util.Optional;
-import org.sonar.api.config.Configuration;
-import org.sonar.api.config.Settings;
+public class TelemetryFindingsFilteredCounter {
+  private int findingsFilteredCount;
 
-/**
- * Used to help migration from {@link Settings} to {@link Configuration}
- */
-public class ConfigurationBridge implements Configuration {
-
-  private final Settings settings;
-
-  public ConfigurationBridge(Settings settings) {
-    this.settings = settings;
+  public TelemetryFindingsFilteredCounter() {
   }
 
-  @Override
-  public Optional<String> get(String key) {
-    return Optional.ofNullable(settings.getString(key));
+  public TelemetryFindingsFilteredCounter(int findingsFilteredCount) {
+    this.findingsFilteredCount = findingsFilteredCount;
   }
 
-  @Override
-  public boolean hasKey(String key) {
-    return settings.hasKey(key);
+  public int getFindingsFilteredCount() {
+    return findingsFilteredCount;
   }
 
-  @Override
-  public String[] getStringArray(String key) {
-    return settings.getStringArray(key);
+  public void incrementFindingsFilteredCount() {
+    this.findingsFilteredCount++;
   }
-
 }

@@ -30,13 +30,13 @@ import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingClueProvider;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
 import org.sonarsource.sonarlint.core.ConfigurationService;
-import org.sonarsource.sonarlint.core.SonarQubeClientManager;
 import org.sonarsource.sonarlint.core.ConnectionService;
 import org.sonarsource.sonarlint.core.ConnectionSuggestionProvider;
 import org.sonarsource.sonarlint.core.OrganizationsCache;
 import org.sonarsource.sonarlint.core.SharedConnectedModeSettingsProvider;
 import org.sonarsource.sonarlint.core.SonarCloudActiveEnvironment;
 import org.sonarsource.sonarlint.core.SonarProjectsCache;
+import org.sonarsource.sonarlint.core.SonarQubeClientManager;
 import org.sonarsource.sonarlint.core.TokenGeneratorHelper;
 import org.sonarsource.sonarlint.core.UserPaths;
 import org.sonarsource.sonarlint.core.VersionSoonUnsupportedHelper;
@@ -98,11 +98,13 @@ import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.sync.FindingsSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.HotspotSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.IssueSynchronizationService;
+import org.sonarsource.sonarlint.core.sync.ScaSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SonarProjectBranchesSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SynchronizationService;
 import org.sonarsource.sonarlint.core.sync.TaintSynchronizationService;
 import org.sonarsource.sonarlint.core.tracking.KnownFindingsStorageService;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
+import org.sonarsource.sonarlint.core.tracking.ScaIssueTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TrackingService;
 import org.sonarsource.sonarlint.core.websocket.WebSocketService;
@@ -166,6 +168,7 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   NewCodeService.class,
   RequestHandlerBindingAssistant.class,
   TaintVulnerabilityTrackingService.class,
+  ScaIssueTrackingService.class,
   SonarProjectBranchesSynchronizationService.class,
   TaintSynchronizationService.class,
   IssueSynchronizationService.class,
@@ -191,6 +194,7 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   MonitoringService.class,
   AiCodeFixService.class,
   ClientAwareTaskManager.class,
+  ScaSynchronizationService.class,
 })
 public class SonarLintSpringAppConfig {
 

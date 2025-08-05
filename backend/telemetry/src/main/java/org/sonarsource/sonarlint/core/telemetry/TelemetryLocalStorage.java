@@ -63,6 +63,7 @@ public class TelemetryLocalStorage {
   private final Map<String, Integer> quickFixCountByRuleKey;
   private final Map<String, TelemetryHelpAndFeedbackCounter> helpAndFeedbackLinkClickedCount;
   private final Map<AnalysisReportingType, TelemetryAnalysisReportingCounter> analysisReportingCountersByType;
+  private final Map<String, TelemetryFindingsFilteredCounter> findingsFilteredCountersByType;
   private final Map<String, TelemetryFixSuggestionReceivedCounter> fixSuggestionReceivedCounter;
   private final Map<String, List<TelemetryFixSuggestionResolvedStatus>> fixSuggestionResolved;
   private final Map<String, ToolCallCounter> calledToolsByName;
@@ -83,6 +84,7 @@ public class TelemetryLocalStorage {
   private int taintInvestigatedRemotelyCount;
   private int hotspotInvestigatedLocallyCount;
   private int hotspotInvestigatedRemotelyCount;
+  private int issueInvestigatedLocallyCount;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -95,6 +97,7 @@ public class TelemetryLocalStorage {
     quickFixCountByRuleKey = new LinkedHashMap<>();
     helpAndFeedbackLinkClickedCount = new LinkedHashMap<>();
     analysisReportingCountersByType = new LinkedHashMap<>();
+    findingsFilteredCountersByType = new LinkedHashMap<>();
     fixSuggestionReceivedCounter = new LinkedHashMap<>();
     fixSuggestionResolved = new LinkedHashMap<>();
     issuesUuidAiFixableSeen = new HashSet<>();
@@ -130,7 +133,7 @@ public class TelemetryLocalStorage {
   }
 
   @Deprecated
-  LocalDate installDate() {
+  public LocalDate installDate() {
     return installDate;
   }
 
@@ -147,7 +150,7 @@ public class TelemetryLocalStorage {
   }
 
   @CheckForNull
-  LocalDate lastUseDate() {
+  public LocalDate lastUseDate() {
     return lastUseDate;
   }
 
@@ -165,6 +168,10 @@ public class TelemetryLocalStorage {
 
   public Map<AnalysisReportingType, TelemetryAnalysisReportingCounter> getAnalysisReportingCountersByType() {
     return analysisReportingCountersByType;
+  }
+
+  public Map<String, TelemetryFindingsFilteredCounter> getFindingsFilteredCountersByType() {
+    return findingsFilteredCountersByType;
   }
 
   public Map<String, TelemetryFixSuggestionReceivedCounter> getFixSuggestionReceivedCounter() {
@@ -196,7 +203,7 @@ public class TelemetryLocalStorage {
   }
 
   @CheckForNull
-  LocalDateTime lastUploadTime() {
+  public LocalDateTime lastUploadTime() {
     return lastUploadDateTime;
   }
 
@@ -220,6 +227,7 @@ public class TelemetryLocalStorage {
     quickFixCountByRuleKey.clear();
     helpAndFeedbackLinkClickedCount.clear();
     analysisReportingCountersByType.clear();
+    findingsFilteredCountersByType.clear();
     fixSuggestionReceivedCounter.clear();
     fixSuggestionResolved.clear();
     issuesUuidAiFixableSeen.clear();
@@ -234,7 +242,7 @@ public class TelemetryLocalStorage {
     calledToolsByName.clear();
   }
 
-  long numUseDays() {
+  public long numUseDays() {
     return numUseDays;
   }
 
@@ -242,7 +250,7 @@ public class TelemetryLocalStorage {
     this.enabled = enabled;
   }
 
-  boolean enabled() {
+  public boolean enabled() {
     return enabled;
   }
 
@@ -401,6 +409,11 @@ public class TelemetryLocalStorage {
     this.analysisReportingCountersByType.computeIfAbsent(analysisType, k -> new TelemetryAnalysisReportingCounter()).incrementAnalysisReportingCount();
   }
 
+  public void findingsFiltered(String filterType) {
+    markSonarLintAsUsedToday();
+    this.findingsFilteredCountersByType.computeIfAbsent(filterType, k -> new TelemetryFindingsFilteredCounter()).incrementFindingsFilteredCount();
+  }
+
   public void incrementHotspotStatusChangedCount() {
     markSonarLintAsUsedToday();
     hotspotStatusChangedCount++;
@@ -545,6 +558,11 @@ public class TelemetryLocalStorage {
     taintInvestigatedRemotelyCount++;
   }
 
+  public void incrementIssueInvestigatedLocallyCount() {
+    markSonarLintAsUsedToday();
+    issueInvestigatedLocallyCount++;
+  }
+
   public int getHotspotInvestigatedRemotelyCount() {
     return hotspotInvestigatedRemotelyCount;
   }
@@ -559,5 +577,9 @@ public class TelemetryLocalStorage {
 
   public int getTaintInvestigatedLocallyCount() {
     return taintInvestigatedLocallyCount;
+  }
+
+  public int getIssueInvestigatedLocallyCount() {
+    return issueInvestigatedLocallyCount;
   }
 }

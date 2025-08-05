@@ -21,9 +21,6 @@ package org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking;
 
 public class ListAllParams {
   private final String configurationScopeId;
-  /**
-   * Set to true to fetch server taint issues
-   */
   private final boolean shouldRefresh;
 
   public ListAllParams(String configurationScopeId) {
