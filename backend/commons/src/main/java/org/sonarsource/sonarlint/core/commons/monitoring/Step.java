@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Commons
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,17 +17,34 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize;
+package org.sonarsource.sonarlint.core.commons.monitoring;
 
-public enum BackendCapability {
-  SMART_NOTIFICATIONS,
-  PROJECT_SYNCHRONIZATION,
-  EMBEDDED_SERVER,
-  SECURITY_HOTSPOTS,
-  SERVER_SENT_EVENTS,
-  DATAFLOW_BUG_DETECTION,
-  FULL_SYNCHRONIZATION,
-  TELEMETRY,
-  MONITORING,
-  ISSUE_STREAMING
+import io.sentry.ITransaction;
+import javax.annotation.Nullable;
+
+public class Step {
+
+  private final String task;
+  private final Runnable operation;
+
+  public Step(String task, Runnable operation) {
+    this.task = task;
+    this.operation = operation;
+  }
+
+  public void execute() {
+    operation.run();
+  }
+
+  public void executeTransaction(ITransaction transaction, @Nullable String description) {
+    var span = new Span(transaction.startChild(task, description));
+    try {
+      operation.run();
+      span.finishSuccessfully();
+    } catch (Exception exception) {
+      span.finishExceptionally(exception);
+      throw exception;
+    }
+  }
+
 }

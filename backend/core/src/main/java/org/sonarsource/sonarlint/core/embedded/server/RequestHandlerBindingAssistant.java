@@ -43,17 +43,12 @@ import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarCloudConnectionDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarQubeConnectionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.AssistBindingParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.NoBindingSuggestionFoundParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.AssistCreatingConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowMessageParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.UsernamePasswordDto;
 
 public class RequestHandlerBindingAssistant {
 
@@ -216,28 +211,9 @@ public class RequestHandlerBindingAssistant {
   }
 
   AssistCreatingConnectionResponse assistCreatingConnection(AssistCreatingConnectionParams connectionParams, SonarLintCancelMonitor cancelMonitor) {
-    try {
-      var future = client.assistCreatingConnection(connectionParams);
-      cancelMonitor.onCancel(() -> future.cancel(true));
-      return future.join();
-    } catch (Exception e) {
-      revokeToken(connectionParams, cancelMonitor);
-      throw e;
-    }
-  }
-
-  private void revokeToken(AssistCreatingConnectionParams connectionParams, SonarLintCancelMonitor cancelMonitor) {
-    String tokenName = connectionParams.getTokenName();
-    String tokenValue = connectionParams.getTokenValue();
-    if (tokenName != null && tokenValue != null) {
-      LOG.debug(String.format("Revoking token '%s'", tokenName));
-      var token = Either.<TokenDto, UsernamePasswordDto>forLeft(new TokenDto(tokenValue));
-      sonarQubeClientManager.getForTransientConnection(connectionParams.getConnectionParams().mapToEither(
-        sq -> new TransientSonarQubeConnectionDto(sq.getServerUrl(), token),
-        sc -> new TransientSonarCloudConnectionDto(sc.getOrganizationKey(), token, sc.getRegion())))
-        .userTokens()
-        .revoke(tokenName, cancelMonitor);
-    }
+    var future = client.assistCreatingConnection(connectionParams);
+    cancelMonitor.onCancel(() -> future.cancel(true));
+    return future.join();
   }
 
   NewBinding assistBinding(String connectionId, boolean isSonarCloud, String projectKey, SonarLintCancelMonitor cancelMonitor) {
@@ -248,7 +224,7 @@ public class RequestHandlerBindingAssistant {
       return new NewBinding(connectionId, null);
     }
     var bindableConfig = configScopeCandidates.iterator().next();
-    var future = client.assistBinding(new AssistBindingParams(connectionId, projectKey, bindableConfig.getConfigurationScope().getId(),
+    var future = client.assistBinding(new AssistBindingParams(connectionId, projectKey, bindableConfig.getConfigurationScope().id(),
       bindableConfig.isFromSharedConfiguration()));
     cancelMonitor.onCancel(() -> future.cancel(true));
     var response = future.join();
