@@ -17,18 +17,24 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.sca;
 
-import java.util.List;
+import java.util.UUID;
 
-public class ListAllScaIssuesResponse {
-  private final List<ScaIssueDto> scaIssues;
+public class GetDependencyRiskDetailsParams {
+  private final String configurationScopeId;
+  private final UUID dependencyRiskKey;
 
-  public ListAllScaIssuesResponse(List<ScaIssueDto> scaIssues) {
-    this.scaIssues = scaIssues;
+  public GetDependencyRiskDetailsParams(String configurationScopeId, UUID dependencyRiskKey) {
+    this.configurationScopeId = configurationScopeId;
+    this.dependencyRiskKey = dependencyRiskKey;
   }
 
-  public List<ScaIssueDto> getScaIssues() {
-    return scaIssues;
+  public String getConfigurationScopeId() {
+    return configurationScopeId;
+  }
+
+  public UUID getDependencyRiskKey() {
+    return dependencyRiskKey;
   }
 }

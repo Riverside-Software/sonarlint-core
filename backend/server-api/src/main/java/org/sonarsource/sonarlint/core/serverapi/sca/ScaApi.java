@@ -20,12 +20,16 @@
 package org.sonarsource.sonarlint.core.serverapi.sca;
 
 import com.google.gson.Gson;
+import jakarta.annotation.Nullable;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.UUID;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 import org.sonarsource.sonarlint.core.serverapi.UrlUtils;
+
+import static org.sonarsource.sonarlint.core.http.HttpClient.JSON_CONTENT_TYPE;
 
 public class ScaApi {
 
@@ -54,6 +58,26 @@ public class ScaApi {
       "pageIndex",
       "pageSize");
     return new GetIssuesReleasesResponse(allIssuesReleases, new GetIssuesReleasesResponse.Page(allIssuesReleases.size()));
+  }
+
+  public GetIssueReleaseResponse getIssueRelease(UUID key, SonarLintCancelMonitor cancelMonitor) {
+    var url = "/api/v2/sca/issues-releases/" + UrlUtils.urlEncode(key.toString());
+    try (var response = serverApiHelper.get(url, cancelMonitor)) {
+      return new Gson().fromJson(new InputStreamReader(response.bodyAsStream(), StandardCharsets.UTF_8), GetIssueReleaseResponse.class);
+    }
+  }
+
+  public void changeStatus(UUID issueReleaseKey, String transitionKey, @Nullable String comment, SonarLintCancelMonitor cancelMonitor) {
+    var body = new ChangeStatusRequestBody(issueReleaseKey.toString(), transitionKey, comment);
+    var url = "/api/v2/sca/issues-releases/change-status";
+
+    serverApiHelper.post(url, JSON_CONTENT_TYPE, body.toJson(), cancelMonitor);
+  }
+
+  private record ChangeStatusRequestBody(String issueReleaseKey, String transitionKey, @Nullable String comment) {
+    public String toJson() {
+      return new Gson().toJson(this);
+    }
   }
 
 }

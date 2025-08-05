@@ -74,6 +74,7 @@ public class TelemetryLocalStorage {
   private int importedAddedBindingsCount;
   private int autoAddedBindingsCount;
   private int exportedConnectedModeCount;
+  private int suggestedRemoteBindingsCount;
   private long newIssuesFoundCount;
   private long issuesFixedCount;
   private int biggestNumberOfFilesInConfigScope;
@@ -85,6 +86,8 @@ public class TelemetryLocalStorage {
   private int hotspotInvestigatedLocallyCount;
   private int hotspotInvestigatedRemotelyCount;
   private int issueInvestigatedLocallyCount;
+  private int dependencyRiskInvestigatedRemotelyCount;
+  private int dependencyRiskInvestigatedLocallyCount;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -236,10 +239,13 @@ public class TelemetryLocalStorage {
     importedAddedBindingsCount = 0;
     autoAddedBindingsCount = 0;
     exportedConnectedModeCount = 0;
+    suggestedRemoteBindingsCount = 0;
     newIssuesFoundCount = 0;
     issuesFixedCount = 0;
     biggestNumberOfFilesInConfigScope = 0;
     calledToolsByName.clear();
+    dependencyRiskInvestigatedLocallyCount = 0;
+    dependencyRiskInvestigatedRemotelyCount = 0;
   }
 
   public long numUseDays() {
@@ -480,8 +486,16 @@ public class TelemetryLocalStorage {
     exportedConnectedModeCount++;
   }
 
+  public void incrementSuggestedRemoteBindingsCount() {
+    suggestedRemoteBindingsCount++;
+  }
+
   public int getExportedConnectedModeCount() {
     return exportedConnectedModeCount;
+  }
+
+  public int getSuggestedRemoteBindingsCount() {
+    return suggestedRemoteBindingsCount;
   }
 
   public void addNewlyFoundIssues(long newIssues) {
@@ -563,6 +577,16 @@ public class TelemetryLocalStorage {
     issueInvestigatedLocallyCount++;
   }
 
+  public void incrementDependencyRiskInvestigatedRemotelyCount() {
+    markSonarLintAsUsedToday();
+    dependencyRiskInvestigatedRemotelyCount++;
+  }
+
+  public void incrementDependencyRiskInvestigatedLocallyCount() {
+    markSonarLintAsUsedToday();
+    dependencyRiskInvestigatedLocallyCount++;
+  }
+
   public int getHotspotInvestigatedRemotelyCount() {
     return hotspotInvestigatedRemotelyCount;
   }
@@ -581,5 +605,13 @@ public class TelemetryLocalStorage {
 
   public int getIssueInvestigatedLocallyCount() {
     return issueInvestigatedLocallyCount;
+  }
+
+  public int getDependencyRiskInvestigatedRemotelyCount() {
+    return dependencyRiskInvestigatedRemotelyCount;
+  }
+
+  public int getDependencyRiskInvestigatedLocallyCount() {
+    return dependencyRiskInvestigatedLocallyCount;
   }
 }

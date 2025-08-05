@@ -48,6 +48,8 @@ public class TelemetryMeasuresBuilder {
 
     addConnectedModeMeasures(values);
 
+    addBindingSuggestionClueMeasures(values);
+
     addHelpAndFeedbackMeasures(values);
 
     addAnalysisReportingMeasures(values);
@@ -80,6 +82,9 @@ public class TelemetryMeasuresBuilder {
     values.add(new TelemetryMeasuresValue("findings_investigation.hotspots_locally", String.valueOf(storage.getHotspotInvestigatedLocallyCount()), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("findings_investigation.hotspots_remotely", String.valueOf(storage.getHotspotInvestigatedRemotelyCount()), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("findings_investigation.issues_locally", String.valueOf(storage.getIssueInvestigatedLocallyCount()), INTEGER, DAILY));
+    values.add(new TelemetryMeasuresValue("findings_investigation.dependency_risks_locally", String.valueOf(storage.getDependencyRiskInvestigatedLocallyCount()), INTEGER, DAILY));
+    values.add(new TelemetryMeasuresValue("findings_investigation.dependency_risks_remotely",
+      String.valueOf(storage.getDependencyRiskInvestigatedRemotelyCount()), INTEGER, DAILY));
   }
 
   private void addConnectedModeMeasures(ArrayList<TelemetryMeasuresValue> values) {
@@ -94,6 +99,10 @@ public class TelemetryMeasuresBuilder {
       values.add(new TelemetryMeasuresValue("bindings.cloud_eu_count", String.valueOf(liveAttributes.countSonarQubeCloudEUBindings()), INTEGER, DAILY));
       values.add(new TelemetryMeasuresValue("bindings.cloud_us_count", String.valueOf(liveAttributes.countSonarQubeCloudUSBindings()), INTEGER, DAILY));
     }
+  }
+
+  private void addBindingSuggestionClueMeasures(ArrayList<TelemetryMeasuresValue> values) {
+    values.add(new TelemetryMeasuresValue("binding_suggestion_clue.remote_url", String.valueOf(storage.getSuggestedRemoteBindingsCount()), INTEGER, DAILY));
   }
 
   private void addHelpAndFeedbackMeasures(List<TelemetryMeasuresValue> values) {

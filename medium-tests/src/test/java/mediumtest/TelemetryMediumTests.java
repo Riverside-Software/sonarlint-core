@@ -339,6 +339,20 @@ class TelemetryMediumTests {
   }
 
   @SonarLintTest
+  void it_should_accumulate_investigated_dependency_risks(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().dependencyRiskInvestigatedLocally();
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getDependencyRiskInvestigatedLocallyCount()).isEqualTo(1));
+
+    backend.getTelemetryService().dependencyRiskInvestigatedLocally();
+    backend.getTelemetryService().dependencyRiskInvestigatedLocally();
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getDependencyRiskInvestigatedLocallyCount()).isEqualTo(3));
+  }
+
+  @SonarLintTest
   void it_should_accumulate_clicked_dev_notifications(SonarLintTestHarness harness) {
     var backend = setupClientAndBackend(harness);
     var notificationEvent = "myNotification";

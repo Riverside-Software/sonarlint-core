@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,18 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking;
+package org.sonarsource.sonarlint.core.serverapi.projectbindings;
 
-import java.util.concurrent.CompletableFuture;
-import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
-import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
-
-@JsonSegment("sca")
-public interface ScaIssueTrackingRpcService {
-
-  /**
-   * Returns the list of SCA issues detected for the given configuration scopes.
-   */
-  @JsonRequest
-  CompletableFuture<ListAllScaIssuesResponse> listAll(ListAllParams params);
+public record SQCProjectBindingsResponse(String projectId) {
 }

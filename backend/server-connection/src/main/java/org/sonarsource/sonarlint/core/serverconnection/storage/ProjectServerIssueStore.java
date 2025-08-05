@@ -30,10 +30,10 @@ import java.util.function.Consumer;
 import org.sonarsource.sonarlint.core.commons.HotspotReviewStatus;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.serverapi.hotspot.ServerHotspot;
+import org.sonarsource.sonarlint.core.serverconnection.issues.ServerDependencyRisk;
 import org.sonarsource.sonarlint.core.serverconnection.issues.ServerFinding;
 import org.sonarsource.sonarlint.core.serverconnection.issues.ServerIssue;
 import org.sonarsource.sonarlint.core.serverconnection.issues.ServerTaintIssue;
-import org.sonarsource.sonarlint.core.serverconnection.issues.ServerScaIssue;
 
 public interface ProjectServerIssueStore {
   boolean wasEverUpdated();
@@ -199,12 +199,14 @@ public interface ProjectServerIssueStore {
   boolean containsIssue(String issueKey);
 
   /**
-   * Store SCA issues for a branch by replacing existing ones.
+   * Store dependency risks for a branch by replacing existing ones.
    */
-  void replaceAllScaIssuesOfBranch(String branchName, List<ServerScaIssue> scaIssues);
+  void replaceAllDependencyRisksOfBranch(String branchName, List<ServerDependencyRisk> serverDependencyRisks);
 
   /**
-   * Load all SCA issues stored for a branch.
+   * Load all dependency risks stored for a branch.
    */
-  List<ServerScaIssue> loadScaIssues(String branchName);
+  List<ServerDependencyRisk> loadDependencyRisks(String branchName);
+
+  void updateDependencyRiskStatus(UUID key, ServerDependencyRisk.Status newStatus);
 }

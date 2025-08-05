@@ -234,6 +234,11 @@ public class TelemetryService {
     updateTelemetry(TelemetryLocalStorage::incrementExportedConnectedModeCount);
   }
 
+  public void suggestedRemoteBinding() {
+    updateTelemetry(TelemetryLocalStorage::incrementSuggestedRemoteBindingsCount);
+  }
+
+
   public void toolCalled(ToolCalledParams params) {
     updateTelemetry(storage -> storage.incrementToolCalledCount(params.getToolName(), params.isSucceeded()));
   }
@@ -256,6 +261,14 @@ public class TelemetryService {
 
   public void issueInvestigatedLocally() {
     updateTelemetry(TelemetryLocalStorage::incrementIssueInvestigatedLocallyCount);
+  }
+
+  public void dependencyRiskInvestigatedRemotely() {
+    updateTelemetry(TelemetryLocalStorage::incrementDependencyRiskInvestigatedRemotelyCount);
+  }
+
+  public void dependencyRiskInvestigatedLocally() {
+    updateTelemetry(TelemetryLocalStorage::incrementDependencyRiskInvestigatedLocallyCount);
   }
 
   public void findingsFiltered(String filterType) {

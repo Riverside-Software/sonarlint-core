@@ -20,6 +20,7 @@
 package org.sonarsource.sonarlint.core;
 
 import com.google.common.collect.ImmutableSortedSet;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -32,8 +33,10 @@ import org.sonarsource.sonarlint.core.commons.ConnectionKind;
 import org.sonarsource.sonarlint.core.commons.log.LogOutput;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
+import org.sonarsource.sonarlint.core.commons.util.git.GitService;
 import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
 import org.sonarsource.sonarlint.core.event.ConnectionConfigurationAddedEvent;
+import org.sonarsource.sonarlint.core.fs.ClientFileSystemService;
 import org.sonarsource.sonarlint.core.repository.config.BindingConfiguration;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationScope;
@@ -44,6 +47,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.binding.SuggestBindingParams;
 import org.sonarsource.sonarlint.core.serverapi.component.ServerProject;
+import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
@@ -52,6 +56,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -75,11 +80,14 @@ class BindingSuggestionProviderTests {
   private final SonarLintRpcClient client = mock(SonarLintRpcClient.class);
   private final BindingClueProvider bindingClueProvider = mock(BindingClueProvider.class);
   private final SonarProjectsCache sonarProjectsCache = mock(SonarProjectsCache.class);
+  private final SonarQubeClientManager sonarQubeClientManager = mock(SonarQubeClientManager.class);
+  private final ClientFileSystemService clientFs = mock(ClientFileSystemService.class);
+  private final TelemetryService telemetryService = mock(TelemetryService.class);
 
-  private final BindingSuggestionProvider underTest = new BindingSuggestionProvider(configRepository, connectionRepository, client, bindingClueProvider, sonarProjectsCache);
+  private final BindingSuggestionProvider underTest = new BindingSuggestionProvider(configRepository, connectionRepository, client, bindingClueProvider, sonarProjectsCache, sonarQubeClientManager, clientFs, telemetryService);
 
   @BeforeEach
-  public void setup() {
+  void setup() {
     when(sonarProjectsCache.getTextSearchIndex(anyString(), any(SonarLintCancelMonitor.class))).thenReturn(new TextSearchIndex<>());
     logTester.clear();
   }
@@ -393,6 +401,125 @@ class BindingSuggestionProviderTests {
       .containsOnly(
         tuple(SC_1_ID, PROJECT_KEY_1, "Project 1"),
         tuple(SC_1_ID, "key2", "Project 2"));
+  }
+
+  @Test
+  void search_by_remote_url_should_return_suggestion_when_project_found_for_sonarcloud() {
+    var cancelMonitor = new SonarLintCancelMonitor();
+    var baseDir = Path.of("repo");
+
+    when(connectionRepository.getConnectionsById()).thenReturn(Map.of(SC_1_ID, SC_1));
+    when(connectionRepository.getConnectionById(SC_1_ID)).thenReturn(SC_1);
+
+    when(configRepository.getConfigurationScope(CONFIG_SCOPE_ID_1))
+      .thenReturn(new ConfigurationScope(CONFIG_SCOPE_ID_1, null, true, "Some project"));
+    when(configRepository.getBindingConfiguration(CONFIG_SCOPE_ID_1)).thenReturn(BindingConfiguration.noBinding());
+
+    when(bindingClueProvider.collectBindingCluesWithConnections(eq(CONFIG_SCOPE_ID_1), eq(Set.of(SC_1_ID)), any(SonarLintCancelMonitor.class)))
+      .thenReturn(List.of());
+
+    when(clientFs.getBaseDir(CONFIG_SCOPE_ID_1)).thenReturn(baseDir);
+
+    try (var gitServiceMock = mockStatic(GitService.class)) {
+      gitServiceMock.when(() -> GitService.getRemoteUrl(baseDir)).thenReturn("git@github.com:myorg/myproj.git");
+
+      when(sonarQubeClientManager.withActiveClientFlatMapOptionalAndReturn(eq(SC_1_ID), any()))
+        .thenReturn(Optional.of(new BindingSuggestionDto(SC_1_ID, PROJECT_KEY_1, "Project 1", false)));
+
+      var result = underTest.getBindingSuggestions(CONFIG_SCOPE_ID_1, SC_1_ID, cancelMonitor);
+
+      assertThat(result).containsOnlyKeys(CONFIG_SCOPE_ID_1);
+      assertThat(result.get(CONFIG_SCOPE_ID_1))
+        .extracting(BindingSuggestionDto::getConnectionId, BindingSuggestionDto::getSonarProjectKey, BindingSuggestionDto::getSonarProjectName)
+        .containsOnly(tuple(SC_1_ID, PROJECT_KEY_1, "Project 1"));
+    }
+  }
+
+  @Test
+  void search_by_remote_url_should_return_suggestion_when_project_found() {
+    var cancelMonitor = new SonarLintCancelMonitor();
+    Path baseDir = Path.of("repo");
+
+    when(connectionRepository.getConnectionsById()).thenReturn(Map.of(SQ_1_ID, SQ_1));
+    when(connectionRepository.getConnectionById(SQ_1_ID)).thenReturn(SQ_1);
+
+    when(configRepository.getConfigurationScope(CONFIG_SCOPE_ID_1))
+      .thenReturn(new ConfigurationScope(CONFIG_SCOPE_ID_1, null, true, "Some project"));
+    when(configRepository.getBindingConfiguration(CONFIG_SCOPE_ID_1)).thenReturn(BindingConfiguration.noBinding());
+
+    when(bindingClueProvider.collectBindingCluesWithConnections(eq(CONFIG_SCOPE_ID_1), eq(Set.of(SQ_1_ID)), any(SonarLintCancelMonitor.class)))
+      .thenReturn(List.of());
+
+    when(clientFs.getBaseDir(CONFIG_SCOPE_ID_1)).thenReturn(baseDir);
+
+    try (var gitServiceMock = mockStatic(GitService.class)) {
+      gitServiceMock.when(() -> GitService.getRemoteUrl(baseDir)).thenReturn("git@github.com:myorg/myproj.git");
+
+      when(sonarQubeClientManager.withActiveClientFlatMapOptionalAndReturn(eq(SQ_1_ID), any()))
+        .thenReturn(Optional.of(new BindingSuggestionDto(SQ_1_ID, PROJECT_KEY_1, "Project 1", false)));
+
+      var result = underTest.getBindingSuggestions(CONFIG_SCOPE_ID_1, SQ_1_ID, cancelMonitor);
+
+      assertThat(result).containsOnlyKeys(CONFIG_SCOPE_ID_1);
+      assertThat(result.get(CONFIG_SCOPE_ID_1))
+        .extracting(BindingSuggestionDto::getConnectionId, BindingSuggestionDto::getSonarProjectKey, BindingSuggestionDto::getSonarProjectName)
+        .containsOnly(tuple(SQ_1_ID, PROJECT_KEY_1, "Project 1"));
+    }
+  }
+
+  @Test
+  void search_by_remote_url_should_do_nothing_when_no_remote_url() {
+    var cancelMonitor = new SonarLintCancelMonitor();
+    var baseDir = Path.of("repo");
+
+    when(connectionRepository.getConnectionsById()).thenReturn(Map.of(SQ_1_ID, SQ_1));
+    when(connectionRepository.getConnectionById(SQ_1_ID)).thenReturn(SQ_1);
+
+    when(configRepository.getConfigurationScope(CONFIG_SCOPE_ID_1))
+      .thenReturn(new ConfigurationScope(CONFIG_SCOPE_ID_1, null, true, "Some project"));
+    when(configRepository.getBindingConfiguration(CONFIG_SCOPE_ID_1)).thenReturn(BindingConfiguration.noBinding());
+
+    when(bindingClueProvider.collectBindingCluesWithConnections(eq(CONFIG_SCOPE_ID_1), eq(Set.of(SQ_1_ID)), any(SonarLintCancelMonitor.class)))
+      .thenReturn(List.of());
+
+    when(clientFs.getBaseDir(CONFIG_SCOPE_ID_1)).thenReturn(baseDir);
+
+    try (var gitServiceMock = mockStatic(GitService.class)) {
+      gitServiceMock.when(() -> GitService.getRemoteUrl(baseDir)).thenReturn(null);
+
+      var result = underTest.getBindingSuggestions(CONFIG_SCOPE_ID_1, SQ_1_ID, cancelMonitor);
+
+      assertThat(result).isEmpty();
+    }
+  }
+
+  @Test
+  void search_by_remote_url_should_do_nothing_when_no_project_id_found() {
+    var cancelMonitor = new SonarLintCancelMonitor();
+    var baseDir = Path.of("repo");
+
+    when(connectionRepository.getConnectionsById()).thenReturn(Map.of(SQ_1_ID, SQ_1));
+    when(connectionRepository.getConnectionById(SQ_1_ID)).thenReturn(SQ_1);
+
+    when(configRepository.getConfigurationScope(CONFIG_SCOPE_ID_1))
+      .thenReturn(new ConfigurationScope(CONFIG_SCOPE_ID_1, null, true, "Some project"));
+    when(configRepository.getBindingConfiguration(CONFIG_SCOPE_ID_1)).thenReturn(BindingConfiguration.noBinding());
+
+    when(bindingClueProvider.collectBindingCluesWithConnections(eq(CONFIG_SCOPE_ID_1), eq(Set.of(SQ_1_ID)), any(SonarLintCancelMonitor.class)))
+      .thenReturn(List.of());
+
+    when(clientFs.getBaseDir(CONFIG_SCOPE_ID_1)).thenReturn(baseDir);
+
+    try (var gitServiceMock = mockStatic(GitService.class)) {
+      gitServiceMock.when(() -> GitService.getRemoteUrl(baseDir)).thenReturn("git@github.com:myorg/myproj.git");
+
+      when(sonarQubeClientManager.withActiveClientFlatMapOptionalAndReturn(eq(SQ_1_ID), any()))
+        .thenReturn(Optional.empty());
+
+      var result = underTest.getBindingSuggestions(CONFIG_SCOPE_ID_1, SQ_1_ID, cancelMonitor);
+
+      assertThat(result).isEmpty();
+    }
   }
 
   private static ServerProject serverProject(String projectKey, String name) {

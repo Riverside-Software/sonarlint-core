@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server Connection
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,25 +17,12 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverconnection.issues;
+package org.sonarsource.sonarlint.core.serverapi.projectbindings;
 
 import java.util.List;
-import java.util.UUID;
 
-public record ServerScaIssue(UUID key, Type type, Severity severity, Status status, String packageName, String packageVersion, List<Transition> transitions) {
-  public enum Severity {
-    INFO, LOW, MEDIUM, HIGH, BLOCKER
-  }
+public record SQSProjectBindingsResponseDto(List<ProjectBinding> projectBindings) {
 
-  public enum Type {
-    VULNERABILITY, PROHIBITED_LICENSE
-  }
-
-  public enum Status {
-    OPEN, CONFIRM, ACCEPT, SAFE
-  }
-
-  public enum Transition {
-    CONFIRM, REOPEN, SAFE, FIXED, ACCEPT
+  public record ProjectBinding(String projectId, String projectKey) {
   }
 }

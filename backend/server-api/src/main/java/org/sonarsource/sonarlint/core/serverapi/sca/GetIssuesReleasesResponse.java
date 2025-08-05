@@ -23,7 +23,7 @@ import java.util.List;
 import java.util.UUID;
 
 public record GetIssuesReleasesResponse(List<IssuesRelease> issuesReleases, Page page) {
-  public record IssuesRelease(UUID key, Type type, Severity severity, Status status, Release release, List<Transition> transitions) {
+  public record IssuesRelease(UUID key, Type type, Severity severity, SoftwareQuality quality, Status status, Release release, List<Transition> transitions) {
     public record Release(String packageName, String version) {
     }
 
@@ -31,12 +31,18 @@ public record GetIssuesReleasesResponse(List<IssuesRelease> issuesReleases, Page
       INFO, LOW, MEDIUM, HIGH, BLOCKER
     }
 
+    public enum SoftwareQuality {
+      MAINTAINABILITY,
+      RELIABILITY,
+      SECURITY
+    }
+
     public enum Type {
       VULNERABILITY, PROHIBITED_LICENSE
     }
 
     public enum Status {
-      OPEN, CONFIRM, ACCEPT, SAFE
+      OPEN, CONFIRM, ACCEPT, SAFE, FIXED
     }
 
     public enum Transition {

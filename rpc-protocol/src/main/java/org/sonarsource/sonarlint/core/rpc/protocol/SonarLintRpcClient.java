@@ -73,7 +73,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.promotion.PromoteExtra
 import org.sonarsource.sonarlint.core.rpc.protocol.client.smartnotification.ShowSmartNotificationParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.sync.DidSynchronizeConfigurationScopeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.sync.InvalidTokenParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.sca.DidChangeScaIssuesParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.sca.DidChangeDependencyRisksParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.taint.vulnerability.DidChangeTaintVulnerabilitiesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
 
@@ -83,7 +83,9 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryCli
 public interface SonarLintRpcClient {
 
   /**
-   * Suggest some bindings to the client, based on registered connections, config scope, and binding clues.
+   * Suggest a list of binding suggestions for each eligible configuration scope,
+   * based on registered connections, config scope, binding clues, and git remote URL.
+   * Scopes without any available suggestions are automatically excluded from the results.
    */
   @JsonNotification
   void suggestBinding(SuggestBindingParams params);
@@ -248,13 +250,13 @@ public interface SonarLintRpcClient {
   void didChangeTaintVulnerabilities(DidChangeTaintVulnerabilitiesParams params);
 
   /**
-   * Called whenever there is a change in the list of SCA issues of a configuration scope. The change can be caused by:
+   * Called whenever there is a change in the list of dependency risks of a configuration scope. The change can be caused by:
    * <ul>
    *   <li>a synchronization</li>
    * </ul>
    */
   @JsonNotification
-  void didChangeScaIssues(DidChangeScaIssuesParams params);
+  void didChangeDependencyRisks(DidChangeDependencyRisksParams params);
 
   @JsonNotification
   void noBindingSuggestionFound(NoBindingSuggestionFoundParams params);

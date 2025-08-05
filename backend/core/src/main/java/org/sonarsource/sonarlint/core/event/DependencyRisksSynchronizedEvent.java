@@ -19,8 +19,8 @@
  */
 package org.sonarsource.sonarlint.core.event;
 
-import org.sonarsource.sonarlint.core.serverconnection.issues.ServerScaIssue;
+import org.sonarsource.sonarlint.core.serverconnection.issues.ServerDependencyRisk;
 import org.sonarsource.sonarlint.core.serverconnection.storage.UpdateSummary;
 
-public record ScaIssuesSynchronizedEvent(String connectionId, String sonarProjectKey, String sonarBranch, UpdateSummary<ServerScaIssue> summary) {
+public record DependencyRisksSynchronizedEvent(String connectionId, String sonarProjectKey, String sonarBranch, UpdateSummary<ServerDependencyRisk> summary) {
 }
