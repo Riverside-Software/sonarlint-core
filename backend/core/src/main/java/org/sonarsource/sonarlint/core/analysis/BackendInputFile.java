@@ -35,7 +35,7 @@ public class BackendInputFile implements ClientInputFile {
   private final Charset charset;
 
   public BackendInputFile(ClientFile clientFile) {
-    this(clientFile, StandardCharsets.UTF_8);
+    this(clientFile, clientFile.getCharset() == null ? StandardCharsets.UTF_8 : clientFile.getCharset());
   }
 
   public BackendInputFile(ClientFile clientFile, Charset charset) {
