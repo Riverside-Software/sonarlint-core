@@ -23,11 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.ReportIssuesAsErrorLevel;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.ReportIssuesAsOverrideLevel;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLiveAttributes;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorage;
-import org.sonarsource.sonarlint.core.telemetry.TelemetryReportIssuesAsOverride;
 
 import static org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresValueGranularity.DAILY;
 import static org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresValueType.BOOLEAN;
@@ -72,9 +69,9 @@ public class TelemetryMeasuresBuilder {
 
     addFindingInvestigationMeasures(values);
 
-    addReportIssuesAsErrorMeasures(values);
-
     addAutomaticAnalysisMeasures(values);
+
+    addFlightRecorderMeasures(values);
 
     return new TelemetryMeasuresPayload(UUID.randomUUID().toString(), platform, storage.installTime(), product, TelemetryMeasuresDimension.INSTALLATION, values);
   }
@@ -95,15 +92,6 @@ public class TelemetryMeasuresBuilder {
     values.add(new TelemetryMeasuresValue("findings_investigation.dependency_risks_locally", String.valueOf(storage.getDependencyRiskInvestigatedLocallyCount()), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("findings_investigation.dependency_risks_remotely",
       String.valueOf(storage.getDependencyRiskInvestigatedRemotelyCount()), INTEGER, DAILY));
-  }
-
-  private void addReportIssuesAsErrorMeasures(ArrayList<TelemetryMeasuresValue> values) {
-    addReportIssuesAsErrorLevelCount(values, ReportIssuesAsErrorLevel.NONE);
-    addReportIssuesAsErrorLevelCount(values, ReportIssuesAsErrorLevel.MEDIUM_AND_ABOVE);
-    addReportIssuesAsErrorLevelCount(values, ReportIssuesAsErrorLevel.ALL);
-
-    addReportIssuesAsOverrideCount(values, ReportIssuesAsOverrideLevel.WARNING);
-    addReportIssuesAsOverrideCount(values, ReportIssuesAsOverrideLevel.ERROR);
   }
 
   private void addConnectedModeMeasures(ArrayList<TelemetryMeasuresValue> values) {
@@ -133,37 +121,6 @@ public class TelemetryMeasuresBuilder {
 
   private void addBindingSuggestionClueMeasures(ArrayList<TelemetryMeasuresValue> values) {
     values.add(new TelemetryMeasuresValue("binding_suggestion_clue.remote_url", String.valueOf(storage.getSuggestedRemoteBindingsCount()), INTEGER, DAILY));
-  }
-
-  private void addReportIssuesAsErrorLevelCount(List<TelemetryMeasuresValue> values, ReportIssuesAsErrorLevel level) {
-    storage.getReportedIssuesAsErrorCountPerLevel().entrySet().stream()
-      .filter(e -> e.getValue() > 0 && e.getKey() == level)
-      .map(e -> new TelemetryMeasuresValue(
-        "reported_issues_as_error_level." + level.name().toLowerCase(Locale.ROOT),
-        String.valueOf(e.getValue()),
-        INTEGER,
-        DAILY
-      ))
-      .forEach(values::add);
-  }
-
-  private void addReportIssuesAsOverrideCount(List<TelemetryMeasuresValue> values, ReportIssuesAsOverrideLevel level) {
-    storage.getReportedIssuesAsOverridePerLevel().entrySet().stream()
-      .filter(e -> e.getKey() == level)
-      .forEach(entry -> {
-        var allOverrideCount = entry.getValue().stream().map(TelemetryReportIssuesAsOverride::getCount)
-          .mapToInt(Integer::intValue)
-          .sum();
-
-        if (allOverrideCount > 0) {
-          values.add(new TelemetryMeasuresValue(
-            "reported_issues_as_override." + level.name().toLowerCase(Locale.ROOT),
-            Integer.toString(allOverrideCount),
-            INTEGER,
-            DAILY
-          ));
-        }
-      });
   }
 
   private void addHelpAndFeedbackMeasures(List<TelemetryMeasuresValue> values) {
@@ -215,7 +172,7 @@ public class TelemetryMeasuresBuilder {
     }
   }
 
-  private void addToolsMeasures(ArrayList<TelemetryMeasuresValue> values) {
+  private void addToolsMeasures(List<TelemetryMeasuresValue> values) {
     var calledToolsByName = storage.getCalledToolsByName();
     calledToolsByName.forEach((key, toolCallCounter) -> {
       values.add(new TelemetryMeasuresValue("tools." + key + "_success_count", Integer.toString(toolCallCounter.getSuccess()), INTEGER, DAILY));
@@ -223,7 +180,7 @@ public class TelemetryMeasuresBuilder {
     });
   }
 
-  private void addFindingsFilteredMeasures(ArrayList<TelemetryMeasuresValue> values) {
+  private void addFindingsFilteredMeasures(List<TelemetryMeasuresValue> values) {
     storage.getFindingsFilteredCountersByType().entrySet().stream()
       .filter(e -> e.getValue().getFindingsFilteredCount() > 0)
       .map(e -> new TelemetryMeasuresValue(
@@ -235,8 +192,15 @@ public class TelemetryMeasuresBuilder {
       .forEach(values::add);
   }
 
-  private void addAutomaticAnalysisMeasures(ArrayList<TelemetryMeasuresValue> values) {
+  private void addAutomaticAnalysisMeasures(List<TelemetryMeasuresValue> values) {
     values.add(new TelemetryMeasuresValue("automatic_analysis.enabled", String.valueOf(storage.isAutomaticAnalysisEnabled()), BOOLEAN, DAILY));
     values.add(new TelemetryMeasuresValue("automatic_analysis.toggled_count", String.valueOf(storage.getAutomaticAnalysisToggledCount()), INTEGER, DAILY));
+  }
+
+  private void addFlightRecorderMeasures(List<TelemetryMeasuresValue> values) {
+    var flightRecorderSessionsCount = storage.getFlightRecorderSessionsCount();
+    if (flightRecorderSessionsCount > 0) {
+      values.add(new TelemetryMeasuresValue("flight_recorder.sessions_count", String.valueOf(flightRecorderSessionsCount), INTEGER, DAILY));
+    }
   }
 }
