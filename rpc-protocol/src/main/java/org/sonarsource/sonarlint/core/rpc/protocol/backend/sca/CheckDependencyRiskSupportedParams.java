@@ -17,50 +17,18 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.common;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.sca;
 
-public enum Language {
+public class CheckDependencyRiskSupportedParams {
 
-  ABAP,
-  ANSIBLE,
-  APEX,
-  AZURERESOURCEMANAGER,
-  C,
-  CLOUDFORMATION,
-  COBOL,
-  CPP,
-  CS,
-  CSS,
-  DOCKER,
-  GO,
-  GITHUBACTIONS,
-  HTML,
-  IPYTHON,
-  JAVA,
-  JCL,
-  JS,
-  JSON,
-  JSP,
-  KOTLIN,
-  KUBERNETES,
-  OBJC,
-  OPENEDGE,
-  OPENEDGE_DB,
-  PHP,
-  PLI,
-  PLSQL,
-  PYTHON,
-  RPG,
-  RUBY,
-  SCALA,
-  SECRETS,
-  TEXT,
-  SWIFT,
-  TERRAFORM,
-  TS,
-  TSQL,
-  VBNET,
-  XML,
-  YAML
+  private final String configurationScopeId;
+
+  public CheckDependencyRiskSupportedParams(String configurationScopeId) {
+    this.configurationScopeId = configurationScopeId;
+  }
+
+  public String getConfigurationScopeId() {
+    return configurationScopeId;
+  }
 
 }

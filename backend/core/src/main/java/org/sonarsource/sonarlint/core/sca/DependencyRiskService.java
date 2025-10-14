@@ -29,6 +29,7 @@ import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
 import org.sonarsource.sonarlint.core.SonarQubeClientManager;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.Binding;
+import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.event.DependencyRisksSynchronizedEvent;
@@ -36,6 +37,7 @@ import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcErrorCode;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.CheckDependencyRiskSupportedResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.DependencyRiskTransition;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.AffectedPackageDto;
@@ -53,8 +55,11 @@ import org.sonarsource.sonarlint.core.sync.ScaSynchronizationService;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
 import org.springframework.context.event.EventListener;
 
+import static org.sonarsource.sonarlint.core.serverconnection.ServerSettings.SCA_ENABLED;
+
 public class DependencyRiskService {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
+  private static final Version SCA_MIN_SQ_VERSION = Version.create("2025.4");
 
   private final ConfigurationRepository configurationRepository;
   private final ConnectionConfigurationRepository connectionRepository;
@@ -99,6 +104,43 @@ public class DependencyRiskService {
           .toList())));
   }
 
+  public CheckDependencyRiskSupportedResponse checkSupported(String configurationScopeId) {
+    var configScope = configurationRepository.getConfigurationScope(configurationScopeId);
+    if (configScope == null) {
+      var error = new ResponseError(SonarLintRpcErrorCode.CONFIG_SCOPE_NOT_FOUND, "The provided configuration scope does not exist: " + configurationScopeId, configurationScopeId);
+      throw new ResponseErrorException(error);
+    }
+    var effectiveBinding = configurationRepository.getEffectiveBinding(configurationScopeId);
+    if (effectiveBinding.isEmpty()) {
+      return new CheckDependencyRiskSupportedResponse(false, "The project is not bound, please bind it to SonarQube Server Enterprise 2025.4 or higher");
+    }
+    var connectionId = effectiveBinding.get().connectionId();
+    var connection = connectionRepository.getConnectionById(connectionId);
+    if (connection == null) {
+      var error = new ResponseError(SonarLintRpcErrorCode.CONNECTION_NOT_FOUND, "The provided configuration scope is bound to an unknown connection: " + connectionId,
+        connectionId);
+      throw new ResponseErrorException(error);
+    }
+    if (connection.getEndpointParams().isSonarCloud()) {
+      return new CheckDependencyRiskSupportedResponse(false, "SonarQube Cloud does not yet support dependency risks");
+    }
+    var optServerInfo = storageService.connection(connectionId).serverInfo().read();
+    if (optServerInfo.isEmpty()) {
+      var error = new ResponseError(SonarLintRpcErrorCode.CONNECTION_NOT_FOUND, "Could not retrieve server information for connection",
+        connectionId);
+      throw new ResponseErrorException(error);
+    }
+    var serverInfo = optServerInfo.get();
+    if (!serverInfo.version().satisfiesMinRequirement(SCA_MIN_SQ_VERSION)) {
+      return new CheckDependencyRiskSupportedResponse(false, "The connected SonarQube Server version is lower than the minimum supported version 2025.4");
+    }
+    var scaEnabled = serverInfo.globalSettings().getAsBoolean(SCA_ENABLED).orElse(false);
+    if (Boolean.FALSE.equals(scaEnabled)) {
+      return new CheckDependencyRiskSupportedResponse(false, "The connected SonarQube Server does not have Advanced Security enabled (requires Enterprise edition or higher)");
+    }
+    return new CheckDependencyRiskSupportedResponse(true, null);
+  }
+
   private List<DependencyRiskDto> loadDependencyRisks(String configurationScopeId, Binding binding, boolean shouldRefresh, SonarLintCancelMonitor cancelMonitor) {
     return branchTrackingService.awaitEffectiveSonarProjectBranch(configurationScopeId)
       .map(matchedBranch -> {
@@ -122,6 +164,8 @@ public class DependencyRiskService {
       DependencyRiskDto.Status.valueOf(serverDependencyRisk.status().name()),
       serverDependencyRisk.packageName(),
       serverDependencyRisk.packageVersion(),
+      serverDependencyRisk.vulnerabilityId(),
+      serverDependencyRisk.cvssScore(),
       serverDependencyRisk.transitions().stream()
         .map(transition -> DependencyRiskDto.Transition.valueOf(transition.name()))
         .toList());
@@ -168,7 +212,7 @@ public class DependencyRiskService {
 
     serverConnection.withClientApi(serverApi -> {
       serverApi.sca().changeStatus(dependencyRiskKey, transition.name(), comment, cancelMonitor);
-      projectServerIssueStore.updateDependencyRiskStatus(dependencyRiskKey, newStatus);
+      projectServerIssueStore.updateDependencyRiskStatus(dependencyRiskKey, newStatus, updatedDependencyRisk.transitions());
       client.didChangeDependencyRisks(new DidChangeDependencyRisksParams(configurationScopeId, Set.of(), List.of(), List.of(toDto(updatedDependencyRisk))));
     });
   }
@@ -200,8 +244,9 @@ public class DependencyRiskService {
   }
 
   private static GetDependencyRiskDetailsResponse convertToRpcResponse(GetIssueReleaseResponse serverResponse) {
-    var affectedPackages = serverResponse.vulnerability().affectedPackages().stream()
-      .map(pkg -> {
+    var vulnerability = serverResponse.vulnerability();
+    var affectedPackages = vulnerability == null ? List.<AffectedPackageDto>of() : vulnerability.affectedPackages()
+      .stream().map(pkg -> {
         var recommendationDetails = pkg.recommendationDetails();
         RecommendationDetailsDto recommendationDetailsDto = null;
         if (recommendationDetails != null) {
@@ -220,13 +265,14 @@ public class DependencyRiskService {
             .visibility(recommendationDetails.visibility()).build();
         }
         return new AffectedPackageDto(pkg.purl(), pkg.recommendation(), recommendationDetailsDto);
-      })
-      .toList();
+      }).toList();
+    var vulnerabilityId = vulnerability == null ? null : vulnerability.vulnerabilityId();
+    var description = vulnerability == null ? null : vulnerability.description();
 
     return new GetDependencyRiskDetailsResponse(serverResponse.key(), DependencyRiskDto.Severity.valueOf(serverResponse.severity().name()),
       DependencyRiskDto.SoftwareQuality.valueOf(serverResponse.quality().name()),serverResponse.release().packageName(),
-      serverResponse.release().version(), DependencyRiskDto.Type.valueOf(serverResponse.type().name()), serverResponse.vulnerability().vulnerabilityId(),
-      serverResponse.vulnerability().description(), affectedPackages);
+      serverResponse.release().version(), DependencyRiskDto.Type.valueOf(serverResponse.type().name()), vulnerabilityId,
+      description, affectedPackages);
   }
 
   public void openDependencyRiskInBrowser(String configurationScopeId, UUID dependencyKey) {

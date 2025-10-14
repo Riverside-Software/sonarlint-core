@@ -45,6 +45,7 @@ public enum Language {
   RUBY("Ruby"),
   SCALA("Scala"),
   SECRETS("Secrets"),
+  TEXT("Text"),
   SWIFT("Swift"),
   TSQL("T-SQL"),
   TS("TypeScript"),
@@ -59,7 +60,8 @@ public enum Language {
   KUBERNETES("Kubernetes"),
   TERRAFORM("Terraform"),
   AZURERESOURCEMANAGER("AzureResourceManager"),
-  ANSIBLE("Ansible");
+  ANSIBLE("Ansible"),
+  GITHUBACTIONS("GitHub Actions");
   private final String label;
 
   Language(String label) {
@@ -88,6 +90,8 @@ public enum Language {
         return OBJC;
       case COBOL:
         return COBOL;
+      case GITHUBACTIONS:
+        return GITHUBACTIONS;
       case HTML:
         return HTML;
       case IPYTHON:
@@ -120,6 +124,8 @@ public enum Language {
         return SCALA;
       case SECRETS:
         return SECRETS;
+      case TEXT:
+        return TEXT;
       case SWIFT:
         return SWIFT;
       case TSQL:

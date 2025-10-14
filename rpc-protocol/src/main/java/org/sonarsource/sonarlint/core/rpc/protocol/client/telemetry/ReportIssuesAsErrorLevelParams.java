@@ -17,50 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.common;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-public enum Language {
+public class ReportIssuesAsErrorLevelParams {
+  private final ReportIssuesAsErrorLevel level;
 
-  ABAP,
-  ANSIBLE,
-  APEX,
-  AZURERESOURCEMANAGER,
-  C,
-  CLOUDFORMATION,
-  COBOL,
-  CPP,
-  CS,
-  CSS,
-  DOCKER,
-  GO,
-  GITHUBACTIONS,
-  HTML,
-  IPYTHON,
-  JAVA,
-  JCL,
-  JS,
-  JSON,
-  JSP,
-  KOTLIN,
-  KUBERNETES,
-  OBJC,
-  OPENEDGE,
-  OPENEDGE_DB,
-  PHP,
-  PLI,
-  PLSQL,
-  PYTHON,
-  RPG,
-  RUBY,
-  SCALA,
-  SECRETS,
-  TEXT,
-  SWIFT,
-  TERRAFORM,
-  TS,
-  TSQL,
-  VBNET,
-  XML,
-  YAML
+  public ReportIssuesAsErrorLevelParams(ReportIssuesAsErrorLevel level) {
+    this.level = level;
+  }
 
+  public ReportIssuesAsErrorLevel getLevel() {
+    return level;
+  }
 }

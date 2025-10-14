@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -50,6 +51,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonarqube.ws.client.WsClient;
@@ -71,6 +74,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSys
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.FeatureFlagsDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.HttpConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.CheckDependencyRiskSupportedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.AffectedPackageDto;
@@ -92,6 +96,7 @@ import static org.awaitility.Awaitility.await;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.APEX;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.C;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.COBOL;
+import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.CPP;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JAVA;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.JCL;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.SECRETS;
@@ -105,11 +110,15 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
   private static final String PROJECT_KEY_TSQL = "sample-tsql";
   private static final String PROJECT_KEY_APEX = "sample-apex";
   private static final String PROJECT_KEY_CUSTOM_SECRETS = "sample-custom-secrets";
+  private static final String PROJECT_KEY_MISRA = "sample-misra";
   private static final String PROJECT_KEY_SCA = "sample-sca";
+  public static final String SONAR_EARLY_ACCESS_MISRA_ENABLED_PROPERTY_KEY = "sonar.earlyAccess.misra.enabled";
+  public static final String SONAR_SCA_FEATURE_ENABLED_PROPERTY_KEY = "sonar.sca.enabled";
 
   @RegisterExtension
   static OrchestratorExtension ORCHESTRATOR = OrchestratorUtils.defaultEnvBuilder()
-    .setServerProperty("sonar.sca.enabled", "true")
+    .setServerProperty(SONAR_SCA_FEATURE_ENABLED_PROPERTY_KEY, "true")
+    .setServerProperty(SONAR_EARLY_ACCESS_MISRA_ENABLED_PROPERTY_KEY, "true")
     .setEdition(Edition.ENTERPRISE)
     .activateLicense()
     .restoreProfileAtStartup(FileLocation.ofClasspath("/c-sonarlint.xml"))
@@ -140,6 +149,9 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
   static void prepare() {
     adminWsClient = newAdminWsClient(ORCHESTRATOR);
     adminWsClient.settings().set(new SetRequest().setKey("sonar.forceAuthentication").setValue("true"));
+    // we have to set it again via API because the server property value is not returned by api/settings/values
+    adminWsClient.settings().set(new SetRequest().setKey(SONAR_SCA_FEATURE_ENABLED_PROPERTY_KEY).setValue("true"));
+    adminWsClient.settings().set(new SetRequest().setKey(SONAR_EARLY_ACCESS_MISRA_ENABLED_PROPERTY_KEY).setValue("true"));
 
     removeGroupPermission("anyone", "scan");
 
@@ -167,6 +179,11 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
       singlePointOfExitRuleKey = "c:S1005";
     } else {
       singlePointOfExitRuleKey = "c:FunctionSinglePointOfExit";
+    }
+    if (ORCHESTRATOR.getServer().version().isGreaterThanOrEquals(2025, 4)) {
+      ORCHESTRATOR.getServer().restoreProfile(FileLocation.ofClasspath("/cpp-misra-sonarlint.xml"));
+      provisionProject(ORCHESTRATOR, PROJECT_KEY_MISRA, "Sample MISRA");
+      ORCHESTRATOR.getServer().associateProjectToQualityProfile(PROJECT_KEY_MISRA, "cpp", "SonarLint IT MISRA");
     }
   }
 
@@ -257,6 +274,33 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
       assertThat(rawIssues)
         .extracting(RaisedIssueDto::getRuleKey)
         .containsOnly("c:S3805", singlePointOfExitRuleKey);
+    }
+
+    @Test
+    // the compile commands file is specific to Unix-like platforms, so skip on Windows
+    @DisabledOnOs(OS.WINDOWS)
+    @OnlyOnSonarQube(from = "2025.4")
+    void analysisMisraRules(@TempDir Path tmpDir) throws IOException {
+      var configScopeId = "analysisMisraRules";
+      start(configScopeId, PROJECT_KEY_MISRA);
+      var projectDir = Path.of("projects").resolve(PROJECT_KEY_MISRA);
+      var filePath = projectDir.resolve("foo.cpp").toAbsolutePath().toString();
+      var compileCommandsFilePath = tmpDir.resolve("compile_commands.json");
+      Files.writeString(compileCommandsFilePath, """
+        [
+        {
+          "directory": "%s",
+          "command": "/usr/bin/c++ -g -std=gnu++20 -fdiagnostics-color=always -o CMakeFiles/untitled.dir/foo.cpp.o -c %s",
+          "file": "%s",
+          "output": "CMakeFiles/untitled.dir/foo.cpp.o"
+        }
+        ]""".formatted(projectDir.toAbsolutePath().toString(), filePath, filePath));
+
+      var rawIssues = analyzeFile(configScopeId, PROJECT_KEY_MISRA, "foo.cpp", "sonar.cfamily.compile-commands", compileCommandsFilePath.toAbsolutePath().toString());
+
+      assertThat(rawIssues)
+        .extracting(RaisedIssueDto::getRuleKey, RaisedIssueDto::getPrimaryMessage)
+        .containsOnly(tuple("cpp:M23_151", "Either add a parameter list or the \"&\" operator to this use of \"f\"."));
     }
 
     @Test
@@ -366,12 +410,12 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
     @BeforeAll
     void prepare() throws IOException {
       startBackend(Map.of());
+      provisionProject(ORCHESTRATOR, PROJECT_KEY_SCA, "Sample SCA");
     }
 
     @Test
     void should_return_risk_dependency_details() {
-      String configScopeId = "should_honor_the_web_api_contract";
-      provisionProject(ORCHESTRATOR, PROJECT_KEY_SCA, "Sample SCA");
+      var configScopeId = "should_honor_the_web_api_contract";
       analyzeMavenProject(ORCHESTRATOR, "sample-sca", Map.of("sonar.projectKey", PROJECT_KEY_SCA));
       bindProject(configScopeId, PROJECT_KEY_SCA, PROJECT_KEY_SCA);
       var firstDependencyRiskKey = getFirstDependencyRiskKey(PROJECT_KEY_SCA);
@@ -387,6 +431,18 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
           List.of(new AffectedPackageDto("pkg:maven/com.fasterxml.woodstox/woodstox-core", "upgrade",
             RecommendationDetailsDto.builder().impactDescription("Vulnerability occurs if attacker can provide specifically crafted XML document with DTD reference.")
               .impactScore(5).realIssue(true).visibility("external").build()))));
+    }
+
+    @Test
+    void sca_feature_should_be_enabled() {
+      var configScopeId = "sca_check_enabled";
+      analyzeMavenProject(ORCHESTRATOR, "sample-sca", Map.of("sonar.projectKey", PROJECT_KEY_SCA));
+      bindProject(configScopeId, PROJECT_KEY_SCA, PROJECT_KEY_SCA);
+
+      var supportedResponse = backend.getDependencyRiskService().checkSupported(new CheckDependencyRiskSupportedParams(configScopeId)).join();
+
+      assertThat(supportedResponse.isSupported()).isTrue();
+      assertThat(supportedResponse.getReason()).isNull();
     }
 
     private UUID getFirstDependencyRiskKey(String projectKey) {
@@ -472,7 +528,7 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
 
     backend = clientLauncher.getServerProxy();
     try {
-      var languages = Set.of(JAVA, COBOL, C, TSQL, APEX, SECRETS, JCL);
+      var languages = Set.of(JAVA, COBOL, C, CPP, TSQL, APEX, SECRETS, JCL);
       var featureFlags = new FeatureFlagsDto(true, true, true, false, true, false, false, true, false, true, false);
       backend.initialize(
         new InitializeParams(IT_CLIENT_INFO, IT_TELEMETRY_ATTRIBUTES, HttpConfigurationDto.defaultConfig(), null, featureFlags,

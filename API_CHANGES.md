@@ -1,3 +1,25 @@
+# 10.28
+
+## Breaking changes
+
+* Fields `vulnerabilityId` and `description` from `org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsResponse` are now nullable.
+  * Dependency risks of type `PROHIBITED_LICENSE` do not have a vulnerability ID or description.
+
+## New features
+
+* Add `TEXT` language to `org.sonarsource.sonarlint.core.commons.api.SonarLanguage`
+  * Enabling this language allows detecting [text issues](https://rules.sonarsource.com/text/)
+* Add `GITHUBACTIONS` language to `org.sonarsource.sonarlint.core.commons.api.SonarLanguage`
+  * Enabling this language allows detecting [issues on GitHub Actions](https://rules.sonarsource.com/githubactions/)
+* Add new method `org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.DependencyRiskRpcService#checkSupported` to check if dependency risks are supported by the server
+  * It returns the reason in case the server does not support dependency risks
+
+## SCA
+
+* Introduce new fields `vulnerabilityId` and `cvssScore` in `org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.DependencyRiskDto`
+  * The `vulnerabilityId` is a unique identifier for the vulnerability such as `CVE-1234`, and the `cvssScore` is the Common Vulnerability Scoring System score for the vulnerability
+  * They are null in case the dependency risk is of type `PROHIBITED_LICENSE`
+
 # 10.27
 
 ## Breaking changes

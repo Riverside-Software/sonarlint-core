@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Telemetry
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,50 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.common;
+package org.sonarsource.sonarlint.core.telemetry;
 
-public enum Language {
 
-  ABAP,
-  ANSIBLE,
-  APEX,
-  AZURERESOURCEMANAGER,
-  C,
-  CLOUDFORMATION,
-  COBOL,
-  CPP,
-  CS,
-  CSS,
-  DOCKER,
-  GO,
-  GITHUBACTIONS,
-  HTML,
-  IPYTHON,
-  JAVA,
-  JCL,
-  JS,
-  JSON,
-  JSP,
-  KOTLIN,
-  KUBERNETES,
-  OBJC,
-  OPENEDGE,
-  OPENEDGE_DB,
-  PHP,
-  PLI,
-  PLSQL,
-  PYTHON,
-  RPG,
-  RUBY,
-  SCALA,
-  SECRETS,
-  TEXT,
-  SWIFT,
-  TERRAFORM,
-  TS,
-  TSQL,
-  VBNET,
-  XML,
-  YAML
+public class TelemetryReportIssuesAsOverride {
+  private final String ruleKey;
+  private int count;
 
+  public TelemetryReportIssuesAsOverride(String ruleKey) {
+    this.ruleKey = ruleKey;
+    this.count = 1;
+  }
+
+  public void increment() {
+    count++;
+  }
+
+  public int getCount() {
+    return count;
+  }
+
+  public String getRuleKey() {
+    return ruleKey;
+  }
 }

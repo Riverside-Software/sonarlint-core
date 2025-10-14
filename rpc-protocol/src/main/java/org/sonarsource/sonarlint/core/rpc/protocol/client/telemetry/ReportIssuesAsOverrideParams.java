@@ -17,50 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.common;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-public enum Language {
+public class ReportIssuesAsOverrideParams {
+  private final ReportIssuesAsOverrideLevel level;
+  private final String ruleKey;
 
-  ABAP,
-  ANSIBLE,
-  APEX,
-  AZURERESOURCEMANAGER,
-  C,
-  CLOUDFORMATION,
-  COBOL,
-  CPP,
-  CS,
-  CSS,
-  DOCKER,
-  GO,
-  GITHUBACTIONS,
-  HTML,
-  IPYTHON,
-  JAVA,
-  JCL,
-  JS,
-  JSON,
-  JSP,
-  KOTLIN,
-  KUBERNETES,
-  OBJC,
-  OPENEDGE,
-  OPENEDGE_DB,
-  PHP,
-  PLI,
-  PLSQL,
-  PYTHON,
-  RPG,
-  RUBY,
-  SCALA,
-  SECRETS,
-  TEXT,
-  SWIFT,
-  TERRAFORM,
-  TS,
-  TSQL,
-  VBNET,
-  XML,
-  YAML
+  public ReportIssuesAsOverrideParams(ReportIssuesAsOverrideLevel level, String ruleKey) {
+    this.level = level;
+    this.ruleKey = ruleKey;
+  }
 
+  public ReportIssuesAsOverrideLevel getLevel() {
+    return level;
+  }
+
+  public String getRuleKey() {
+    return ruleKey;
+  }
 }

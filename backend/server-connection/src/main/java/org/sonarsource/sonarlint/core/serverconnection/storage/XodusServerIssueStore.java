@@ -149,6 +149,8 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
   private static final String ASSIGNEE_PROPERTY_NAME = "assignee";
   private static final String PACKAGE_NAME_PROPERTY_NAME = "packageName";
   private static final String PACKAGE_VERSION_PROPERTY_NAME = "packageVersion";
+  private static final String VULNERABILITY_ID_PROPERTY_NAME = "vulnerabilityId";
+  private static final String CVSS_SCORE_PROPERTY_NAME = "cvssScore";
   private static final String TRANSITIONS_PROPERTY_NAME = "transitions";
   private static final String STATUS_PROPERTY_NAME = "status";
   private final PersistentEntityStore entityStore;
@@ -852,13 +854,13 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
   }
 
   @Override
-  public void updateDependencyRiskStatus(UUID key, ServerDependencyRisk.Status newStatus) {
+  public void updateDependencyRiskStatus(UUID key, ServerDependencyRisk.Status newStatus, List<ServerDependencyRisk.Transition> transitions) {
     entityStore.executeInTransaction(txn -> {
       var optionalEntity = findUnique(txn, DEPENDENCY_RISK_ENTITY_TYPE, KEY_PROPERTY_NAME, key.toString());
-      if (optionalEntity.isPresent()) {
-        var issueEntity = optionalEntity.get();
+      optionalEntity.ifPresent(issueEntity -> {
         issueEntity.setProperty(STATUS_PROPERTY_NAME, newStatus.name());
-      }
+        setTransitions(issueEntity, transitions);
+      });
     });
   }
 
@@ -881,10 +883,13 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
     var status = ServerDependencyRisk.Status.valueOf((String) requireNonNull(storedIssue.getProperty(STATUS_PROPERTY_NAME)));
     var packageName = (String) requireNonNull(storedIssue.getProperty(PACKAGE_NAME_PROPERTY_NAME));
     var packageVersion = (String) requireNonNull(storedIssue.getProperty(PACKAGE_VERSION_PROPERTY_NAME));
+    var vulnerabilityId = (String) storedIssue.getProperty(VULNERABILITY_ID_PROPERTY_NAME);
+    var cvssScore = (String) storedIssue.getProperty(CVSS_SCORE_PROPERTY_NAME);
     var transitionsString = (String) requireNonNull(storedIssue.getProperty(TRANSITIONS_PROPERTY_NAME));
     var transitions = transitionsString.trim().isEmpty() ? List.<ServerDependencyRisk.Transition>of()
       : Stream.of(transitionsString.split(",")).map(ServerDependencyRisk.Transition::valueOf).toList();
-    return new ServerDependencyRisk(key, type, severity, quality, status, packageName, packageVersion, transitions);
+    return new ServerDependencyRisk(key, type, severity, quality, status, packageName, packageVersion,
+      vulnerabilityId, cvssScore, transitions);
   }
 
   private static void deleteAllDependencyRisksOfBranch(Entity branchEntity) {
@@ -908,7 +913,17 @@ public class XodusServerIssueStore implements ProjectServerIssueStore {
     issueEntity.setProperty(STATUS_PROPERTY_NAME, issue.status().name());
     issueEntity.setProperty(PACKAGE_NAME_PROPERTY_NAME, issue.packageName());
     issueEntity.setProperty(PACKAGE_VERSION_PROPERTY_NAME, issue.packageVersion());
-    issueEntity.setProperty(TRANSITIONS_PROPERTY_NAME, issue.transitions().stream()
+    if (issue.vulnerabilityId() != null) {
+      issueEntity.setProperty(VULNERABILITY_ID_PROPERTY_NAME, issue.vulnerabilityId());
+    }
+    if (issue.cvssScore() != null) {
+      issueEntity.setProperty(CVSS_SCORE_PROPERTY_NAME, issue.cvssScore());
+    }
+    setTransitions(issueEntity, issue.transitions());
+  }
+
+  private static void setTransitions(Entity issueEntity, List<ServerDependencyRisk.Transition> transitions) {
+    issueEntity.setProperty(TRANSITIONS_PROPERTY_NAME, transitions.stream()
       .map(Enum::name)
       .collect(Collectors.joining(",")));
   }

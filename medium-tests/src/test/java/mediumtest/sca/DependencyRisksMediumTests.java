@@ -28,6 +28,8 @@ import java.util.concurrent.CompletionException;
 import org.assertj.core.groups.Tuple;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcErrorCode;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.CheckDependencyRiskSupportedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.CheckDependencyRiskSupportedResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.GetDependencyRiskDetailsResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.DependencyRiskDto;
@@ -110,6 +112,8 @@ class DependencyRisksMediumTests {
               .withKey(dependencyRiskKey)
               .withPackageName("com.example.vulnerable")
               .withPackageVersion("2.1.0")
+              .withVulnerabilityId("CVE-1234")
+              .withCvssScore("7.5")
               .withType(Type.VULNERABILITY)
               .withSeverity(Severity.HIGH)))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
@@ -155,7 +159,8 @@ class DependencyRisksMediumTests {
           branch -> branch
             .withDependencyRisk(
               new ServerFixture.AbstractServerBuilder.ServerProjectBuilder.ServerDependencyRisk(dependencyRiskKey.toString(), "PROHIBITED_LICENSE",
-                "HIGH", "MAINTAINABILITY", "OPEN", "com.example.vulnerable", "2.1.0", List.of("CONFIRM")))))
+                "HIGH", "MAINTAINABILITY", "OPEN", "com.example.vulnerable", "2.1.0",
+                null, null, List.of("CONFIRM")))))
       .start();
     var backend = harness.newBackend()
       .withBackendCapability(SCA_SYNCHRONIZATION)
@@ -186,7 +191,8 @@ class DependencyRisksMediumTests {
           branch -> branch
             .withDependencyRisk(
               new ServerFixture.AbstractServerBuilder.ServerProjectBuilder.ServerDependencyRisk(dependencyRiskKey.toString(), "VULNERABILITY", "HIGH",
-                "SECURITY", "OPEN", "com.example.vulnerable", "2.1.0", List.of("CONFIRM")))))
+                "SECURITY", "OPEN", "com.example.vulnerable", "2.1.0",
+                "CVE-1234", "7.5", List.of("CONFIRM")))))
       .start();
     var client = harness.newFakeClient().build();
     harness.newBackend()
@@ -209,6 +215,8 @@ class DependencyRisksMediumTests {
           assertThat(dependencyRisk.getId()).isEqualTo(dependencyRiskKey);
           assertThat(dependencyRisk.getPackageName()).isEqualTo("com.example.vulnerable");
           assertThat(dependencyRisk.getPackageVersion()).isEqualTo("2.1.0");
+          assertThat(dependencyRisk.getVulnerabilityId()).isEqualTo("CVE-1234");
+          assertThat(dependencyRisk.getCvssScore()).isEqualTo("7.5");
           assertThat(dependencyRisk.getType()).isEqualTo(DependencyRiskDto.Type.VULNERABILITY);
           assertThat(dependencyRisk.getSeverity()).isEqualTo(DependencyRiskDto.Severity.HIGH);
           assertThat(dependencyRisk.getQuality()).isEqualTo(DependencyRiskDto.SoftwareQuality.SECURITY);
@@ -233,6 +241,8 @@ class DependencyRisksMediumTests {
               .withKey(dependencyRiskKey)
               .withPackageName("com.example.vulnerable")
               .withPackageVersion("2.1.0")
+              .withVulnerabilityId("CVE-1234")
+              .withCvssScore("7.5")
               .withType(Type.VULNERABILITY)
               .withSeverity(Severity.HIGH)))))
       .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
@@ -259,7 +269,8 @@ class DependencyRisksMediumTests {
           branch -> branch
             .withDependencyRisk(
               new ServerFixture.AbstractServerBuilder.ServerProjectBuilder.ServerDependencyRisk(dependencyRiskKey.toString(), "VULNERABILITY", "LOW",
-                "RELIABILITY", "ACCEPT", "com.example.vulnerable", "2.1.0", List.of("REOPEN")))))
+                "RELIABILITY", "ACCEPT", "com.example.vulnerable", "2.1.0", "CVE-1234",
+                "7.5", List.of("REOPEN")))))
       .start();
     var client = harness.newFakeClient().build();
     harness.newBackend()
@@ -288,11 +299,12 @@ class DependencyRisksMediumTests {
       assertThat(change.getClosedDependencyRiskIds()).isEmpty();
       assertThat(change.getAddedDependencyRisks()).isEmpty();
       assertThat(change.getUpdatedDependencyRisks())
-        .extracting(DependencyRiskDto::getId, DependencyRiskDto::getType, DependencyRiskDto::getSeverity, DependencyRiskDto::getStatus, DependencyRiskDto::getTransitions, DependencyRiskDto::getPackageName,
-          DependencyRiskDto::getPackageVersion)
+        .extracting(DependencyRiskDto::getId, DependencyRiskDto::getType, DependencyRiskDto::getSeverity, DependencyRiskDto::getStatus,
+          DependencyRiskDto::getTransitions, DependencyRiskDto::getPackageName, DependencyRiskDto::getPackageVersion,
+          DependencyRiskDto::getVulnerabilityId, DependencyRiskDto::getCvssScore)
         .containsExactly(
           tuple(dependencyRiskKey, DependencyRiskDto.Type.VULNERABILITY, DependencyRiskDto.Severity.LOW, DependencyRiskDto.Status.ACCEPT, List.of(DependencyRiskDto.Transition.REOPEN), "com.example.vulnerable",
-            "2.1.0"));
+            "2.1.0", "CVE-1234", "7.5"));
     });
   }
 
@@ -487,6 +499,7 @@ class DependencyRisksMediumTests {
     var response = getDependencyRiskDetails(backend, CONFIG_SCOPE_ID, dependencyRiskKey);
 
     assertThat(response).isNotNull();
+    assertThat(response.getDescription()).isNotNull();
     assertThat(response.getDescription()).isEqualTo("Deserialization of untrusted data vulnerability in Apache Commons Collections.");
     assertThat(response.getAffectedPackages())
       .hasSize(2)
@@ -760,6 +773,99 @@ class DependencyRisksMediumTests {
     assertThat(response.getAffectedPackages()).isEmpty();
   }
 
+  @SonarLintTest
+  void it_should_handle_dependency_risk_details_for_prohibited_license(SonarLintTestHarness harness) {
+    var dependencyRiskKey = UUID.randomUUID();
+    var server = harness.newFakeSonarQubeServer()
+      .withProject(PROJECT_KEY, project -> project.withBranch("main"))
+      .start();
+
+    server.getMockServer().stubFor(
+      get(urlEqualTo("/api/v2/sca/issues-releases/" + dependencyRiskKey))
+        .willReturn(aResponse()
+          .withStatus(200)
+          .withHeader("Content-Type", "application/json")
+          .withBody("""
+            {
+              "key": "589a534f-53e0-4eca-9987-b91bb42146d6",
+              "severity": "BLOCKER",
+              "quality": "SECURITY",
+              "release": {
+                "packageName": "org.apache.tomcat.embed:tomcat-embed-core",
+                "version": "9.0.70"
+              },
+              "type": "PROHIBITED_LICENSE",
+              "vulnerability": null
+            }
+            """)));
+
+    var backend = harness.newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server)
+      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
+      .start();
+
+    var response = getDependencyRiskDetails(backend, CONFIG_SCOPE_ID, dependencyRiskKey);
+
+    assertThat(response).isNotNull();
+    assertThat(response.getType()).isEqualTo(DependencyRiskDto.Type.PROHIBITED_LICENSE);
+    assertThat(response.getDescription()).isNull();
+    assertThat(response.getVulnerabilityId()).isNull();
+  }
+
+  @SonarLintTest
+  void it_should_check_for_supported_sca(SonarLintTestHarness harness) {
+    var server = harness.newFakeSonarQubeServer()
+      .start();
+    var backend = harness.newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server,
+        storage -> storage
+          .withGlobalSettings(Map.of("sonar.sca.enabled", "true"))
+          .withServerVersion("2025.4"))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
+      .start();
+
+    var response = checkSupported(backend, CONFIG_SCOPE_ID);
+
+    assertThat(response.isSupported()).isTrue();
+    assertThat(response.getReason()).isNull();
+  }
+
+  @SonarLintTest
+  void it_should_not_be_supported_if_old_version(SonarLintTestHarness harness) {
+    var server = harness.newFakeSonarQubeServer()
+      .start();
+    var backend = harness.newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server,
+        storage -> storage
+          .withGlobalSettings(Map.of("sonar.sca.enabled", "true"))
+          .withServerVersion("2025.3"))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
+      .start();
+
+    var response = checkSupported(backend, CONFIG_SCOPE_ID);
+
+    assertThat(response.isSupported()).isFalse();
+    assertThat(response.getReason()).isEqualTo("The connected SonarQube Server version is lower than the minimum supported version 2025.4");
+  }
+
+  @SonarLintTest
+  void it_should_not_be_supported_if_sca_disabled(SonarLintTestHarness harness) {
+    var server = harness.newFakeSonarQubeServer()
+      .start();
+    var backend = harness.newBackend()
+      .withSonarQubeConnection(CONNECTION_ID, server,
+        storage -> storage
+          .withGlobalSettings(Map.of("sonar.sca.enabled", "false"))
+          .withServerVersion("2025.4"))
+      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, PROJECT_KEY)
+      .start();
+
+    var response = checkSupported(backend, CONFIG_SCOPE_ID);
+
+    assertThat(response.isSupported()).isFalse();
+    assertThat(response.getReason()).isEqualTo("The connected SonarQube Server does not have Advanced Security enabled (requires Enterprise edition or higher)");
+  }
+
   private List<DependencyRiskDto> listAllDependencyRisks(SonarLintTestRpcServer backend, String configScopeId) {
     return backend.getDependencyRiskService().listAll(new ListAllParams(configScopeId)).join().getDependencyRisks();
   }
@@ -770,5 +876,9 @@ class DependencyRisksMediumTests {
 
   private GetDependencyRiskDetailsResponse getDependencyRiskDetails(SonarLintTestRpcServer backend, String configScopeId, UUID dependencyRiskKey) {
     return backend.getDependencyRiskService().getDependencyRiskDetails(new GetDependencyRiskDetailsParams(configScopeId, dependencyRiskKey)).join();
+  }
+
+  private CheckDependencyRiskSupportedResponse checkSupported(SonarLintTestRpcServer backend, String configScopeId) {
+    return backend.getDependencyRiskService().checkSupported(new CheckDependencyRiskSupportedParams(configScopeId)).join();
   }
 }

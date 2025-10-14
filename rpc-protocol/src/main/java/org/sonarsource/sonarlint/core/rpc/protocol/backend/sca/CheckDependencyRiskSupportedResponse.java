@@ -17,50 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.common;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.sca;
 
-public enum Language {
+import javax.annotation.CheckForNull;
+import javax.annotation.Nullable;
 
-  ABAP,
-  ANSIBLE,
-  APEX,
-  AZURERESOURCEMANAGER,
-  C,
-  CLOUDFORMATION,
-  COBOL,
-  CPP,
-  CS,
-  CSS,
-  DOCKER,
-  GO,
-  GITHUBACTIONS,
-  HTML,
-  IPYTHON,
-  JAVA,
-  JCL,
-  JS,
-  JSON,
-  JSP,
-  KOTLIN,
-  KUBERNETES,
-  OBJC,
-  OPENEDGE,
-  OPENEDGE_DB,
-  PHP,
-  PLI,
-  PLSQL,
-  PYTHON,
-  RPG,
-  RUBY,
-  SCALA,
-  SECRETS,
-  TEXT,
-  SWIFT,
-  TERRAFORM,
-  TS,
-  TSQL,
-  VBNET,
-  XML,
-  YAML
+public class CheckDependencyRiskSupportedResponse {
+
+  private final boolean supported;
+  private final String reason;
+
+  public CheckDependencyRiskSupportedResponse(boolean supported, @Nullable String reason) {
+    this.supported = supported;
+    this.reason = reason;
+  }
+
+  public boolean isSupported() {
+    return supported;
+  }
+
+  @CheckForNull
+  public String getReason() {
+    return reason;
+  }
 
 }
