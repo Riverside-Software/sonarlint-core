@@ -20,6 +20,7 @@
 package org.sonarsource.sonarlint.core.rule.extractor;
 
 import java.io.File;
+import javax.annotation.Nullable;
 import org.sonar.api.utils.TempFolder;
 
 public class NoopTempFolder implements TempFolder {
@@ -40,7 +41,7 @@ public class NoopTempFolder implements TempFolder {
   }
 
   @Override
-  public File newFile(String prefix, String suffix) {
+  public File newFile(@Nullable String prefix, @Nullable String suffix) {
     throw new UnsupportedOperationException("newFile");
   }
 

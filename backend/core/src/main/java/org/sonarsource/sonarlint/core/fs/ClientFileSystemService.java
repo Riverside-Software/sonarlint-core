@@ -25,7 +25,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import javax.annotation.PreDestroy;
@@ -221,4 +224,18 @@ public class ClientFileSystemService {
   public void didCloseFile(String configurationScopeId, URI fileUri) {
     openFilesRepository.considerClosed(configurationScopeId, fileUri);
   }
+
+  public Map<String, Set<URI>> groupFilesByConfigScope(Set<URI> fileUris) {
+    return fileUris.stream()
+      .map(filesByUri::get)
+      .filter(Objects::nonNull)
+      .collect(Collectors.groupingBy(
+        ClientFile::getConfigScopeId,
+        Collectors.mapping(
+          ClientFile::getUri,
+          Collectors.toSet()
+        )
+      ));
+  }
+
 }

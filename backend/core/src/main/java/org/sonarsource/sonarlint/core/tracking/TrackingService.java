@@ -41,7 +41,7 @@ import org.sonarsource.sonarlint.core.commons.KnownFinding;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
 import org.sonarsource.sonarlint.core.commons.NewCodeDefinition;
 import org.sonarsource.sonarlint.core.commons.RuleType;
-import org.sonarsource.sonarlint.core.commons.SonarLintBlameResult;
+import org.sonarsource.sonarlint.core.commons.MultiFileBlameResult;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.git.GitService;
 import org.sonarsource.sonarlint.core.commons.util.git.exceptions.GitException;
@@ -85,6 +85,7 @@ public class TrackingService {
   private final FindingsSynchronizationService findingsSynchronizationService;
   private final NewCodeService newCodeService;
   private final ApplicationEventPublisher eventPublisher;
+  private final GitService gitService;
 
   public TrackingService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, SonarProjectBranchTrackingService branchTrackingService,
     PathTranslationService pathTranslationService, FindingReportingService reportingService, KnownFindingsStorageService knownFindingsStorageService, StorageService storageService,
@@ -102,6 +103,7 @@ public class TrackingService {
     this.findingsSynchronizationService = findingsSynchronizationService;
     this.newCodeService = newCodeService;
     this.eventPublisher = eventPublisher;
+    this.gitService = GitService.create();
   }
 
   @EventListener
@@ -284,7 +286,6 @@ public class TrackingService {
       try {
         var newCodeDefinition = newCodeService.getFullNewCodeDefinition(configurationScopeId);
         var thresholdDate = newCodeDefinition.map(NewCodeDefinition::getThresholdDate).orElse(NewCodeDefinition.withAlwaysNew().getThresholdDate());
-        var gitService = GitService.create();
         var blameResult = gitService.getBlameResult(baseDir, fileRelativePaths, fileUris, fileContentProvider, thresholdDate);
         return (filePath, lineNumbers) -> determineIntroductionDate(filePath, lineNumbers, blameResult);
       } catch (GitException e) {
@@ -308,14 +309,11 @@ public class TrackingService {
     }
   }
 
-  private static Instant determineIntroductionDate(Path path, Collection<Integer> lineNumbers, SonarLintBlameResult sonarLintBlameResult) {
-    if (sonarLintBlameResult.isEmpty()) {
-      return Instant.now();
-    }
-    return sonarLintBlameResult.getLatestChangeDateForLinesInFile(path, lineNumbers).orElse(Instant.now());
+  private static Instant determineIntroductionDate(Path path, Collection<Integer> lineNumbers, MultiFileBlameResult multiFileBlameResult) {
+    return multiFileBlameResult.getLatestChangeDateForLinesInFile(path, lineNumbers).orElse(Instant.now());
   }
 
   private record MatchingResult(Map<Path, List<TrackedIssue>> issuesToReport,
-                                       Map<Path, List<TrackedIssue>> hotspotsToReport) {
+    Map<Path, List<TrackedIssue>> hotspotsToReport) {
   }
 }

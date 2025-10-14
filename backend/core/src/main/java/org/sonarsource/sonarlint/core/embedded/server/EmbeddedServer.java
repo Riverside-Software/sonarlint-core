@@ -32,7 +32,19 @@ import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.io.CloseMode;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
+import org.sonarsource.sonarlint.core.embedded.server.filter.CorsFilter;
+import org.sonarsource.sonarlint.core.embedded.server.filter.CspFilter;
+import org.sonarsource.sonarlint.core.embedded.server.filter.ParseParamsFilter;
+import org.sonarsource.sonarlint.core.embedded.server.filter.RateLimitFilter;
+import org.sonarsource.sonarlint.core.embedded.server.filter.ValidationFilter;
+import org.sonarsource.sonarlint.core.embedded.server.handler.GeneratedUserTokenHandler;
+import org.sonarsource.sonarlint.core.embedded.server.handler.ShowFixSuggestionRequestHandler;
+import org.sonarsource.sonarlint.core.embedded.server.handler.ShowHotspotRequestHandler;
+import org.sonarsource.sonarlint.core.embedded.server.handler.ShowIssueRequestHandler;
+import org.sonarsource.sonarlint.core.embedded.server.handler.StatusRequestHandler;
+import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.embeddedserver.EmbeddedServerStartedParams;
 
 import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.EMBEDDED_SERVER;
 
@@ -52,15 +64,22 @@ public class EmbeddedServer {
   private final ShowHotspotRequestHandler showHotspotRequestHandler;
   private final ShowIssueRequestHandler showIssueRequestHandler;
   private final ShowFixSuggestionRequestHandler showFixSuggestionRequestHandler;
+  private final ToggleAutomaticAnalysisRequestHandler toggleAutomaticAnalysisRequestHandler;
+  private final AnalyzeFileListRequestHandler analyzeFileListRequestHandler;
+  private final SonarLintRpcClient client;
 
   public EmbeddedServer(InitializeParams params, StatusRequestHandler statusRequestHandler, GeneratedUserTokenHandler generatedUserTokenHandler,
-    ShowHotspotRequestHandler showHotspotRequestHandler, ShowIssueRequestHandler showIssueRequestHandler, ShowFixSuggestionRequestHandler showFixSuggestionRequestHandler) {
+    ShowHotspotRequestHandler showHotspotRequestHandler, ShowIssueRequestHandler showIssueRequestHandler, ShowFixSuggestionRequestHandler showFixSuggestionRequestHandler,
+    ToggleAutomaticAnalysisRequestHandler toggleAutomaticAnalysisRequestHandler, AnalyzeFileListRequestHandler analyzeFileListRequestHandler, SonarLintRpcClient client) {
     this.enabled = params.getBackendCapabilities().contains(EMBEDDED_SERVER);
     this.statusRequestHandler = statusRequestHandler;
     this.generatedUserTokenHandler = generatedUserTokenHandler;
     this.showHotspotRequestHandler = showHotspotRequestHandler;
     this.showIssueRequestHandler = showIssueRequestHandler;
     this.showFixSuggestionRequestHandler = showFixSuggestionRequestHandler;
+    this.toggleAutomaticAnalysisRequestHandler = toggleAutomaticAnalysisRequestHandler;
+    this.analyzeFileListRequestHandler = analyzeFileListRequestHandler;
+    this.client = client;
   }
 
   @PostConstruct
@@ -89,11 +108,15 @@ public class EmbeddedServer {
           .setSocketConfig(socketConfig)
           .addFilterFirst("RateLimiter", new RateLimitFilter())
           .addFilterAfter("RateLimiter", "CORS", new CorsFilter())
+          .addFilterAfter("CORS", "Params", new ParseParamsFilter())
+          .addFilterAfter("Params", "Validation", new ValidationFilter(client))
           .register("/sonarlint/api/status", statusRequestHandler)
           .register("/sonarlint/api/token", generatedUserTokenHandler)
           .register("/sonarlint/api/hotspots/show", showHotspotRequestHandler)
           .register("/sonarlint/api/issues/show", showIssueRequestHandler)
           .register("/sonarlint/api/fix/show", showFixSuggestionRequestHandler)
+          .register("/sonarlint/api/analysis/automatic/config", toggleAutomaticAnalysisRequestHandler)
+          .register("/sonarlint/api/analysis/files", analyzeFileListRequestHandler)
           .addFilterLast("CSP", new CspFilter())
           .create();
         startedServer.start();
@@ -108,6 +131,7 @@ public class EmbeddedServer {
     }
     if (port > 0) {
       LOG.info("Started embedded server on port " + port);
+      client.embeddedServerStarted(new EmbeddedServerStartedParams(port));
       server = startedServer;
     } else {
       LOG.error("Unable to start request handler");

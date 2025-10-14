@@ -269,6 +269,9 @@ public class TelemetryService {
     updateTelemetry(TelemetryLocalStorage::incrementSuggestedRemoteBindingsCount);
   }
 
+  public void mcpIntegrationEnabled() {
+    updateTelemetry(storage -> storage.setMcpIntegrationEnabled(true));
+  }
 
   public void toolCalled(ToolCalledParams params) {
     updateTelemetry(storage -> storage.incrementToolCalledCount(params.getToolName(), params.isSucceeded()));
@@ -312,6 +315,10 @@ public class TelemetryService {
 
   public void flightRecorderStarted() {
     updateTelemetry(TelemetryLocalStorage::incrementFlightRecorderSessionsCount);
+  }
+
+  public void mcpServerConfigurationRequested() {
+    updateTelemetry(TelemetryLocalStorage::incrementMcpServerConfigurationRequestedCount);
   }
 
   @EventListener

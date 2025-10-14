@@ -41,6 +41,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
@@ -107,6 +108,7 @@ import static java.util.Optional.ofNullable;
 import static java.util.function.Predicate.not;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toMap;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.commons.lang3.StringUtils.trimToNull;
 import static org.sonarsource.sonarlint.core.analysis.container.analysis.filesystem.LanguageDetection.sanitizeExtension;
@@ -260,8 +262,7 @@ public class AnalysisService {
     var analysisProperties = analysisConfig.getAnalysisProperties();
     var inferredAnalysisProperties = startChild(trace, "getInferredAnalysisProperties", ANALYSIS_CFG_FOR_ENGINE,
       () -> client.getInferredAnalysisProperties(new GetInferredAnalysisPropertiesParams(
-        configScopeId, filesToAnalyze.stream().map(ClientFile::getUri).toList()
-      )).join().getProperties());
+        configScopeId, filesToAnalyze.stream().map(ClientFile::getUri).toList())).join().getProperties());
     analysisProperties.putAll(inferredAnalysisProperties);
     var activeRules = analysisConfig.getActiveRules().stream().map(r -> {
       var ar = new ActiveRule(r.getRuleKey(), r.getLanguageKey());
@@ -286,8 +287,7 @@ public class AnalysisService {
     LOG.debug("Charset from analyzer properties: {}", fSrcEncoding);
     filesToAnalyze.stream().forEach(it -> LOG.debug("{} charset: {}", it, it.getCharset()));
 
-    return startChild(trace, "buildAnalysisConfiguration", ANALYSIS_CFG_FOR_ENGINE, () ->
-      AnalysisConfiguration.builder()
+    return startChild(trace, "buildAnalysisConfiguration", ANALYSIS_CFG_FOR_ENGINE, () -> AnalysisConfiguration.builder()
       // Force encoding when in VSCode. InputFile.charset is correctly set in Eclipse.
       .addInputFiles(filesToAnalyze.stream().map(it -> fSrcEncoding == null ? new BackendInputFile(it) : new BackendInputFile(it, fSrcEncoding)).toList())
       .putAllExtraProperties(analysisProperties)
@@ -536,8 +536,6 @@ public class AnalysisService {
     var connectionId = event.connectionId();
     checkIfReadyForAnalysis(configurationRepository.getBoundScopesToConnection(connectionId)
       .stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()));
-    configurationRepository.getBoundScopesToConnection(connectionId)
-      .stream().map(BoundScope::getConfigScopeId).forEach(this::autoAnalyzeOpenFiles);
   }
 
   @EventListener
@@ -545,35 +543,30 @@ public class AnalysisService {
     var configScopeIds = event.getConfigScopeIds();
     configScopeIds.forEach(schedulerCache::registerModuleIfLeafConfigScope);
     checkIfReadyForAnalysis(configScopeIds);
-    configScopeIds.forEach(this::autoAnalyzeOpenFiles);
   }
 
   @EventListener
   public void onConfigurationScopeRemoved(ConfigurationScopeRemovedEvent event) {
     var removedConfigurationScopeId = event.getRemovedConfigurationScopeId();
     analysisReadinessByConfigScopeId.remove(removedConfigurationScopeId);
+    client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(Set.of(removedConfigurationScopeId), false));
     schedulerCache.unregisterModule(removedConfigurationScopeId, event.getRemovedBindingConfiguration().connectionId());
   }
 
   @EventListener
   public void onBindingConfigurationChanged(BindingConfigChangedEvent event) {
     var configScopeId = event.configScopeId();
-    analysisReadinessByConfigScopeId.remove(configScopeId);
-    if (!checkIfReadyForAnalysis(configScopeId)) {
-      client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(Set.of(configScopeId), false));
-    }
+    checkIfReadyForAnalysis(Set.of(configScopeId));
   }
 
   @EventListener
   public void onAnalyzerConfigurationSynchronized(AnalyzerConfigurationSynchronized event) {
     checkIfReadyForAnalysis(event.getConfigScopeIds());
-    event.getConfigScopeIds().forEach(this::autoAnalyzeOpenFiles);
   }
 
   @EventListener
   public void onConfigurationScopesSynchronized(ConfigurationScopesSynchronizedEvent event) {
     checkIfReadyForAnalysis(event.getConfigScopeIds());
-    event.getConfigScopeIds().forEach(this::autoAnalyzeOpenFiles);
   }
 
   @EventListener
@@ -672,38 +665,39 @@ public class AnalysisService {
   }
 
   private void checkIfReadyForAnalysis(Set<String> configurationScopeIds) {
-    var readyConfigScopeIds = configurationScopeIds.stream()
-      .filter(this::isReadyForAnalysis)
-      .collect(toSet());
-    saveAndNotifyReadyForAnalysis(readyConfigScopeIds);
-  }
-
-  private boolean checkIfReadyForAnalysis(String configurationScopeId) {
-    if (isReadyForAnalysis(configurationScopeId)) {
-      saveAndNotifyReadyForAnalysis(Set.of(configurationScopeId));
-      return true;
-    }
-    return false;
-  }
-
-  private void saveAndNotifyReadyForAnalysis(Set<String> configScopeIds) {
-    var scopeIdsThatBecameReady = new HashSet<String>();
-    configScopeIds.forEach(configScopeId -> {
-      if (analysisReadinessByConfigScopeId.get(configScopeId) != Boolean.TRUE) {
-        analysisReadinessByConfigScopeId.put(configScopeId, Boolean.TRUE);
-        scopeIdsThatBecameReady.add(configScopeId);
+    var readyConfigScopeIds = new HashSet<String>();
+    var scopeThatBecameReady = new HashSet<String>();
+    var scopeThatBecameNotReady = new HashSet<String>();
+    configurationScopeIds.forEach(configScopeId -> {
+      var readyForAnalysis = isReadyForAnalysis(configScopeId);
+      var childrenScopesWithSameReadiness = configurationRepository.getChildrenWithInheritedBinding(configScopeId);
+      var wasReady = analysisReadinessByConfigScopeId.put(configScopeId, readyForAnalysis);
+      analysisReadinessByConfigScopeId.putAll(childrenScopesWithSameReadiness.stream().collect(toMap(Function.identity(), k -> readyForAnalysis)));
+      if (readyForAnalysis && !Boolean.TRUE.equals(wasReady)) {
+        scopeThatBecameReady.add(configScopeId);
+        scopeThatBecameReady.addAll(childrenScopesWithSameReadiness);
+      } else if (!readyForAnalysis && Boolean.TRUE.equals(wasReady)) {
+        scopeThatBecameNotReady.add(configScopeId);
+        scopeThatBecameNotReady.addAll(childrenScopesWithSameReadiness);
+      }
+      if (readyForAnalysis) {
+        readyConfigScopeIds.add(configScopeId);
+        readyConfigScopeIds.addAll(childrenScopesWithSameReadiness);
       }
     });
-    if (!scopeIdsThatBecameReady.isEmpty()) {
-      reanalyseOpenFiles(scopeIdsThatBecameReady::contains);
-      scopeIdsThatBecameReady.forEach(scopeId -> {
+    if (!scopeThatBecameReady.isEmpty()) {
+      scopeThatBecameReady.forEach(scopeId -> {
         var scheduler = schedulerCache.getOrCreateAnalysisScheduler(scopeId);
         if (scheduler != null) {
           scheduler.wakeUp();
         }
       });
-      client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(scopeIdsThatBecameReady, true));
+      client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(scopeThatBecameReady, true));
     }
+    if (!scopeThatBecameNotReady.isEmpty()) {
+      client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(scopeThatBecameNotReady, false));
+    }
+    reanalyseOpenFiles(readyConfigScopeIds::contains);
   }
 
   private boolean isReadyForAnalysis(String configScopeId) {
@@ -818,8 +812,7 @@ public class AnalysisService {
 
   private CompletableFuture<AnalysisResult> schedule(String configScopeId, AnalyzeCommand command, UUID analysisId, ArrayList<RawIssue> rawIssues,
     boolean shouldFetchServerIssues, @Nullable Trace trace) {
-    var scheduler = startChild(trace, "getOrCreateAnalysisScheduler", "schedule", () ->
-      schedulerCache.getOrCreateAnalysisScheduler(configScopeId, command.getTrace()));
+    var scheduler = startChild(trace, "getOrCreateAnalysisScheduler", "schedule", () -> schedulerCache.getOrCreateAnalysisScheduler(configScopeId, command.getTrace()));
     startChild(trace, "post", "schedule", () -> scheduler.post(command));
     var result = command.getFutureResult();
     result.exceptionally(exception -> {

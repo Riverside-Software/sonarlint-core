@@ -96,6 +96,8 @@ public class TelemetryLocalStorage {
   private boolean isAutomaticAnalysisEnabled;
   private int automaticAnalysisToggledCount;
   private int flightRecorderSessionsCount;
+  private int mcpServerConfigurationRequestedCount;
+  private boolean isMcpIntegrationEnabled;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -261,6 +263,8 @@ public class TelemetryLocalStorage {
     dependencyRiskInvestigatedRemotelyCount = 0;
     automaticAnalysisToggledCount = 0;
     flightRecorderSessionsCount = 0;
+    mcpServerConfigurationRequestedCount = 0;
+    isMcpIntegrationEnabled = false;
   }
 
   public long numUseDays() {
@@ -576,6 +580,14 @@ public class TelemetryLocalStorage {
     return issuesFixedCount;
   }
 
+  public void setMcpIntegrationEnabled(boolean isMcpIntegrationEnabled) {
+    this.isMcpIntegrationEnabled = isMcpIntegrationEnabled;
+  }
+
+  public boolean isMcpIntegrationEnabled() {
+    return isMcpIntegrationEnabled;
+  }
+
   public void incrementToolCalledCount(String toolName, boolean succeeded) {
     markSonarLintAsUsedToday();
     calledToolsByName.computeIfAbsent(toolName, k -> new ToolCallCounter()).incrementCount(succeeded);
@@ -701,5 +713,14 @@ public class TelemetryLocalStorage {
 
   public int getFlightRecorderSessionsCount() {
     return flightRecorderSessionsCount;
+  }
+
+  public void incrementMcpServerConfigurationRequestedCount() {
+    markSonarLintAsUsedToday();
+    mcpServerConfigurationRequestedCount++;
+  }
+
+  public int getMcpServerConfigurationRequestedCount() {
+    return mcpServerConfigurationRequestedCount;
   }
 }
