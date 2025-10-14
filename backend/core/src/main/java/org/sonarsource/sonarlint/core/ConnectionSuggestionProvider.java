@@ -133,12 +133,10 @@ public class ConnectionSuggestionProvider {
         if (projectKey != null) {
           handleBindingClue(bindingClue).ifPresentOrElse(clue -> clue.map(
             serverUrl -> connectionSuggestionsByConfigScopeIds.computeIfAbsent(configScopeId, s -> new ArrayList<>())
-              .add(new ConnectionSuggestionDto(new SonarQubeConnectionSuggestionDto(serverUrl, projectKey),
-                bindingClue.isFromSharedConfiguration())),
+              .add(new ConnectionSuggestionDto(new SonarQubeConnectionSuggestionDto(serverUrl, projectKey), bindingClue.getOrigin())),
             organization -> connectionSuggestionsByConfigScopeIds.computeIfAbsent(configScopeId, s -> new ArrayList<>())
               .add(new ConnectionSuggestionDto(new SonarCloudConnectionSuggestionDto(organization, projectKey,
-                ((BindingClueProvider.SonarCloudBindingClue) bindingClue).getRegion()),
-                bindingClue.isFromSharedConfiguration()))),
+                ((BindingClueProvider.SonarCloudBindingClue) bindingClue).getRegion()), bindingClue.getOrigin()))),
             () -> bindingSuggestionsForConfigScopeIds.add(configScopeId));
         }
       }
