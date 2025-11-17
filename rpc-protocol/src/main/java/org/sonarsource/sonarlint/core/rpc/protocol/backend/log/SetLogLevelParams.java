@@ -17,40 +17,16 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.log;
 
-import java.util.Map;
-import javax.annotation.CheckForNull;
-import javax.annotation.Nullable;
+public class SetLogLevelParams {
+  private final LogLevel newLevel;
 
-public class ActiveRuleDto {
-
-  private final String ruleKey;
-  private final String languageKey;
-  private final Map<String, String> params;
-  private final String templateRuleKey;
-
-  public ActiveRuleDto(String ruleKey, String languageKey, Map<String, String> params, @Nullable String templateRuleKey) {
-    this.ruleKey = ruleKey;
-    this.languageKey = languageKey;
-    this.params = params;
-    this.templateRuleKey = templateRuleKey;
+  public SetLogLevelParams(LogLevel newLevel) {
+    this.newLevel = newLevel;
   }
 
-  public String getRuleKey() {
-    return ruleKey;
-  }
-
-  public String getLanguageKey() {
-    return languageKey;
-  }
-
-  public Map<String, String> getParams() {
-    return params;
-  }
-
-  @CheckForNull
-  public String getTemplateRuleKey() {
-    return templateRuleKey;
+  public LogLevel getNewLevel() {
+    return newLevel;
   }
 }

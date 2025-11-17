@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Implementation
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,11 +17,13 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rules;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.log;
 
-public class NewRulesActivatedOnServer {
+import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
+import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
 
-  public NewRulesActivatedOnServer() {
-    // no field
-  }
+@JsonSegment("log")
+public interface LogRpcService {
+  @JsonNotification
+  void setLogLevel(SetLogLevelParams params);
 }

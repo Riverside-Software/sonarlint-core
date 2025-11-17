@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Implementation
  * Copyright (C) 2016-2025 SonarSource SA
  * mailto:info AT sonarsource DOT com
  *
@@ -17,17 +17,10 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis;
+package org.sonarsource.sonarlint.core.active.rules;
 
-public class GetGlobalConnectedConfigurationParams {
+import java.util.List;
+import org.sonarsource.sonarlint.core.serverapi.push.RuleSetChangedEvent;
 
-  private final String connectionId;
-
-  public GetGlobalConnectedConfigurationParams(String connectionId) {
-    this.connectionId = connectionId;
-  }
-
-  public String getConnectionId() {
-    return connectionId;
-  }
+public record ServerActiveRulesChanged(String connectionId, List<String> projectKeys, List<RuleSetChangedEvent.ActiveRule> activatedRules, List<String> deactivatedRules) {
 }

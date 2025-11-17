@@ -49,6 +49,7 @@ import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
+import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.sonar.scanner.protocol.Constants;
 import org.sonar.scanner.protocol.input.ScannerInput;
@@ -131,7 +132,7 @@ public class ServerFixture {
   public abstract static class AbstractServerBuilder<T extends AbstractServerBuilder<T>> {
     private final Consumer<Server> onStart;
     private final ServerKind serverKind;
-    private String version;
+    private final String version;
     protected final Map<String, SonarQubeCloudBuilder.SonarQubeCloudOrganizationBuilder> organizationsByKey = new HashMap<>();
     protected final Map<String, ServerProjectBuilder> projectByProjectKey = new HashMap<>();
     protected final Map<String, ServerQualityProfileBuilder> qualityProfilesByKey = new HashMap<>();
@@ -303,7 +304,7 @@ public class ServerFixture {
     }
 
     public static class ServerProjectBuilder {
-      private String organizationKey;
+      private final String organizationKey;
       private final Map<String, ServerProjectBranchBuilder> branchesByName = new HashMap<>();
       private String mainBranchName = "main";
       private final Map<String, ServerProjectPullRequestBuilder> pullRequestsByName = new HashMap<>();
@@ -550,6 +551,10 @@ public class ServerFixture {
 
           public String getFilePath() {
             return filePath;
+          }
+
+          public boolean isResolved() {
+            return StringUtils.isNotEmpty(resolution);
           }
         }
       }
@@ -871,6 +876,7 @@ public class ServerFixture {
         registerPushApiResponses();
         registerFeaturesApiResponses();
         registerScaApiResponses();
+        registerUsersApiResponses();
         registerDopTranslationApiResponses();
       }
     }
@@ -1332,6 +1338,7 @@ public class ServerFixture {
         var timestamp = Issues.TaintVulnerabilityPullQueryTimestamp.newBuilder().setQueryTimestamp(123L).build();
         var issuesArray = branch.taintIssues.stream().map(issue -> Issues.TaintVulnerabilityLite.newBuilder()
           .setKey(issue.issueKey)
+          .setResolved(issue.isResolved())
           .setRuleKey(issue.ruleKey)
           .setType(Common.RuleType.BUG)
           .setSeverity(Common.Severity.MAJOR)
@@ -1628,6 +1635,11 @@ public class ServerFixture {
         mockServer.stubFor(post(prefix + "/sca/issues-releases/change-status")
           .willReturn(aResponse().withStatus(200)));
       }));
+    }
+
+    private void registerUsersApiResponses() {
+      mockServer.stubFor(get("/api/users/current")
+        .willReturn(jsonResponse("{\"isLoggedIn\": true, \"id\": \"11111111-1111-1111-1111-111111111111\", \"login\": \"user\"}", 200)));
     }
 
     public void pushEvent(String eventPayload) {

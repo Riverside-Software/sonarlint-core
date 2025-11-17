@@ -67,6 +67,7 @@ import org.sonarsource.sonarlint.core.serverconnection.LocalStorageSynchronizer;
 import org.sonarsource.sonarlint.core.serverconnection.OrganizationSynchronizer;
 import org.sonarsource.sonarlint.core.serverconnection.ServerInfoSynchronizer;
 import org.sonarsource.sonarlint.core.serverconnection.SonarServerSettingsChangedEvent;
+import org.sonarsource.sonarlint.core.serverconnection.UserSynchronizer;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -319,8 +320,10 @@ public class SynchronizationService {
     var serverInfoSynchronizer = new ServerInfoSynchronizer(storage);
     var storageSynchronizer = new LocalStorageSynchronizer(enabledLanguagesToSync, connectedModeEmbeddedPluginKeys, serverInfoSynchronizer, storage);
     var aiCodeFixSynchronizer = new AiCodeFixSettingsSynchronizer(storage, new OrganizationSynchronizer(storage));
+    var userSynchronizer = new UserSynchronizer(storage);
     try {
       LOG.debug("Synchronizing storage of connection '{}'", connectionId);
+      userSynchronizer.synchronize(serverApi, cancelMonitor);
       var summary = storageSynchronizer.synchronizeServerInfosAndPlugins(serverApi, cancelMonitor);
       if (summary.anyPluginSynchronized()) {
         applicationEventPublisher.publishEvent(new PluginsSynchronizedEvent(connectionId));
@@ -331,7 +334,8 @@ public class SynchronizationService {
         .collect(groupingBy(BoundScope::getSonarProjectKey, mapping(BoundScope::getConfigScopeId, toSet())));
       aiCodeFixSynchronizer.synchronize(serverApi, summary.version(), scopesPerProjectKey.keySet(), cancelMonitor);
       scopesPerProjectKey.forEach((projectKey, configScopeIds) -> {
-        bindingSynchronizationTimestampRepository.setLastSynchronizationTimestampToNow(new Binding(connectionId, projectKey));
+        var binding = new Binding(connectionId, projectKey);
+        bindingSynchronizationTimestampRepository.setLastSynchronizationTimestampToNow(binding);
         LOG.debug("Synchronizing storage of Sonar project '{}' for connection '{}'", projectKey, connectionId);
         var analyzerConfigUpdateSummary = storageSynchronizer.synchronizeAnalyzerConfig(serverApi, projectKey, cancelMonitor);
         // XXX we might want to group those 2 events under one
@@ -339,7 +343,7 @@ public class SynchronizationService {
           applicationEventPublisher.publishEvent(
             new SonarServerSettingsChangedEvent(configScopeIds, analyzerConfigUpdateSummary.getUpdatedSettingsValueByKey()));
         }
-        applicationEventPublisher.publishEvent(new AnalyzerConfigurationSynchronized(configScopeIds));
+        applicationEventPublisher.publishEvent(new AnalyzerConfigurationSynchronized(binding, configScopeIds));
         sonarProjectBranchesSynchronizationService.sync(connectionId, projectKey, cancelMonitor);
       });
       synchronizeProjectsSync(

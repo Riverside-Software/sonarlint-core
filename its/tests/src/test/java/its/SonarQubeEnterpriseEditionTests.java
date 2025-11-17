@@ -26,6 +26,7 @@ import com.sonar.orchestrator.http.HttpMethod;
 import com.sonar.orchestrator.junit5.OnlyOnSonarQube;
 import com.sonar.orchestrator.junit5.OrchestratorExtension;
 import com.sonar.orchestrator.locator.FileLocation;
+import com.sonar.orchestrator.version.Version;
 import its.utils.OrchestratorUtils;
 import its.utils.PluginLocator;
 import java.io.File;
@@ -71,7 +72,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidAddCo
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.scope.DidRemoveConfigurationScopeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.SonarQubeConnectionConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.FeatureFlagsDto;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.HttpConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.sca.CheckDependencyRiskSupportedParams;
@@ -93,6 +94,7 @@ import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.APEX;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.C;
 import static org.sonarsource.sonarlint.core.rpc.protocol.common.Language.COBOL;
@@ -284,6 +286,8 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
     @DisabledOnOs(OS.WINDOWS)
     @OnlyOnSonarQube(from = "2025.4")
     void analysisMisraRules(@TempDir Path tmpDir) throws IOException {
+      // early-access flag will be removed in 2025.6, MISRA rules will be available out of the box
+      assumeTrue(ORCHESTRATOR.getServer().version().compareTo(Version.create("2025.6")) < 0);
       var configScopeId = "analysisMisraRules";
       start(configScopeId, PROJECT_KEY_MISRA);
       var projectDir = Path.of("projects").resolve(PROJECT_KEY_MISRA);
@@ -532,9 +536,9 @@ class SonarQubeEnterpriseEditionTests extends AbstractConnectedTests {
     backend = clientLauncher.getServerProxy();
     try {
       var languages = Set.of(JAVA, COBOL, C, CPP, TSQL, APEX, SECRETS, JCL);
-      var featureFlags = new FeatureFlagsDto(true, true, true, false, true, false, false, true, false, true, false);
       backend.initialize(
-        new InitializeParams(IT_CLIENT_INFO, IT_TELEMETRY_ATTRIBUTES, HttpConfigurationDto.defaultConfig(), null, featureFlags,
+        new InitializeParams(IT_CLIENT_INFO, IT_TELEMETRY_ATTRIBUTES, HttpConfigurationDto.defaultConfig(), null,
+          Set.of(BackendCapability.FULL_SYNCHRONIZATION, BackendCapability.PROJECT_SYNCHRONIZATION, BackendCapability.SECURITY_HOTSPOTS),
           sonarUserHome.resolve("storage"),
           sonarUserHome.resolve("work"),
           emptySet(),

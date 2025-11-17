@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import javax.annotation.CheckForNull;
 import org.sonarsource.sonarlint.core.SonarCloudRegion;
+import org.sonarsource.sonarlint.core.active.rules.ActiveRulesService;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
 import org.sonarsource.sonarlint.core.commons.BoundScope;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
@@ -32,24 +33,28 @@ import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurat
 import org.sonarsource.sonarlint.core.repository.connection.SonarCloudConnectionConfiguration;
 import org.sonarsource.sonarlint.core.repository.connection.SonarQubeConnectionConfiguration;
 import org.sonarsource.sonarlint.core.repository.rules.RulesRepository;
-import org.sonarsource.sonarlint.core.rules.RulesService;
+import org.sonarsource.sonarlint.core.serverconnection.Organization;
+import org.sonarsource.sonarlint.core.serverconnection.StoredServerInfo;
+import org.sonarsource.sonarlint.core.storage.StorageService;
 
 public class TelemetryServerAttributesProvider {
 
   private final ConfigurationRepository configurationRepository;
   private final ConnectionConfigurationRepository connectionConfigurationRepository;
-  private final RulesService rulesService;
+  private final ActiveRulesService activeRulesService;
   private final RulesRepository rulesRepository;
   private final NodeJsService nodeJsService;
+  private final StorageService storageService;
 
   public TelemetryServerAttributesProvider(ConfigurationRepository configurationRepository,
-    ConnectionConfigurationRepository connectionConfigurationRepository,
-    RulesService rulesService, RulesRepository rulesRepository, NodeJsService nodeJsService) {
+    ConnectionConfigurationRepository connectionConfigurationRepository, ActiveRulesService activeRulesService, RulesRepository rulesRepository,
+    NodeJsService nodeJsService, StorageService storageService) {
     this.configurationRepository = configurationRepository;
     this.connectionConfigurationRepository = connectionConfigurationRepository;
-    this.rulesService = rulesService;
+    this.activeRulesService = activeRulesService;
     this.rulesRepository = rulesRepository;
     this.nodeJsService = nodeJsService;
+    this.storageService = storageService;
   }
 
   public TelemetryServerAttributes getTelemetryServerLiveAttributes() {
@@ -68,7 +73,7 @@ public class TelemetryServerAttributesProvider {
     var nonDefaultEnabledRules = new ArrayList<String>();
     var defaultDisabledRules = new ArrayList<String>();
 
-    rulesService.getStandaloneRuleConfig().forEach((ruleKey, standaloneRuleConfigDto) -> {
+    activeRulesService.getStandaloneRuleConfig().forEach((ruleKey, standaloneRuleConfigDto) -> {
       var optionalEmbeddedRule = rulesRepository.getEmbeddedRule(ruleKey);
       if (optionalEmbeddedRule.isEmpty()) {
         return;
@@ -84,9 +89,25 @@ public class TelemetryServerAttributesProvider {
 
     var nodeJsVersion = getNodeJsVersion();
 
+    var connectionsAttributes = connectionConfigurationRepository.getConnectionsById().keySet().stream()
+      .map(storageService::connection)
+      .map(c -> {
+        var userId = c.user().read().orElse(null);
+        var serverId = c.serverInfo().read().map(StoredServerInfo::serverId).orElse(null);
+        var orgId = c.organization().read().map(Organization::id).orElse(null);
+
+        if (userId == null && serverId == null && orgId == null) {
+          return null;
+        }
+
+        return new TelemetryConnectionAttributes(userId, serverId, orgId);
+      })
+      .filter(Objects::nonNull)
+      .toList();
+
     return new TelemetryServerAttributes(usesConnectedMode, usesSonarCloud, childBindingCount, sonarQubeServerBindingCount,
       sonarQubeCloudEUBindingCount, sonarQubeCloudUSBindingCount, devNotificationsDisabled, nonDefaultEnabledRules,
-      defaultDisabledRules, nodeJsVersion);
+      defaultDisabledRules, nodeJsVersion, connectionsAttributes);
   }
 
   private int countSonarQubeCloudBindings(Collection<BoundScope> allBindings, SonarCloudRegion region) {

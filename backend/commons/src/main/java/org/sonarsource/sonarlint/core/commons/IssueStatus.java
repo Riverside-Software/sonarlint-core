@@ -19,6 +19,23 @@
  */
 package org.sonarsource.sonarlint.core.commons;
 
+import javax.annotation.CheckForNull;
+
+/**
+ * Represents Issue resolution status. Not the status of the issue itself.
+ */
 public enum IssueStatus {
-  ACCEPT, WONT_FIX, FALSE_POSITIVE
+  ACCEPT,
+  WONT_FIX,
+  FALSE_POSITIVE;
+
+  @CheckForNull
+  public static IssueStatus parse(String stringRepresentation) {
+    return switch (stringRepresentation) {
+      // ACCEPTED transition leads to WONTFIX status on server so we are not making difference between them.
+      case "WONTFIX", "ACCEPT" -> IssueStatus.ACCEPT;
+      case "FALSE-POSITIVE" -> IssueStatus.FALSE_POSITIVE;
+      default -> null;
+    };
+  }
 }
