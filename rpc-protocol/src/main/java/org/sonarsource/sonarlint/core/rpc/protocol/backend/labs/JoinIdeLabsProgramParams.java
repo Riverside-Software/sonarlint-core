@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - RPC Protocol
- * Copyright (C) 2016-2025 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -17,18 +17,22 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.labs;
 
-import java.util.concurrent.CompletableFuture;
-import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
-import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
+public class JoinIdeLabsProgramParams {
+  private final String email;
+  private final String ide;
 
-@JsonSegment("ai")
-public interface AiAssistedIdeRpcService {
-  /**
-   * Returns the content of rule file to be written to each IDE's rule folder.
-   * The rule file provides good practices to the agent.
-   */
-  @JsonRequest
-  CompletableFuture<GetRuleFileContentResponse> getRuleFileContent(GetRuleFileContentParams params);
+  public JoinIdeLabsProgramParams(String email, String ide) {
+    this.email = email;
+    this.ide = ide;
+  }
+
+  public String getEmail() {
+    return email;
+  }
+
+  public String getIde() {
+    return ide;
+  }
 }

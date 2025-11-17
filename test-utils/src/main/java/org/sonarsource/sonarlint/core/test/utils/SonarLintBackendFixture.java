@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Test Utils
- * Copyright (C) 2016-2025 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -48,6 +48,8 @@ import java.util.function.Consumer;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.jetbrains.annotations.NotNull;
+import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabase;
+import org.sonarsource.sonarlint.core.commons.storage.repository.AiCodeFixRepository;
 import org.sonarsource.sonarlint.core.rpc.client.ClientJsonRpcLauncher;
 import org.sonarsource.sonarlint.core.rpc.client.ConfigScopeNotFoundException;
 import org.sonarsource.sonarlint.core.rpc.client.SonarLintCancelChecker;
@@ -116,6 +118,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.sonarsource.sonarlint.core.labs.IdeLabsSpringConfig.PROPERTY_IDE_LABS_SUBSCRIPTION_URL;
 import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.TELEMETRY;
 import static org.sonarsource.sonarlint.core.telemetry.TelemetrySpringConfig.PROPERTY_TELEMETRY_ENDPOINT;
 import static org.sonarsource.sonarlint.core.test.utils.storage.StorageFixture.newStorage;
@@ -465,6 +468,11 @@ public class SonarLintBackendFixture {
       return this;
     }
 
+    public SonarLintBackendBuilder withIdeLabsSubscriptionUrl(String ideLabsSubscriptionUrl) {
+      System.setProperty(PROPERTY_IDE_LABS_SUBSCRIPTION_URL, ideLabsSubscriptionUrl);
+      return this;
+    }
+
     public SonarLintBackendBuilder withAutomaticAnalysisEnabled(boolean enabled) {
       this.automaticAnalysisEnabled = enabled;
       return this;
@@ -518,6 +526,7 @@ public class SonarLintBackendFixture {
             enabledLanguages, extraEnabledLanguagesInConnectedMode, disabledPluginKeysForAnalysis, sonarQubeConnections, sonarCloudConnections, sonarlintUserHome.toString(),
             standaloneConfigByKey, isFocusOnNewCode, languageSpecificRequirements, automaticAnalysisEnabled, telemetryMigration, logLevel))
           .get();
+        initializeDatabase(sonarLintBackend.getSonarLintDatabase(), storages);
         sonarLintBackend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(configurationScopes));
         if (afterStartCallback != null) {
           afterStartCallback.accept(sonarLintBackend);
@@ -526,6 +535,17 @@ public class SonarLintBackendFixture {
       } catch (Exception e) {
         throw new IllegalStateException("Cannot initialize the backend", e);
       }
+    }
+
+    private static void initializeDatabase(SonarLintDatabase sonarLintDatabase, List<StorageFixture.StorageBuilder> storages) {
+      var aiCodeFixRepository = new AiCodeFixRepository(sonarLintDatabase);
+
+      storages.forEach(storage -> {
+        var aiCodeFixSettings = storage.getAiCodeFixSettingsBuilder();
+        if (aiCodeFixSettings != null) {
+          aiCodeFixRepository.upsert(aiCodeFixSettings.buildAiCodeFix(storage.getConnectionId()));
+        }
+      });
     }
 
     private static URI createUriFromString(@Nullable String uri) {

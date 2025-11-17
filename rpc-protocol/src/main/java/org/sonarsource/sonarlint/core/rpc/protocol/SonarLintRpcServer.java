@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - RPC Protocol
- * Copyright (C) 2016-2025 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -22,7 +22,7 @@ package org.sonarsource.sonarlint.core.rpc.protocol;
 import java.util.concurrent.CompletableFuture;
 import org.eclipse.lsp4j.jsonrpc.services.JsonDelegate;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAssistedIdeRpcService;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAgentRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalysisRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.binding.BindingRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.branch.SonarProjectBranchRpcService;
@@ -34,6 +34,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.flightrecorder.Flight
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.HotspotRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.issue.IssueRpcService;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.labs.IdeLabsRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.log.LogRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.newcode.NewCodeRpcService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.progress.TaskProgressRpcService;
@@ -103,10 +104,13 @@ public interface SonarLintRpcServer {
   FlightRecordingRpcService getFlightRecordingService();
 
   @JsonDelegate
-  AiAssistedIdeRpcService getAiAssistedIdeRpcService();
+  AiAgentRpcService getAiAgentService();
 
   @JsonDelegate
   LogRpcService getLogService();
+
+  @JsonDelegate
+  IdeLabsRpcService getIdeLabsService();
 
   @JsonRequest
   CompletableFuture<Void> shutdown();

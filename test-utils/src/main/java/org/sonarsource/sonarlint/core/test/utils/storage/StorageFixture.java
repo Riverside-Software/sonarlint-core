@@ -1,6 +1,6 @@
 /*
  * SonarLint Core - Test Utils
- * Copyright (C) 2016-2025 SonarSource SA
+ * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
  * This program is free software; you can redistribute it and/or
@@ -124,6 +124,14 @@ public class StorageFixture {
       consumer.accept(builder);
       aiCodeFixBuilder = builder;
       return this;
+    }
+
+    public AiCodeFixFixtures.Builder getAiCodeFixSettingsBuilder() {
+      return aiCodeFixBuilder;
+    }
+
+    public String getConnectionId() {
+      return connectionId;
     }
 
     public Storage create(Path rootPath) {
