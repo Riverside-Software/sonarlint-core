@@ -66,7 +66,7 @@ public class MCPServerConfigurationProvider {
         "SONARQUBE_URL",
         "-e",
         "SONARQUBE_IDE_PORT",
-        "mcp/sonarqube"
+        "docker.rssw.eu/mcp/sonarqube:latest"
       ],
       "env": {
         "SONARQUBE_URL": "%s",
