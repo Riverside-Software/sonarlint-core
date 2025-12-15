@@ -23,6 +23,7 @@ import com.google.gson.Gson;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.labs.JoinIdeLabsProgramResponse;
 
 public class IdeLabsService {
+
   private final IdeLabsHttpClient labsHttpClient;
   private final Gson gson = new Gson();
 
@@ -34,14 +35,14 @@ public class IdeLabsService {
     try (var response = labsHttpClient.join(email, ideName)) {
       if (!response.isSuccessful()) {  
         return new JoinIdeLabsProgramResponse(false, "An unexpected error occurred. Server responded with status code: " + response.code());  
-      }  
+      }
 
-      var responseBody = response.bodyAsString();  
-      if (gson.fromJson(responseBody, IdeLabsSubscriptionResponseBody.class).validEmail()) {
-        return new JoinIdeLabsProgramResponse(true, null);  
-      }  
+      var responseBody = gson.fromJson(response.bodyAsString(), IdeLabsSubscriptionResponseBody.class);
+      if (!responseBody.validEmail()) {
+        return new JoinIdeLabsProgramResponse(false, "The provided email address is not valid. Please enter a valid email address.");
+      }
 
-      return new JoinIdeLabsProgramResponse(false, "The provided email address is not valid. Please enter a valid email address.");  
+      return new JoinIdeLabsProgramResponse(true, null);
     } catch (Exception e) {
       return new JoinIdeLabsProgramResponse(false, "An unexpected error occurred: " + e.getMessage());
     }

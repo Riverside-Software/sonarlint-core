@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Commons
+ * SonarLint Core - RPC Protocol
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,9 +17,19 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.commons.storage;
+package org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry;
 
-import java.nio.file.Path;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionOrigin;
 
-public record SonarLintDatabaseInitParams(Path storageRoot, SonarLintDatabaseMode sonarLintDatabaseMode) {
+public class AcceptedBindingSuggestionParams {
+
+  private final BindingSuggestionOrigin origin;
+
+  public AcceptedBindingSuggestionParams(BindingSuggestionOrigin origin) {
+    this.origin = origin;
+  }
+
+  public BindingSuggestionOrigin getOrigin() {
+    return origin;
+  }
 }

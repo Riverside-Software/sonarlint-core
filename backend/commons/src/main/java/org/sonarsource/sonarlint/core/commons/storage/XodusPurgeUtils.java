@@ -45,7 +45,19 @@ public class XodusPurgeUtils {
           }
         }
       } catch (Exception e) {
-        LOG.error("Unable to purge old temporary files for pattern " + pattern);
+        LOG.error("Unable to purge old temporary files for pattern " + pattern, e);
+      }
+    }
+  }
+
+  public static void deleteInFolderWithPattern(Path folder, String pattern) {
+    if (Files.exists(folder)) {
+      try (var stream = Files.newDirectoryStream(folder, pattern)) {
+        for (var path : stream) {
+          FileUtils.deleteQuietly(path.toFile());
+        }
+      } catch (Exception e) {
+        LOG.error("Unable to remove files in {} for pattern {}", folder, pattern);
       }
     }
   }

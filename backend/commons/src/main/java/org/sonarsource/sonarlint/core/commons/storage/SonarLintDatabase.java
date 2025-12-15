@@ -19,14 +19,15 @@
  */
 package org.sonarsource.sonarlint.core.commons.storage;
 
-import jakarta.inject.Inject;
 import java.nio.file.Files;
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.nio.file.Path;
 import java.util.Set;
+import java.util.function.Consumer;
+import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcConnectionPool;
+import org.jooq.Configuration;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
@@ -36,64 +37,62 @@ import static org.sonarsource.sonarlint.core.commons.storage.model.Tables.AI_COD
 
 public final class SonarLintDatabase {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
+  public static final String SQ_IDE_DB_FILENAME = "sq-ide";
 
   private final JdbcConnectionPool dataSource;
   private final DSLContext dsl;
 
-  @Inject
-  public SonarLintDatabase(SonarLintDatabaseInitParams sonarLintDatabaseInitParams) {
+  public SonarLintDatabase(Path storageRoot) {
     JdbcConnectionPool ds;
     try {
-      var mode = System.getProperty("sonarlint.db.mode", "file");
-      String url;
-      if ("mem".equalsIgnoreCase(mode)) {
-        // In-memory mode for tests: keep DB alive until JVM exits to allow multiple connections
-        url = "jdbc:h2:mem:sonarlint;DB_CLOSE_DELAY=-1";
-      } else {
-        var baseDir = sonarLintDatabaseInitParams.storageRoot().resolve("h2");
-        Files.createDirectories(baseDir);
-        var dbBasePath = baseDir.resolve("sonarlint").toAbsolutePath();
-        url = "jdbc:h2:" + dbBasePath;
-        // Ensure H2 AUTO_SERVER binds and advertises loopback to allow local cross-process connections reliably
-        var bindAddressProperty = "h2.bindAddress";
-        if (StringUtils.isEmpty(System.getProperty(bindAddressProperty))) {
-          System.setProperty(bindAddressProperty, "127.0.0.1");
-        }
-        url += ";AUTO_SERVER=TRUE";
+      var baseDir = storageRoot.resolve("h2");
+      deleteLegacyDatabase(baseDir);
+      Files.createDirectories(baseDir);
+      var dbBasePath = baseDir.resolve(SQ_IDE_DB_FILENAME).toAbsolutePath();
+      var url = "jdbc:h2:" + dbBasePath + ";AUTO_SERVER=TRUE";
+      // Ensure H2 AUTO_SERVER binds and advertises loopback to allow local cross-process connections reliably
+      var bindAddressProperty = "h2.bindAddress";
+      if (StringUtils.isEmpty(System.getProperty(bindAddressProperty))) {
+        System.setProperty(bindAddressProperty, "127.0.0.1");
       }
       LOG.debug("Initializing H2Database with URL {}", url);
       ds = JdbcConnectionPool.create(url, "sa", "");
     } catch (Exception e) {
       throw new IllegalStateException("Failed to initialize H2Database", e);
     }
-    ds.setMaxConnections(10);
     this.dataSource = ds;
 
-    // Run Flyway migrations if available. Do not fail if none is found.
-    try {
-      var flyway = Flyway.configure()
-        .dataSource(this.dataSource)
-        .locations("classpath:db/migration")
-        .defaultSchema("PUBLIC")
-        .schemas("PUBLIC")
-        .createSchemas(true)
-        .baselineOnMigrate(true)
-        .failOnMissingLocations(false)
-        .load();
-      flyway.migrate();
-    } catch (RuntimeException e) {
-      LOG.error("Flyway migration skipped or failed: {}", e.getMessage());
-    }
+    var flyway = Flyway.configure()
+      .dataSource(this.dataSource)
+      .locations("classpath:db/migration")
+      .defaultSchema("PUBLIC")
+      .schemas("PUBLIC")
+      .createSchemas(true)
+      .baselineOnMigrate(true)
+      .failOnMissingLocations(false)
+      .load();
+    // this might throw but it's fine. If migrations fail, we want to fail starting the backend
+    flyway.migrate();
 
+    System.setProperty("org.jooq.no-tips", "true");
+    System.setProperty("org.jooq.no-logo", "true");
     this.dsl = DSL.using(this.dataSource, SQLDialect.H2);
+  }
+
+  private static void deleteLegacyDatabase(Path baseDir) {
+    // see SLCORE-1847
+    var legacyDb = baseDir.resolve("sonarlint");
+    if (Files.exists(legacyDb)) {
+      FileUtils.deleteQuietly(legacyDb.toFile());
+    }
   }
 
   public DSLContext dsl() {
     return dsl;
   }
 
-  public Connection getConnection() throws SQLException {
-    return dataSource.getConnection();
+  public void withTransaction(Consumer<Configuration> transaction) {
+    dsl.transaction(transaction::accept);
   }
 
   public void shutdown() {
@@ -111,4 +110,3 @@ public final class SonarLintDatabase {
       .execute();
   }
 }
-

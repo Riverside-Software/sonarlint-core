@@ -23,6 +23,7 @@ import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLiveAttributes;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorage;
@@ -33,6 +34,9 @@ import static org.sonarsource.sonarlint.core.telemetry.measures.payload.Telemetr
 import static org.sonarsource.sonarlint.core.telemetry.measures.payload.TelemetryMeasuresValueType.STRING;
 
 public class TelemetryMeasuresBuilder {
+
+  private static final String LINK_CLICKED_BASE_NAME = "link_clicked_count_";
+  private static final String FEEDBACK_CLICKED_BASE_NAME = "feedback_link_clicked_count_";
 
   private final String platform;
   private final String product;
@@ -77,6 +81,8 @@ public class TelemetryMeasuresBuilder {
 
     addMCPMeasures(values);
 
+    addLabsMeasures(values);
+
     return new TelemetryMeasuresPayload(UUID.randomUUID().toString(), platform, storage.installTime(), product, TelemetryMeasuresDimension.INSTALLATION, values);
   }
 
@@ -118,8 +124,8 @@ public class TelemetryMeasuresBuilder {
 
   private void addNewBindingsMeasures(ArrayList<TelemetryMeasuresValue> values) {
     if (liveAttributes.usesConnectedMode()) {
-      values.add(new TelemetryMeasuresValue("new_bindings.manual", String.valueOf(storage.getNewBindingsManualCount()), INTEGER, DAILY));
-      values.add(new TelemetryMeasuresValue("new_bindings.accepted_suggestion_remote_url", String.valueOf(storage.getSuggestedRemoteBindingsCount()), INTEGER, DAILY));
+      values.add(new TelemetryMeasuresValue("new_bindings.manual", String.valueOf(storage.getManualAddedBindingsCount()), INTEGER, DAILY));
+      values.add(new TelemetryMeasuresValue("new_bindings.accepted_suggestion_remote_url", String.valueOf(storage.getNewBindingsRemoteUrlCount()), INTEGER, DAILY));
       values.add(new TelemetryMeasuresValue("new_bindings.accepted_suggestion_properties_file", String.valueOf(storage.getNewBindingsPropertiesFileCount()), INTEGER, DAILY));
       values.add(new TelemetryMeasuresValue("new_bindings.accepted_suggestion_shared_config_file",
         String.valueOf(storage.getNewBindingsSharedConfigurationCount()), INTEGER, DAILY));
@@ -221,4 +227,21 @@ public class TelemetryMeasuresBuilder {
     }
   }
 
+  private void addLabsMeasures(ArrayList<TelemetryMeasuresValue> values) {
+    values.add(new TelemetryMeasuresValue("ide_labs.joined", String.valueOf(liveAttributes.hasJoinedIdeLabs()), BOOLEAN, DAILY));
+    values.add(new TelemetryMeasuresValue("ide_labs.enabled", String.valueOf(liveAttributes.hasEnabledIdeLabs()), BOOLEAN, DAILY));
+    addAll(storage.getLabsLinkClickedCount(), LINK_CLICKED_BASE_NAME, values);
+    addAll(storage.getLabsFeedbackLinkClickedCount(), FEEDBACK_CLICKED_BASE_NAME, values);
+  }
+
+  private static void addAll(Map<String, Integer> clickCounts, String baseName, List<TelemetryMeasuresValue> values) {
+    clickCounts.entrySet().stream()
+      .filter(entry -> entry.getValue() > 0)
+      .map(entry -> new TelemetryMeasuresValue(
+        "ide_labs." + baseName + entry.getKey(),
+        String.valueOf(entry.getValue()),
+        INTEGER,
+        DAILY))
+      .forEach(values::add);
+  }
 }

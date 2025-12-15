@@ -32,6 +32,8 @@ import jetbrains.exodus.env.Environments;
 import jetbrains.exodus.util.CompressBackupUtil;
 import org.sonarsource.sonarlint.core.commons.IssueStatus;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
+import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabase;
+import org.sonarsource.sonarlint.core.commons.storage.repository.LocalOnlyIssuesRepository;
 import org.sonarsource.sonarlint.core.local.only.IssueStatusBinding;
 import org.sonarsource.sonarlint.core.serverconnection.storage.InstantBinding;
 import org.sonarsource.sonarlint.core.serverconnection.storage.UuidBinding;
@@ -46,9 +48,15 @@ public class ConfigurationScopeStorageFixture {
   public static class ConfigurationScopeStorageBuilder {
     private final List<LocalOnlyIssue> localOnlyIssues = new ArrayList<>();
     private final String configScopeId;
+    private boolean noH2;
 
     public ConfigurationScopeStorageBuilder(String configScopeId) {
       this.configScopeId = configScopeId;
+    }
+
+    public ConfigurationScopeStorageBuilder noH2() {
+      this.noH2 = true;
+      return this;
     }
 
     public ConfigurationScopeStorageBuilder withLocalOnlyIssue(LocalOnlyIssue issue) {
@@ -113,6 +121,13 @@ public class ConfigurationScopeStorageFixture {
         CompressBackupUtil.backup(entityStore, xodusBackupPath.toFile(), false);
       } catch (Exception e) {
         throw new IllegalStateException("Unable to backup server issue database", e);
+      }
+    }
+
+    public void populateDatabase(SonarLintDatabase database) {
+      if (!noH2) {
+        var localOnlyIssuesRepository = new LocalOnlyIssuesRepository(database);
+        localOnlyIssues.forEach(issue -> localOnlyIssuesRepository.storeLocalOnlyIssue(configScopeId, issue));
       }
     }
   }

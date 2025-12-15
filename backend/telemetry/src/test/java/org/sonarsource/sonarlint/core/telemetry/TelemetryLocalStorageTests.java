@@ -23,6 +23,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.Map;
 import java.util.UUID;
 import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.Test;
@@ -287,19 +288,16 @@ class TelemetryLocalStorageTests {
   void should_increment_new_bindings_counters_per_origin() {
     var data = new TelemetryLocalStorage();
 
-    assertThat(data.getNewBindingsManualCount()).isZero();
     assertThat(data.getNewBindingsPropertiesFileCount()).isZero();
     assertThat(data.getNewBindingsRemoteUrlCount()).isZero();
     assertThat(data.getNewBindingsProjectNameCount()).isZero();
     assertThat(data.getNewBindingsSharedConfigurationCount()).isZero();
 
-    data.incrementNewBindingsManualCount();
     data.incrementNewBindingsPropertiesFileCount();
     data.incrementNewBindingsRemoteUrlCount();
     data.incrementNewBindingsProjectNameCount();
     data.incrementNewBindingsSharedConfigurationCount();
 
-    assertThat(data.getNewBindingsManualCount()).isEqualTo(1);
     assertThat(data.getNewBindingsPropertiesFileCount()).isEqualTo(1);
     assertThat(data.getNewBindingsRemoteUrlCount()).isEqualTo(1);
     assertThat(data.getNewBindingsProjectNameCount()).isEqualTo(1);
@@ -309,7 +307,6 @@ class TelemetryLocalStorageTests {
   @Test
   void should_reset_new_bindings_counters_on_clear_after_ping() {
     var data = new TelemetryLocalStorage();
-    data.incrementNewBindingsManualCount();
     data.incrementNewBindingsPropertiesFileCount();
     data.incrementNewBindingsRemoteUrlCount();
     data.incrementNewBindingsProjectNameCount();
@@ -317,7 +314,6 @@ class TelemetryLocalStorageTests {
 
     data.clearAfterPing();
 
-    assertThat(data.getNewBindingsManualCount()).isZero();
     assertThat(data.getNewBindingsPropertiesFileCount()).isZero();
     assertThat(data.getNewBindingsRemoteUrlCount()).isZero();
     assertThat(data.getNewBindingsProjectNameCount()).isZero();
@@ -366,5 +362,50 @@ class TelemetryLocalStorageTests {
     assertThat(data.getMcpTransportModeUsed()).isNull();
     data.setMcpTransportModeUsed(McpTransportMode.HTTP);
     assertThat(data.getMcpTransportModeUsed()).isEqualTo(McpTransportMode.HTTP);
+  }
+
+  @Test
+  void should_increment_link_clicked_count_for_each_link_separately() {
+    var data = new TelemetryLocalStorage();
+    assertThat(data.getLabsLinkClickedCount()).isEmpty();
+
+    data.ideLabsLinkClicked("1");
+    data.ideLabsLinkClicked("2");
+    data.ideLabsLinkClicked("2");
+
+    assertThat(data.getLabsLinkClickedCount())
+      .isEqualTo(Map.of(
+        "1", 1,
+        "2", 2));
+  }
+
+  @Test
+  void should_increment_feedback_link_clicked_count_for_each_link_separately() {
+    var data = new TelemetryLocalStorage();
+    assertThat(data.getLabsFeedbackLinkClickedCount()).isEmpty();
+
+    data.ideLabsFeedbackLinkClicked("1");
+    data.ideLabsFeedbackLinkClicked("2");
+    data.ideLabsFeedbackLinkClicked("2");
+
+    assertThat(data.getLabsFeedbackLinkClickedCount())
+      .isEqualTo(Map.of(
+        "1", 1,
+        "2", 2));
+  }
+
+  @Test
+  void should_reset_link_clicked_data_after_ping() {
+    var data = new TelemetryLocalStorage();
+
+    data.ideLabsLinkClicked("1");
+    data.ideLabsLinkClicked("2");
+    data.ideLabsFeedbackLinkClicked("1");
+    data.ideLabsFeedbackLinkClicked("2");
+
+    data.clearAfterPing();
+
+    assertThat(data.getLabsLinkClickedCount()).isEmpty();
+    assertThat(data.getLabsFeedbackLinkClickedCount()).isEmpty();
   }
 }

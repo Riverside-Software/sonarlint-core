@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Commons
+ * SonarLint Core - Implementation
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,8 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.commons.storage;
+package org.sonarsource.sonarlint.core.ai.ide;
 
-public enum SonarLintDatabaseMode {
-  FILE, MEM
+public enum HookScriptType {
+  NODEJS("sonarqube_analysis_hook.js"),
+  PYTHON("sonarqube_analysis_hook.py"),
+  BASH("sonarqube_analysis_hook.sh");
+
+  private final String fileName;
+
+  HookScriptType(String fileName) {
+    this.fileName = fileName;
+  }
+
+  public String getFileName() {
+    return fileName;
+  }
 }
+

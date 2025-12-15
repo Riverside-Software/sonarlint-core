@@ -22,6 +22,7 @@ package org.sonarsource.sonarlint.core.rpc.impl;
 import java.util.concurrent.CompletableFuture;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.GetStatusResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.TelemetryRpcService;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AcceptedBindingSuggestionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddQuickFixAppliedForRuleParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddReportedRulesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisDoneOnSingleLanguageParams;
@@ -29,6 +30,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisRepo
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.DevNotificationsClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FindingsFilteredParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.IdeLabsExternalLinkClickedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.IdeLabsFeedbackLinkClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.HelpAndFeedbackClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.McpTransportModeUsedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.ToolCalledParams;
@@ -126,6 +129,11 @@ class TelemetryRpcServiceDelegate extends AbstractRpcServiceDelegate implements 
   }
 
   @Override
+  public void acceptedBindingSuggestion(AcceptedBindingSuggestionParams params) {
+    notify(() -> getBean(TelemetryService.class).acceptedBindingSuggestion(params.getOrigin()));
+  }
+
+  @Override
   public void addedImportedBindings() {
     notify(() -> getBean(TelemetryService.class).addedImportedBindings());
   }
@@ -168,5 +176,15 @@ class TelemetryRpcServiceDelegate extends AbstractRpcServiceDelegate implements 
   @Override
   public void findingsFiltered(FindingsFilteredParams params) {
     notify(() -> getBean(TelemetryService.class).findingsFiltered(params.getFilterType()));
+  }
+
+  @Override
+  public void ideLabsExternalLinkClicked(IdeLabsExternalLinkClickedParams params) {
+    notify(() -> getBean(TelemetryService.class).ideLabsLinkClicked(params.getLinkId()));
+  }
+
+  @Override
+  public void ideLabsFeedbackLinkClicked(IdeLabsFeedbackLinkClickedParams params) {
+    notify(() -> getBean(TelemetryService.class).ideLabsFeedbackLinkClicked(params.getFeatureId()));
   }
 }

@@ -34,13 +34,11 @@ import org.sonarsource.sonarlint.core.analysis.IssuesRaisedEvent;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
-import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
 import org.sonarsource.sonarlint.core.event.FixSuggestionReceivedEvent;
 import org.sonarsource.sonarlint.core.event.LocalOnlyIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.event.MatchingSessionEndedEvent;
 import org.sonarsource.sonarlint.core.event.ServerIssueStatusChangedEvent;
 import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingMode;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionOrigin;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.telemetry.GetStatusResponse;
@@ -238,27 +236,21 @@ public class TelemetryService {
     updateTelemetry(TelemetryLocalStorage::incrementAutoAddedBindingsCount);
   }
 
-  public void addedNewBinding(BindingMode bindingMode, @Nullable BindingSuggestionOrigin bindingSuggestionOrigin) {
-    if (bindingMode.equals(BindingMode.MANUAL)) {
-      updateTelemetry(TelemetryLocalStorage::incrementNewBindingsManualCount);
-    } else {
-      if (bindingSuggestionOrigin == null) return;
+  public void acceptedBindingSuggestion(BindingSuggestionOrigin bindingSuggestionOrigin) {
+    if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.REMOTE_URL)) {
+      updateTelemetry(TelemetryLocalStorage::incrementNewBindingsRemoteUrlCount);
+    }
 
-      if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.REMOTE_URL)) {
-        updateTelemetry(TelemetryLocalStorage::incrementNewBindingsRemoteUrlCount);
-      }
+    if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.PROJECT_NAME)) {
+      updateTelemetry(TelemetryLocalStorage::incrementNewBindingsProjectNameCount);
+    }
 
-      if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.PROJECT_NAME)) {
-        updateTelemetry(TelemetryLocalStorage::incrementNewBindingsProjectNameCount);
-      }
+    if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.SHARED_CONFIGURATION)) {
+      updateTelemetry(TelemetryLocalStorage::incrementNewBindingsSharedConfigurationCount);
+    }
 
-      if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.SHARED_CONFIGURATION)) {
-        updateTelemetry(TelemetryLocalStorage::incrementNewBindingsSharedConfigurationCount);
-      }
-
-      if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.PROPERTIES_FILE)) {
-        updateTelemetry(TelemetryLocalStorage::incrementNewBindingsPropertiesFileCount);
-      }
+    if (bindingSuggestionOrigin.equals(BindingSuggestionOrigin.PROPERTIES_FILE)) {
+      updateTelemetry(TelemetryLocalStorage::incrementNewBindingsPropertiesFileCount);
     }
   }
 
@@ -326,6 +318,14 @@ public class TelemetryService {
     updateTelemetry(TelemetryLocalStorage::incrementMcpServerConfigurationRequestedCount);
   }
 
+  public void ideLabsLinkClicked(String linkId) {
+    updateTelemetry(storage -> storage.ideLabsLinkClicked(linkId));
+  }
+
+  public void ideLabsFeedbackLinkClicked(String featureId) {
+    updateTelemetry(storage -> storage.ideLabsFeedbackLinkClicked(featureId));
+  }
+
   @EventListener
   public void onMatchingSessionEnded(MatchingSessionEndedEvent event) {
     updateTelemetry(telemetryLocalStorage -> {
@@ -335,12 +335,8 @@ public class TelemetryService {
   }
 
   @EventListener
-  public void onBind(BindingConfigChangedEvent event) {
-    var bindingMode = event.bindingMode();
-
-    if (bindingMode != null) {
-      addedNewBinding(bindingMode, event.origin());
-    }
+  public void onAutomaticAnalysisSettingChanged(AutomaticAnalysisSettingChangedEvent event) {
+    automaticAnalysisSettingToggled();
   }
 
   @EventListener
@@ -381,11 +377,6 @@ public class TelemetryService {
       .map(RaisedFindingDto::getId)
       .collect(Collectors.toSet());
     updateTelemetry(localStorage -> localStorage.addIssuesWithPossibleAiFixFromIde(issuesToReport));
-  }
-
-  @EventListener
-  public void onAutomaticAnalysisSettingChanged(AutomaticAnalysisSettingChangedEvent event) {
-    automaticAnalysisSettingToggled();
   }
 
   @PreDestroy

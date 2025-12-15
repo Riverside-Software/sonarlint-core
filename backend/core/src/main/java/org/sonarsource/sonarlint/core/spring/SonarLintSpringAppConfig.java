@@ -45,6 +45,7 @@ import org.sonarsource.sonarlint.core.UserPaths;
 import org.sonarsource.sonarlint.core.VersionSoonUnsupportedHelper;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRulesService;
 import org.sonarsource.sonarlint.core.ai.ide.AiAgentService;
+import org.sonarsource.sonarlint.core.ai.ide.AiHookService;
 import org.sonarsource.sonarlint.core.analysis.AnalysisSchedulerCache;
 import org.sonarsource.sonarlint.core.analysis.AnalysisService;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
@@ -53,8 +54,6 @@ import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.monitoring.DogfoodEnvironmentDetectionService;
 import org.sonarsource.sonarlint.core.commons.monitoring.MonitoringInitializationParams;
 import org.sonarsource.sonarlint.core.commons.monitoring.MonitoringService;
-import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabaseMode;
-import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabaseInitParams;
 import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabase;
 import org.sonarsource.sonarlint.core.commons.storage.repository.AiCodeFixRepository;
 import org.sonarsource.sonarlint.core.embedded.server.ToggleAutomaticAnalysisRequestHandler;
@@ -219,9 +218,9 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   ToggleAutomaticAnalysisRequestHandler.class,
   AnalyzeFileListRequestHandler.class,
   AiAgentService.class,
+  AiHookService.class,
   LogService.class,
   ActiveRulesService.class,
-  SonarLintDatabase.class,
   AiCodeFixRepository.class,
   SonarLintDatabaseService.class
 })
@@ -270,8 +269,8 @@ public class SonarLintSpringAppConfig {
   }
 
   @Bean
-  SonarLintDatabaseInitParams provideStorageInitParams(UserPaths userPaths) {
-    return new SonarLintDatabaseInitParams(userPaths.getStorageRoot(), SonarLintDatabaseMode.FILE);
+  SonarLintDatabase provideDatabase(UserPaths userPaths) {
+    return new SonarLintDatabase(userPaths.getStorageRoot());
   }
 
   private static HttpConfig adapt(HttpConfigurationDto dto, @Nullable Path sonarlintUserHome) {

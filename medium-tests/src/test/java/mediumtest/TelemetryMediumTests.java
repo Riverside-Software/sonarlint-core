@@ -35,11 +35,13 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.config.binding.BindingSuggestionOrigin;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.file.DidUpdateFileSystemParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.OpenHotspotInBrowserParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.TelemetryMigrationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AcceptedBindingSuggestionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddQuickFixAppliedForRuleParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AddReportedRulesParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.AnalysisDoneOnSingleLanguageParams;
@@ -50,6 +52,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FindingsFilt
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionResolvedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.FixSuggestionStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.HelpAndFeedbackClickedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.IdeLabsExternalLinkClickedParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.IdeLabsFeedbackLinkClickedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.McpTransportMode;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.McpTransportModeUsedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.telemetry.TelemetryClientLiveAttributesResponse;
@@ -519,6 +523,42 @@ class TelemetryMediumTests {
   }
 
   @SonarLintTest
+  void it_should_record_acceptedBindingSuggestion_remoteUrl(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().acceptedBindingSuggestion(new AcceptedBindingSuggestionParams(BindingSuggestionOrigin.REMOTE_URL));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getNewBindingsRemoteUrlCount()).isEqualTo(1));
+  }
+
+  @SonarLintTest
+  void it_should_record_acceptedBindingSuggestion_sharedConfiguration(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().acceptedBindingSuggestion(new AcceptedBindingSuggestionParams(BindingSuggestionOrigin.SHARED_CONFIGURATION));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getNewBindingsSharedConfigurationCount()).isEqualTo(1));
+  }
+
+  @SonarLintTest
+  void it_should_record_acceptedBindingSuggestion_propertiesFile(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().acceptedBindingSuggestion(new AcceptedBindingSuggestionParams(BindingSuggestionOrigin.PROPERTIES_FILE));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getNewBindingsPropertiesFileCount()).isEqualTo(1));
+  }
+
+  @SonarLintTest
+  void it_should_record_acceptedBindingSuggestion_projectName(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().acceptedBindingSuggestion(new AcceptedBindingSuggestionParams(BindingSuggestionOrigin.PROJECT_NAME));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getNewBindingsProjectNameCount()).isEqualTo(1));
+  }
+
+  @SonarLintTest
   void it_should_record_addedImportedBindings(SonarLintTestHarness harness) {
     var backend = setupClientAndBackend(harness);
 
@@ -669,6 +709,36 @@ class TelemetryMediumTests {
     await().untilAsserted(() -> assertThat(backend.telemetryFileContent())
       .extracting(TelemetryLocalStorage::getNewIssuesFoundCount, TelemetryLocalStorage::getIssuesFixedCount)
       .containsExactly(2L, 1L));
+  }
+
+  @SonarLintTest
+  void it_should_record_each_ide_labs_link_click_separately(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().ideLabsExternalLinkClicked(new IdeLabsExternalLinkClickedParams("item1"));
+    backend.getTelemetryService().ideLabsExternalLinkClicked(new IdeLabsExternalLinkClickedParams("item2"));
+    backend.getTelemetryService().ideLabsExternalLinkClicked(new IdeLabsExternalLinkClickedParams("item2"));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getLabsLinkClickedCount())
+      .isEqualTo(Map.of(
+        "item1", 1,
+        "item2", 2
+      )));
+  }
+
+  @SonarLintTest
+  void it_should_record_each_ide_labs_feedback_link_click_separately(SonarLintTestHarness harness) {
+    var backend = setupClientAndBackend(harness);
+
+    backend.getTelemetryService().ideLabsFeedbackLinkClicked(new IdeLabsFeedbackLinkClickedParams("feature1"));
+    backend.getTelemetryService().ideLabsFeedbackLinkClicked(new IdeLabsFeedbackLinkClickedParams("feature2"));
+    backend.getTelemetryService().ideLabsFeedbackLinkClicked(new IdeLabsFeedbackLinkClickedParams("feature2"));
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent().getLabsFeedbackLinkClickedCount())
+      .isEqualTo(Map.of(
+        "feature1", 1,
+        "feature2", 2
+      )));
   }
 
   private SonarLintTestRpcServer setupClientAndBackend(SonarLintTestHarness harness) {

@@ -52,6 +52,7 @@ public class IdeLabsMediumTests {
   @SonarLintTest
   void it_should_join_labs_successfully(SonarLintTestHarness harness) {
     var backend = harness.newBackend()
+      .withTelemetryEnabled()
       .withIdeLabsSubscriptionUrl(marketingCloudMock.baseUrl())
       .start();
     marketingCloudMock.stubFor(post("/")

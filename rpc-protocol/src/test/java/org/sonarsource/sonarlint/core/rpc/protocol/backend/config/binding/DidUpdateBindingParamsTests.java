@@ -26,19 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DidUpdateBindingParamsTests {
 
   @Test
-  void should_store_binding_mode_and_origin_in_new_constructor() {
-    var dto = new BindingConfigurationDto("conn", "proj", true);
-
-    var params = new DidUpdateBindingParams("scope", dto, BindingMode.FROM_SUGGESTION, BindingSuggestionOrigin.PROJECT_NAME);
-
-    assertThat(params.getConfigScopeId()).isEqualTo("scope");
-    assertThat(params.getUpdatedBinding()).isEqualTo(dto);
-    assertThat(params.getBindingMode()).isEqualTo(BindingMode.FROM_SUGGESTION);
-    assertThat(params.getOrigin()).isEqualTo(BindingSuggestionOrigin.PROJECT_NAME);
-  }
-
-  @Test
-  void legacy_constructor_keeps_mode_and_origin_null() {
+  void constructor_keeps_mode_and_origin_null() {
     var dto = new BindingConfigurationDto("conn", "proj", false);
 
     var params = new DidUpdateBindingParams("scope", dto);

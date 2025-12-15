@@ -75,7 +75,6 @@ public class TelemetryLocalStorage {
   private int importedAddedBindingsCount;
   private int autoAddedBindingsCount;
   private int exportedConnectedModeCount;
-  private int newBindingsManualCount;
   private int newBindingsPropertiesFileCount;
   private int newBindingsRemoteUrlCount;
   private int newBindingsProjectNameCount;
@@ -101,6 +100,8 @@ public class TelemetryLocalStorage {
   private boolean isMcpIntegrationEnabled;
   @Nullable
   private McpTransportMode mcpTransportModeUsed;
+  private final Map<String, Integer> labsLinkClickedCount;
+  private final Map<String, Integer> labsFeedbackLinkClickedCount;
 
   TelemetryLocalStorage() {
     enabled = true;
@@ -118,6 +119,8 @@ public class TelemetryLocalStorage {
     fixSuggestionResolved = new LinkedHashMap<>();
     issuesUuidAiFixableSeen = new HashSet<>();
     calledToolsByName = new HashMap<>();
+    labsLinkClickedCount = new HashMap<>();
+    labsFeedbackLinkClickedCount = new HashMap<>();
   }
 
   public Collection<String> getRaisedIssuesRules() {
@@ -252,7 +255,6 @@ public class TelemetryLocalStorage {
     importedAddedBindingsCount = 0;
     autoAddedBindingsCount = 0;
     exportedConnectedModeCount = 0;
-    newBindingsManualCount = 0;
     newBindingsPropertiesFileCount = 0;
     newBindingsRemoteUrlCount = 0;
     newBindingsProjectNameCount = 0;
@@ -269,6 +271,8 @@ public class TelemetryLocalStorage {
     mcpServerConfigurationRequestedCount = 0;
     isMcpIntegrationEnabled = false;
     mcpTransportModeUsed = null;
+    labsLinkClickedCount.clear();
+    labsFeedbackLinkClickedCount.clear();
   }
 
   public long numUseDays() {
@@ -509,11 +513,6 @@ public class TelemetryLocalStorage {
     exportedConnectedModeCount++;
   }
 
-  public void incrementNewBindingsManualCount() {
-    markSonarLintAsUsedToday();
-    newBindingsManualCount++;
-  }
-
   public void incrementNewBindingsPropertiesFileCount() {
     markSonarLintAsUsedToday();
     newBindingsPropertiesFileCount++;
@@ -540,10 +539,6 @@ public class TelemetryLocalStorage {
 
   public int getExportedConnectedModeCount() {
     return exportedConnectedModeCount;
-  }
-
-  public int getNewBindingsManualCount() {
-    return newBindingsManualCount;
   }
 
   public int getNewBindingsPropertiesFileCount() {
@@ -735,5 +730,21 @@ public class TelemetryLocalStorage {
 
   public int getMcpServerConfigurationRequestedCount() {
     return mcpServerConfigurationRequestedCount;
+  }
+
+  public Map<String, Integer> getLabsFeedbackLinkClickedCount() {
+    return labsFeedbackLinkClickedCount;
+  }
+
+  public Map<String, Integer> getLabsLinkClickedCount() {
+    return labsLinkClickedCount;
+  }
+
+  public void ideLabsLinkClicked(String linkId) {
+    this.labsLinkClickedCount.merge(linkId, 1, Integer::sum);
+  }
+
+  public void ideLabsFeedbackLinkClicked(String featureId) {
+    this.labsFeedbackLinkClickedCount.merge(featureId, 1, Integer::sum);
   }
 }
