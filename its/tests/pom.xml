@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-its</artifactId>
-    <version>10.37.99001</version>
+    <version>10.38-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-its-tests</artifactId>
   <name>SonarLint Core - ITs - Tests</name>
@@ -100,7 +100,7 @@
     <dependency>
       <groupId>org.sonarsource.orchestrator</groupId>
       <artifactId>sonar-orchestrator-junit5</artifactId>
-      <version>5.6.2.2625</version>
+      <version>6.0.3.3907</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -170,25 +170,25 @@
                 <artifactItem>
                   <groupId>com.sonarsource.cpp</groupId>
                   <artifactId>sonar-cfamily-plugin</artifactId>
-                  <version>6.41.2.69583</version>
+                  <version>6.75.1.93101</version>
                   <type>jar</type>
                 </artifactItem>
                 <artifactItem>
                   <groupId>org.sonarsource.go</groupId>
                   <artifactId>sonar-go-plugin</artifactId>
-                  <version>1.23.1.2838</version>
+                  <version>1.31.0.4938</version>
                   <type>jar</type>
                 </artifactItem>
                 <artifactItem>
                   <groupId>org.sonarsource.iac</groupId>
                   <artifactId>sonar-iac-plugin</artifactId>
-                  <version>1.16.0.3845</version>
+                  <version>2.2.0.18377</version>
                   <type>jar</type>
                 </artifactItem>
                 <artifactItem>
                   <groupId>org.sonarsource.javascript</groupId>
                   <artifactId>sonar-javascript-plugin</artifactId>
-                  <version>10.12.0.25537</version>
+                  <version>11.7.1.36988</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>

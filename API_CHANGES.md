@@ -1,3 +1,9 @@
+# 10.38
+
+## New features
+
+* Add a new `GESSIE_TELEMETRY` capability in `org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability`. Clients using the feature need to declare it at initialization time. Enables sending data to Gessie (Generic Event System) alongside previous telemetry implementation.
+
 # 10.37
 
 ## Deprecation

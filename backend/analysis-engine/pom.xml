@@ -3,7 +3,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.37.99001</version>
+    <version>10.38-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-analysis-engine</artifactId>
@@ -81,7 +81,7 @@
                 <artifactItem>
                   <groupId>org.sonarsource.python</groupId>
                   <artifactId>sonar-python-plugin</artifactId>
-                  <version>3.24.1.11916</version>
+                  <version>5.14.2.29072</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>

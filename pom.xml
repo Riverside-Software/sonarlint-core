@@ -4,12 +4,12 @@
   <parent>
     <groupId>org.sonarsource.parent</groupId>
     <artifactId>parent</artifactId>
-    <version>84.0.0.3027</version>
+    <version>86.0.0.3040</version>
     <relativePath/>
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>10.37.99001</version>
+  <version>10.38-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -57,7 +57,7 @@
     -->
     <maven.compiler.release>17</maven.compiler.release>
 
-    <sonar-plugin-api.version>12.0.0.2960</sonar-plugin-api.version>
+    <sonar-plugin-api.version>13.4.2.4284</sonar-plugin-api.version>
     <sonar-markdown.version>25.3.0.104237</sonar-markdown.version>
     <sonar-scanner-protocol.version>9.9.0.65466</sonar-scanner-protocol.version>
     <protobuf.version>4.28.2</protobuf.version>
@@ -270,6 +270,11 @@
         <groupId>org.flywaydb</groupId>
         <artifactId>flyway-core</artifactId>
         <version>${flyway.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.sonarsource.classloader</groupId>
+        <artifactId>sonar-classloader</artifactId>
+        <version>1.2.1.2095</version>
       </dependency>
     </dependencies>
   </dependencyManagement>

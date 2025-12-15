@@ -85,6 +85,7 @@ class TelemetryMeasuresPayloadTests {
       "{\"key\":\"automatic_analysis.enabled\",\"value\":\"true\",\"type\":\"boolean\",\"granularity\":\"daily\"}," +
       "{\"key\":\"automatic_analysis.toggled_count\",\"value\":\"1\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"mcp.configuration_requested\",\"value\":\"3\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
+      "{\"key\":\"mcp.rule_file_requested\",\"value\":\"4\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"mcp.integration_enabled\",\"value\":\"true\",\"type\":\"boolean\",\"granularity\":\"daily\"}," +
       "{\"key\":\"mcp.transport_mode\",\"value\":\"HTTP\",\"type\":\"string\",\"granularity\":\"daily\"}," +
       "{\"key\":\"ide_labs.joined\",\"value\":\"true\",\"type\":\"boolean\",\"granularity\":\"daily\"}," +
@@ -92,7 +93,9 @@ class TelemetryMeasuresPayloadTests {
       "{\"key\":\"ide_labs.link_clicked_count_changed_file_analysis_doc\",\"value\":\"10\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"ide_labs.link_clicked_count_privacy_policy\",\"value\":\"20\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
       "{\"key\":\"ide_labs.feedback_link_clicked_count_connected_mode\",\"value\":\"1\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
-      "{\"key\":\"ide_labs.feedback_link_clicked_count_manage_dependency_risk\",\"value\":\"2\",\"type\":\"integer\",\"granularity\":\"daily\"}" +
+      "{\"key\":\"ide_labs.feedback_link_clicked_count_manage_dependency_risk\",\"value\":\"2\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
+      "{\"key\":\"ai_hooks.windsurf_installed\",\"value\":\"2\",\"type\":\"integer\",\"granularity\":\"daily\"}," +
+      "{\"key\":\"ai_hooks.cursor_installed\",\"value\":\"5\",\"type\":\"integer\",\"granularity\":\"daily\"}" +
       "]}");
 
     assertThat(m.messageUuid()).isEqualTo(messageUuid);
@@ -136,6 +139,7 @@ class TelemetryMeasuresPayloadTests {
     values.add(new TelemetryMeasuresValue("automatic_analysis.toggled_count", String.valueOf(1), INTEGER, DAILY));
 
     values.add(new TelemetryMeasuresValue("mcp.configuration_requested", String.valueOf(3), INTEGER, DAILY));
+    values.add(new TelemetryMeasuresValue("mcp.rule_file_requested", String.valueOf(4), INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("mcp.integration_enabled", String.valueOf(true), BOOLEAN, DAILY));
     values.add(new TelemetryMeasuresValue("mcp.transport_mode", McpTransportMode.HTTP.name(), STRING, DAILY));
 
@@ -145,6 +149,9 @@ class TelemetryMeasuresPayloadTests {
     values.add(new TelemetryMeasuresValue("ide_labs.link_clicked_count_privacy_policy", "20", INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("ide_labs.feedback_link_clicked_count_connected_mode", "1", INTEGER, DAILY));
     values.add(new TelemetryMeasuresValue("ide_labs.feedback_link_clicked_count_manage_dependency_risk", "2", INTEGER, DAILY));
+
+    values.add(new TelemetryMeasuresValue("ai_hooks.windsurf_installed", "2", INTEGER, DAILY));
+    values.add(new TelemetryMeasuresValue("ai_hooks.cursor_installed", "5", INTEGER, DAILY));
 
     return values;
   }
@@ -166,6 +173,8 @@ class TelemetryMeasuresPayloadTests {
       .contains(tuple("analysis_reporting.trigger_count_vcs_changed_files", "7", INTEGER, DAILY))
       .contains(tuple("automatic_analysis.enabled", "true", BOOLEAN, DAILY))
       .contains(tuple("automatic_analysis.toggled_count", "1", INTEGER, DAILY))
+      .contains(tuple("mcp.configuration_requested", "3", INTEGER, DAILY))
+      .contains(tuple("mcp.rule_file_requested", "4", INTEGER, DAILY))
       .contains(tuple("mcp.integration_enabled", "true", BOOLEAN, DAILY))
       .contains(tuple("mcp.transport_mode", "HTTP", STRING, DAILY))
       .contains(tuple("ide_labs.joined", "true", BOOLEAN, DAILY))
@@ -173,7 +182,9 @@ class TelemetryMeasuresPayloadTests {
       .contains(tuple("ide_labs.link_clicked_count_changed_file_analysis_doc", "10", INTEGER, DAILY))
       .contains(tuple("ide_labs.link_clicked_count_privacy_policy", "20", INTEGER, DAILY))
       .contains(tuple("ide_labs.feedback_link_clicked_count_connected_mode", "1", INTEGER, DAILY))
-      .contains(tuple("ide_labs.feedback_link_clicked_count_manage_dependency_risk", "2", INTEGER, DAILY));
+      .contains(tuple("ide_labs.feedback_link_clicked_count_manage_dependency_risk", "2", INTEGER, DAILY))
+      .contains(tuple("ai_hooks.windsurf_installed", "2", INTEGER, DAILY))
+      .contains(tuple("ai_hooks.cursor_installed", "5", INTEGER, DAILY));
   }
 
 }
