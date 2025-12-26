@@ -81,10 +81,10 @@
                       <goal>wget</goal>
                     </goals>
                     <configuration>
-                      <url>https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9.1/OpenJDK17U-jre_x64_windows_hotspot_17.0.9_9.zip</url>
+                      <url>https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jre_x64_windows_hotspot_17.0.17_10.zip</url>
                       <unpack>true</unpack>
                       <outputDirectory>${unpack.dir}/windows_x64</outputDirectory>
-                      <sha256>6c491d6f8c28c6f451f08110a30348696a04b009f8c58592191046e0fab1477b</sha256>
+                      <sha256>bd17db1cc08b3a8a98cedc7b8b8a203f683793be65a9ffbe4ceaacde71fc2b6b</sha256>
                     </configuration>
                   </execution>
                 </executions>
