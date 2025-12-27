@@ -12,8 +12,8 @@
   <description>SonarLint backend as a standalone CLI</description>
   <properties>
     <unpack.dir>${project.build.directory}/unpack</unpack.dir>
-    <jre.dirname.linux>jdk-17.0.9+9-jre</jre.dirname.linux>
-    <jre.dirname.windows>jdk-17.0.9+9-jre</jre.dirname.windows>
+    <jre.dirname.linux>jdk-17.0.17+10-jre</jre.dirname.linux>
+    <jre.dirname.windows>jdk-17.0.17+10-jre</jre.dirname.windows>
     <jre.dirname.macosx>jdk-17.0.9+9-jre/Contents/Home</jre.dirname.macosx>
   </properties>
 
@@ -131,10 +131,10 @@
                       <goal>wget</goal>
                     </goals>
                     <configuration>
-                      <url>https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.9%2B9/OpenJDK17U-jre_x64_linux_hotspot_17.0.9_9.tar.gz</url>
+                      <url>https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.17%2B10/OpenJDK17U-jre_x64_linux_hotspot_17.0.17_10.tar.gz</url>
                       <unpack>true</unpack>
                       <outputDirectory>${unpack.dir}/linux_x64</outputDirectory>
-                      <sha256>c37f729200b572884b8f8e157852c739be728d61d9a1da0f920104876d324733</sha256>
+                      <sha256>1c607fb19f153b23a7d62ff980eb55cff1a7d47ce565bbc44d14947c93bd33c9</sha256>
                     </configuration>
                   </execution>
                 </executions>
