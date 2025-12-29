@@ -19,7 +19,7 @@
  */
 package org.sonarsource.sonarlint.core.serverapi.exception;
 
-public class UnauthorizedException extends RuntimeException {
+public class UnauthorizedException extends ServerRequestException {
   public UnauthorizedException(String message) {
     super(message);
   }

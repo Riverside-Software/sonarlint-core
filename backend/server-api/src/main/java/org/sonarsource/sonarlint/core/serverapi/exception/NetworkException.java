@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server Connection
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,10 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverconnection;
+package org.sonarsource.sonarlint.core.serverapi.exception;
 
-public enum AiCodeFixFeatureEnablement {
-  DISABLED,
-  ENABLED_FOR_ALL_PROJECTS,
-  ENABLED_FOR_SOME_PROJECTS
+public class NetworkException extends ServerRequestException {
+
+  public NetworkException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

@@ -21,22 +21,20 @@ package org.sonarsource.sonarlint.core.commons.storage;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Set;
-import java.util.function.Consumer;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.flywaydb.core.Flyway;
 import org.h2.jdbcx.JdbcConnectionPool;
-import org.jooq.Configuration;
 import org.jooq.DSLContext;
 import org.jooq.SQLDialect;
 import org.jooq.impl.DSL;
+import org.jooq.impl.DefaultConfiguration;
+import org.jooq.impl.DefaultExecuteListenerProvider;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
-
-import static org.sonarsource.sonarlint.core.commons.storage.model.Tables.AI_CODEFIX_SETTINGS;
 
 public final class SonarLintDatabase {
   private static final SonarLintLogger LOG = SonarLintLogger.get();
+
   public static final String SQ_IDE_DB_FILENAME = "sq-ide";
 
   private final JdbcConnectionPool dataSource;
@@ -58,6 +56,7 @@ public final class SonarLintDatabase {
       LOG.debug("Initializing H2Database with URL {}", url);
       ds = JdbcConnectionPool.create(url, "sa", "");
     } catch (Exception e) {
+      DatabaseExceptionReporter.capture(e, "startup", "h2.pool.create");
       throw new IllegalStateException("Failed to initialize H2Database", e);
     }
     this.dataSource = ds;
@@ -71,12 +70,22 @@ public final class SonarLintDatabase {
       .baselineOnMigrate(true)
       .failOnMissingLocations(false)
       .load();
-    // this might throw but it's fine. If migrations fail, we want to fail starting the backend
-    flyway.migrate();
+    try {
+      flyway.migrate();
+    } catch (Exception e) {
+      // We are catching the exception for Sentry and rethrowing here to fail starting the backend
+      DatabaseExceptionReporter.capture(e, "startup", "flyway.migrate");
+      throw e;
+    }
 
     System.setProperty("org.jooq.no-tips", "true");
     System.setProperty("org.jooq.no-logo", "true");
-    this.dsl = DSL.using(this.dataSource, SQLDialect.H2);
+
+    var jooqConfig = new DefaultConfiguration()
+      .set(this.dataSource)
+      .set(SQLDialect.H2)
+      .set(new DefaultExecuteListenerProvider(new JooqDatabaseExceptionListener()));
+    this.dsl = DSL.using(jooqConfig);
   }
 
   private static void deleteLegacyDatabase(Path baseDir) {
@@ -91,22 +100,13 @@ public final class SonarLintDatabase {
     return dsl;
   }
 
-  public void withTransaction(Consumer<Configuration> transaction) {
-    dsl.transaction(transaction::accept);
-  }
-
   public void shutdown() {
     try {
       dataSource.dispose();
       LOG.debug("H2Database disposed");
     } catch (Exception e) {
+      DatabaseExceptionReporter.capture(e, "shutdown", "h2.pool.dispose");
       LOG.debug("Error while disposing H2Database: {}", e.getMessage());
     }
-  }
-
-  public void cleanupNonExistingConnections(Set<String> existingConnectionIds) {
-    dsl.deleteFrom(AI_CODEFIX_SETTINGS)
-      .where(AI_CODEFIX_SETTINGS.CONNECTION_ID.notIn(existingConnectionIds))
-      .execute();
   }
 }

@@ -27,6 +27,7 @@ import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.hc.client5.http.auth.CredentialsProvider;
 import org.apache.hc.core5.util.Timeout;
+import org.jooq.DSLContext;
 import org.sonarsource.sonarlint.core.BindingCandidatesFinder;
 import org.sonarsource.sonarlint.core.BindingClueProvider;
 import org.sonarsource.sonarlint.core.BindingSuggestionProvider;
@@ -53,7 +54,6 @@ import org.sonarsource.sonarlint.core.analysis.UserAnalysisPropertiesRepository;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.dogfood.DogfoodEnvironmentDetectionService;
 import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabase;
-import org.sonarsource.sonarlint.core.commons.storage.repository.AiCodeFixRepository;
 import org.sonarsource.sonarlint.core.embedded.server.AnalyzeFileListRequestHandler;
 import org.sonarsource.sonarlint.core.embedded.server.AwaitingUserTokenFutureRepository;
 import org.sonarsource.sonarlint.core.embedded.server.EmbeddedServer;
@@ -83,7 +83,7 @@ import org.sonarsource.sonarlint.core.http.ssl.CertificateStore;
 import org.sonarsource.sonarlint.core.http.ssl.SslConfig;
 import org.sonarsource.sonarlint.core.issue.IssueService;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
-import org.sonarsource.sonarlint.core.local.only.LocalOnlyIssueStorageService;
+import org.sonarsource.sonarlint.core.local.only.XodusLocalOnlyIssueStorageService;
 import org.sonarsource.sonarlint.core.log.LogService;
 import org.sonarsource.sonarlint.core.mode.SeverityModeService;
 import org.sonarsource.sonarlint.core.monitoring.MonitoringInitializationParams;
@@ -108,6 +108,9 @@ import org.sonarsource.sonarlint.core.rules.RulesExtractionHelper;
 import org.sonarsource.sonarlint.core.rules.RulesService;
 import org.sonarsource.sonarlint.core.sca.DependencyRiskService;
 import org.sonarsource.sonarlint.core.server.event.ServerEventsService;
+import org.sonarsource.sonarlint.core.serverconnection.aicodefix.AiCodeFixRepository;
+import org.sonarsource.sonarlint.core.serverconnection.issues.KnownFindingsRepository;
+import org.sonarsource.sonarlint.core.serverconnection.issues.LocalOnlyIssuesRepository;
 import org.sonarsource.sonarlint.core.smartnotifications.SmartNotifications;
 import org.sonarsource.sonarlint.core.storage.SonarLintDatabaseService;
 import org.sonarsource.sonarlint.core.storage.StorageService;
@@ -118,11 +121,11 @@ import org.sonarsource.sonarlint.core.sync.ScaSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SonarProjectBranchesSynchronizationService;
 import org.sonarsource.sonarlint.core.sync.SynchronizationService;
 import org.sonarsource.sonarlint.core.sync.TaintSynchronizationService;
-import org.sonarsource.sonarlint.core.telemetry.TelemetryService;
-import org.sonarsource.sonarlint.core.tracking.KnownFindingsStorageService;
+import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorageManager;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
 import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TrackingService;
+import org.sonarsource.sonarlint.core.tracking.XodusKnownFindingsStorageService;
 import org.sonarsource.sonarlint.core.websocket.WebSocketService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -135,6 +138,7 @@ import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_P
 import static org.sonarsource.sonarlint.core.http.ssl.CertificateStore.DEFAULT_STORE_TYPE;
 import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.FLIGHT_RECORDER;
 import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.MONITORING;
+import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.TELEMETRY;
 
 @Configuration
 // Can't use classpath scanning in OSGi, so waiting to move out of process, we have to declare our beans manually
@@ -179,7 +183,7 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   WebSocketService.class,
   ServerEventsService.class,
   VersionSoonUnsupportedHelper.class,
-  LocalOnlyIssueStorageService.class,
+  XodusLocalOnlyIssueStorageService.class,
   StorageService.class,
   SeverityModeService.class,
   NewCodeService.class,
@@ -201,7 +205,7 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   MCPServerConfigurationProvider.class,
   AnalysisSchedulerCache.class,
   PromotionService.class,
-  KnownFindingsStorageService.class,
+  XodusKnownFindingsStorageService.class,
   TrackingService.class,
   FindingsSynchronizationService.class,
   FindingReportingService.class,
@@ -223,7 +227,9 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   LogService.class,
   ActiveRulesService.class,
   AiCodeFixRepository.class,
-  SonarLintDatabaseService.class
+  SonarLintDatabaseService.class,
+  LocalOnlyIssuesRepository.class,
+  KnownFindingsRepository.class
 })
 public class SonarLintSpringAppConfig {
 
@@ -259,20 +265,27 @@ public class SonarLintSpringAppConfig {
   }
 
   @Bean
-  MonitoringInitializationParams provideMonitoringInitParams(InitializeParams params, FlightRecorderSession flightRecorderSession, TelemetryService telemetryService) {
+  MonitoringInitializationParams provideMonitoringInitParams(InitializeParams params, FlightRecorderSession flightRecorderSession, TelemetryLocalStorageManager telemetryService) {
     return new MonitoringInitializationParams(
       params.getBackendCapabilities().contains(MONITORING),
       params.getBackendCapabilities().contains(FLIGHT_RECORDER),
-      telemetryService.isEnabled(),
+      params.getBackendCapabilities().contains(TELEMETRY) && telemetryService.isEnabled(),
       flightRecorderSession.sessionId(),
       params.getTelemetryConstantAttributes().getProductKey(),
       params.getTelemetryConstantAttributes().getProductVersion(),
       params.getTelemetryConstantAttributes().getIdeVersion());
   }
 
-  @Bean
-  SonarLintDatabase provideDatabase(UserPaths userPaths) {
+  // disable automatic destroy call, shutdown is handled by SonarLintDatabaseService
+  // MonitoringService dependency ensures Sentry is initialized before database migrations run
+  @Bean(destroyMethod = "")
+  SonarLintDatabase provideDatabase(UserPaths userPaths, MonitoringService monitoringService) {
     return new SonarLintDatabase(userPaths.getStorageRoot());
+  }
+
+  @Bean
+  DSLContext provideDSLContext(SonarLintDatabase database) {
+    return database.dsl();
   }
 
   private static HttpConfig adapt(HttpConfigurationDto dto, @Nullable Path sonarlintUserHome) {

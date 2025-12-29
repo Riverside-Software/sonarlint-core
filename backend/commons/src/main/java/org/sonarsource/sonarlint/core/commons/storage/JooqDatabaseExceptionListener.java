@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Server Connection
+ * SonarLint Core - Commons
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,13 +17,28 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.serverconnection;
+package org.sonarsource.sonarlint.core.commons.storage;
 
-import java.util.Set;
+import org.jooq.ExecuteContext;
+import org.jooq.ExecuteListener;
 
-public record AiCodeFixSettings(Set<String> supportedRules, boolean isOrganizationEligible, AiCodeFixFeatureEnablement enablement, Set<String> enabledProjectKeys) {
-  public boolean isFeatureEnabled(String projectKey) {
-    return isOrganizationEligible && (enablement.equals(AiCodeFixFeatureEnablement.ENABLED_FOR_ALL_PROJECTS)
-      || (enablement.equals(AiCodeFixFeatureEnablement.ENABLED_FOR_SOME_PROJECTS) && enabledProjectKeys.contains(projectKey)));
+/**
+ * A jOOQ ExecuteListener that intercepts SQL execution exceptions and reports them
+ * to Sentry via {@link DatabaseExceptionReporter}.
+ */
+public class JooqDatabaseExceptionListener implements ExecuteListener {
+
+  @Override
+  public void exception(ExecuteContext ctx) {
+    var exception = ctx.exception();
+    if (exception == null) {
+      return;
+    }
+
+    var sqlException = ctx.sqlException();
+    var exceptionToReport = sqlException != null ? sqlException : exception;
+    var sql = ctx.sql();
+
+    DatabaseExceptionReporter.capture(exceptionToReport, "runtime", "jooq.execute", sql);
   }
 }
