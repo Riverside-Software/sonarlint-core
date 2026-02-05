@@ -7,7 +7,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.41.99001</version>
+    <version>10.42-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-rpc-protocol</artifactId>
   <name>SonarLint Core - RPC Protocol</name>
@@ -31,6 +31,11 @@
       <groupId>org.eclipse.lsp4j</groupId>
       <artifactId>org.eclipse.lsp4j.jsonrpc</artifactId>
       <version>${lsp4j.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.sentry</groupId>
+      <artifactId>sentry</artifactId>
+      <version>${sentry.version}</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

@@ -66,37 +66,42 @@ public class MonitoringService {
     this.dogfoodEnvDetectionService = dogfoodEnvDetectionService;
     this.userIdStore = userIdStore;
 
-    this.init();
+    this.startIfNeeded();
   }
 
-  public void init() {
+  public void startIfNeeded() {
     if (!initializeParams.monitoringEnabled()) {
       LOG.info("Monitoring is disabled by feature flag.");
       return;
     }
-
     if (shouldInitializeSentry()) {
-      var sentryConfiguration = getSentryConfiguration();
       LOG.info("Initializing Sentry");
-      Sentry.init(sentryConfiguration);
-      active = true;
-      if (initializeParams.flightRecorderEnabled()) {
-        configureFlightRecorderSession();
-      }
+      start();
     }
   }
 
   private boolean shouldInitializeSentry() {
-    return (dogfoodEnvDetectionService.isDogfoodEnvironment() || initializeParams.flightRecorderEnabled()) ||
-      (initializeParams.productKey().equals(INTELLIJ_PRODUCT_KEY) && initializeParams.isTelemetryEnabled());
+    return (dogfoodEnvDetectionService.isDogfoodEnvironment() || initializeParams.flightRecorderEnabled()) || initializeParams.isTelemetryEnabled();
+  }
+
+  private void start() {
+    Sentry.init(this::configure);
+    userIdStore.getOrCreate().ifPresent(userId -> {
+      var user = new User();
+      user.setId(userId.toString());
+      Sentry.setUser(user);
+    });
+    active = true;
+    if (initializeParams.flightRecorderEnabled()) {
+      configureFlightRecorderSession();
+    }
   }
 
   public boolean isActive() {
     return active;
   }
 
-  SentryOptions getSentryConfiguration() {
-    var sentryOptions = new SentryOptions();
+  private void configure(SentryOptions sentryOptions) {
     sentryOptions.setDsn(getDsn());
     sentryOptions.setRelease(SonarLintCoreVersion.getLibraryVersion());
     sentryOptions.setEnvironment(getEnvironment());
@@ -113,14 +118,12 @@ public class MonitoringService {
     sentryOptions.setTag("ideVersion", initializeParams.ideVersion());
     sentryOptions.setTag("platform", SystemUtils.OS_NAME);
     sentryOptions.setTag("architecture", SystemUtils.OS_ARCH);
-    userIdStore.getOrCreate().ifPresent(userId -> sentryOptions.setTag("userId", userId.toString()));
     sentryOptions.addInAppInclude("org.sonarsource.sonarlint");
     sentryOptions.setTracesSampleRate(getTracesSampleRate());
     addCaptureIgnoreRule(sentryOptions, "(?s)com\\.sonar\\.sslr\\.api\\.RecognitionException.*");
     addCaptureIgnoreRule(sentryOptions, "(?s)com\\.sonar\\.sslr\\.impl\\.LexerException.*");
     sentryOptions.setBeforeSend(MonitoringService::beforeSend);
     sentryOptions.setBeforeSendTransaction(MonitoringService::beforeSend);
-    return sentryOptions;
   }
 
   private String getEnvironment() {
@@ -187,13 +190,8 @@ public class MonitoringService {
       Sentry.close();
       active = false;
     } else if (!active && initializeParams.monitoringEnabled() && shouldInitializeSentry()) {
-      var sentryConfiguration = getSentryConfiguration();
       LOG.info("Initializing Sentry after telemetry was enabled");
-      Sentry.init(sentryConfiguration);
-      active = true;
-      if (initializeParams.flightRecorderEnabled()) {
-        configureFlightRecorderSession();
-      }
+      start();
     }
 
   }
