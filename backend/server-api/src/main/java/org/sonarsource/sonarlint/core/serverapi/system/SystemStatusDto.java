@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,14 +17,7 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.flightrecorder;
+package org.sonarsource.sonarlint.core.serverapi.system;
 
-import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
-import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
-
-@JsonSegment("flightRecording")
-public interface FlightRecordingRpcService {
-
-  @JsonNotification
-  void captureThreadDump();
+public record SystemStatusDto(String id, String version, String status) {
 }

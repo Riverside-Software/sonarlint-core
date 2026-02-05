@@ -3,23 +3,100 @@ name: Automate release
 on:
   workflow_dispatch:
     inputs:
-      branch:
-        description: 'The branch from which to check the releasability status.'
-        required: false
-        default: 'master'
       short-description:
         description: 'A short description for the release ticket'
         required: true
+        type: string
+      branch:
+        description: 'The branch from which to release.'
+        required: false
+        default: 'master'
+        type: string
+      pm-email:
+        description: "Product manager email"
+        required: true
+        type: string
+      is-test-run:
+        description: "For testing: use Jira sandbox and create draft releases in GitHub"
+        required: true
+        type: boolean
+        default: false
+      documentation-status:
+        description: "Status of the documentation field for Jira Release"
+        required: false
+        default: 'N/A'
+        type: string
+      lock-branch:
+        description: "If you want to lock given branch for the duration of the release"
+        default: true
+        type: boolean
 
 jobs:
-  release:
-    runs-on: github-ubuntu-latest-s
+  lock-branch:
+    name: Lock ${{ inputs.branch }} branch
+    uses: ./.github/workflows/ToggleLockBranch.yml
+    if: ${{ inputs.lock-branch }}
     permissions:
       id-token: write
-      contents: write
+    with:
+      branch: ${{ inputs.branch }}
 
+  release:
+    name: Release
+    uses: SonarSource/release-github-actions/.github/workflows/ide-automated-release.yml@v1
+    if: always() && !failure() && !cancelled()
+    permissions:
+      statuses: read
+      id-token: write
+      contents: write
+      actions: write
+      pull-requests: write
+    needs: 
+      - lock-branch
+    with:
+      jira-project-key: "SLCORE"
+      project-name: "SonarLint Core"
+      pm-email: ${{ inputs.pm-email }}
+      short-description: ${{ inputs.short-description }}
+      is-test-run: ${{ inputs.is-test-run }}
+      branch: ${{ inputs.branch }}
+      documentation-status: ${{ inputs.documentation-status }}
+      with-optional-checks: true
+
+  unlock-branch:
+    name: Unlock ${{ inputs.branch }} branch
+    uses: ./.github/workflows/ToggleLockBranch.yml
+    needs: release
+    if: ${{ inputs.lock-branch }}
+    permissions:
+      id-token: write
+    with:
+      branch: ${{ inputs.branch }}
+
+  bump-version:
+    name: Create a PR to bump version
+    runs-on: github-ubuntu-latest-s
+    needs:
+      - release
+    permissions:
+      contents: write # write for peter-evans/create-pull-request, read for actions/checkout
+      pull-requests: write # write for peter-evans/create-pull-request
     steps:
-      - name: Check releasability
-        uses: SonarSource/release-github-actions/check-releasability-status@v1
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      - name: bump-version
+        env: 
+          NEW_VERSION: ${{ needs.release.outputs.new-version }}
+        run: |
+          mvn versions:set -DgenerateBackupPoms=false -DnewVersion="$NEW_VERSION-SNAPSHOT"
+      - uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # v7
         with:
-          branch: ${{ inputs.branch }}
+          author: ${{ github.actor }} <${{ github.actor }}>
+          commit-message: Prepare next development iteration
+          title: Prepare next development iteration
+          branch: bot/bump-project-version
+          branch-suffix: timestamp
+          delete-branch: true
+          base: master
+          draft: true # so that we don't actually need to re-open the PR and just make it ready for review
+          reviewers: ${{ github.actor }}
+          body: Bump the version for the new iteration. Created by release automation.

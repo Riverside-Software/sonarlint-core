@@ -23,13 +23,14 @@ import java.net.URI;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
+import org.sonarsource.sonarlint.core.SonarQubeClientManager;
 import org.sonarsource.sonarlint.core.commons.Binding;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
 import org.sonarsource.sonarlint.core.event.SonarServerEventReceivedEvent;
-import org.sonarsource.sonarlint.core.http.ConnectionAwareHttpClientProvider;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
 import org.sonarsource.sonarlint.core.serverapi.push.SonarServerEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,14 +44,14 @@ public class WebSocketManager {
   private final Map<String, String> subscribedProjectKeysByConfigScopes = new HashMap<>();
   private final ExecutorService executorService = FailSafeExecutors.newSingleThreadExecutor("sonarlint-websocket-subscriber");
   private final ApplicationEventPublisher eventPublisher;
-  private final ConnectionAwareHttpClientProvider connectionAwareHttpClientProvider;
+  private final SonarQubeClientManager sonarQubeClientManager;
   private final ConfigurationRepository configurationRepository;
   private final URI websocketEndpointUri;
 
-  public WebSocketManager(ApplicationEventPublisher eventPublisher, ConnectionAwareHttpClientProvider connectionAwareHttpClientProvider,
-    ConfigurationRepository configurationRepository, URI websocketEndpointUri) {
+  public WebSocketManager(ApplicationEventPublisher eventPublisher, SonarQubeClientManager sonarQubeClientManager, ConfigurationRepository configurationRepository,
+    URI websocketEndpointUri) {
     this.eventPublisher = eventPublisher;
-    this.connectionAwareHttpClientProvider = connectionAwareHttpClientProvider;
+    this.sonarQubeClientManager = sonarQubeClientManager;
     this.configurationRepository = configurationRepository;
     this.websocketEndpointUri = websocketEndpointUri;
   }
@@ -85,24 +86,31 @@ public class WebSocketManager {
     }
   }
 
-  public void createConnectionIfNeeded(String connectionId) {
+  /**
+   * @return the connection if it was or has been opened, else empty
+   */
+  public Optional<SonarCloudWebSocket> createConnectionIfNeeded(String connectionId) {
     connectionIdsInterestedInNotifications.add(connectionId);
-    if (!hasOpenConnection()) {
-      try {
-        this.sonarCloudWebSocket = SonarCloudWebSocket.create(this.websocketEndpointUri,
-          connectionAwareHttpClientProvider.getWebSocketClient(connectionId),
-          this::handleSonarServerEvent, this::reopenConnectionOnClose);
-        this.connectionIdUsedToCreateConnection = connectionId;
-      } catch (Exception e) {
-        LOG.error("Error while creating WebSocket connection", e);
-      }
+    if (hasOpenConnection()) {
+      return Optional.of(sonarCloudWebSocket);
+    }
+    try {
+      return sonarQubeClientManager.getValidWebSocketClient(connectionId)
+        .map(webSocketClient -> {
+          this.sonarCloudWebSocket = SonarCloudWebSocket.create(this.websocketEndpointUri, webSocketClient, this::handleSonarServerEvent, this::reopenConnectionOnClose);
+          this.connectionIdUsedToCreateConnection = connectionId;
+          return sonarCloudWebSocket;
+        });
+    } catch (Exception e) {
+      LOG.error("Error while creating WebSocket connection", e);
+      return Optional.empty();
     }
   }
 
   public void reopenConnection(String connectionId, String reason) {
     closeSocket(reason);
-    createConnectionIfNeeded(connectionId);
-    resubscribeAll();
+    createConnectionIfNeeded(connectionId)
+      .ifPresent(connection -> resubscribeAll());
   }
 
   protected void reopenConnectionOnClose() {
@@ -122,15 +130,17 @@ public class WebSocketManager {
   }
 
   public void subscribe(String configScopeId, Binding binding) {
-    this.createConnectionIfNeeded(binding.connectionId());
-    var projectKey = binding.sonarProjectKey();
-    if (subscribedProjectKeysByConfigScopes.containsKey(configScopeId) && !subscribedProjectKeysByConfigScopes.get(configScopeId).equals(projectKey)) {
-      this.forget(configScopeId);
-    }
-    if (!subscribedProjectKeysByConfigScopes.containsValue(projectKey)) {
-      this.sonarCloudWebSocket.subscribe(projectKey);
-    }
-    subscribedProjectKeysByConfigScopes.put(configScopeId, projectKey);
+    createConnectionIfNeeded(binding.connectionId())
+      .ifPresent(connection -> {
+        var projectKey = binding.sonarProjectKey();
+        if (subscribedProjectKeysByConfigScopes.containsKey(configScopeId) && !subscribedProjectKeysByConfigScopes.get(configScopeId).equals(projectKey)) {
+          this.forget(configScopeId);
+        }
+        if (!subscribedProjectKeysByConfigScopes.containsValue(projectKey)) {
+          connection.subscribe(projectKey);
+        }
+        subscribedProjectKeysByConfigScopes.put(configScopeId, projectKey);
+      });
   }
 
   private void resubscribeAll() {
@@ -153,13 +163,9 @@ public class WebSocketManager {
 
   public void forget(String configScopeId) {
     var projectKey = subscribedProjectKeysByConfigScopes.remove(configScopeId);
-    if (projectKey != null && !subscribedProjectKeysByConfigScopes.containsValue(projectKey) && sonarCloudWebSocket != null) {
+    if (projectKey != null && !subscribedProjectKeysByConfigScopes.containsValue(projectKey) && hasOpenConnection()) {
       sonarCloudWebSocket.unsubscribe(projectKey);
     }
-  }
-
-  public SonarCloudWebSocket getSonarCloudWebSocket() {
-    return sonarCloudWebSocket;
   }
 
   public Map<String, String> getSubscribedProjectKeysByConfigScopes() {

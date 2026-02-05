@@ -19,7 +19,6 @@
  */
 package org.sonarsource.sonarlint.core.serverapi.system;
 
-import com.google.gson.Gson;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
@@ -34,23 +33,10 @@ public class SystemApi {
   }
 
   public ServerStatusInfo getStatus(SonarLintCancelMonitor cancelMonitor) {
-    return ServerApiHelper.processTimed(
-      () -> helper.getAnonymous("api/system/status", cancelMonitor),
-      response -> {
-        var responseStr = response.bodyAsString();
-        try {
-          var status = new Gson().fromJson(responseStr, SystemStatus.class);
-          return new ServerStatusInfo(status.id, status.status, status.version);
-        } catch (Exception e) {
-          throw new IllegalStateException("Unable to parse server infos from: " + responseStr, e);
-        }
-      },
-      duration -> LOG.debug("Downloaded server infos in {}ms", duration));
-  }
-
-  private static class SystemStatus {
-    String id;
-    String version;
-    String status;
+    var start = System.currentTimeMillis();
+    var status = helper.getAnonymousJson("api/system/status", SystemStatusDto.class, cancelMonitor);
+    var duration = System.currentTimeMillis() - start;
+    LOG.debug("Downloaded server infos in {}ms", duration);
+    return new ServerStatusInfo(status.id(), status.status(), status.version());
   }
 }

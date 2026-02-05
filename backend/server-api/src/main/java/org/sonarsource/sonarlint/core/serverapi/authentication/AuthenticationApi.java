@@ -19,7 +19,6 @@
  */
 package org.sonarsource.sonarlint.core.serverapi.authentication;
 
-import com.google.gson.Gson;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.ServerApiHelper;
 import org.sonarsource.sonarlint.core.serverapi.system.ValidationResult;
@@ -33,20 +32,8 @@ public class AuthenticationApi {
   }
 
   public ValidationResult validate(SonarLintCancelMonitor cancelMonitor) {
-    try (var response = serverApiHelper.rawGet("api/authentication/validate?format=json", cancelMonitor)) {
-      var code = response.code();
-      if (response.isSuccessful()) {
-        var responseStr = response.bodyAsString();
-        var validateResponse = new Gson().fromJson(responseStr, ValidateResponse.class);
-        return new ValidationResult(validateResponse.valid, validateResponse.valid ? "Authentication successful" : "Authentication failed");
-      } else {
-        return new ValidationResult(false, "HTTP Connection failed (" + code + "): " + response.bodyAsString());
-      }
-    }
-  }
-
-  private static class ValidateResponse {
-    boolean valid;
+    var validateResponse = serverApiHelper.getJson("api/authentication/validate?format=json", ValidateResponseDto.class, cancelMonitor);
+    return new ValidationResult(validateResponse.valid(), validateResponse.valid() ? "Authentication successful" : "Authentication failed");
   }
 
 }

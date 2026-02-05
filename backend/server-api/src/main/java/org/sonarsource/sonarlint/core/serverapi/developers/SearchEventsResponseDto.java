@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Server API
  * Copyright (C) 2016-2025 SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,7 +17,21 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-@ParametersAreNonnullByDefault
-package org.sonarsource.sonarlint.core.rpc.protocol.client.flightrecorder;
+package org.sonarsource.sonarlint.core.serverapi.developers;
 
-import javax.annotation.ParametersAreNonnullByDefault;
+import java.time.ZonedDateTime;
+import java.util.List;
+
+import static java.util.Objects.requireNonNull;
+
+public record SearchEventsResponseDto(List<Event> events) {
+  public record Event(String category, String message, String link, String project, ZonedDateTime date) {
+    public Event {
+      requireNonNull(category);
+      requireNonNull(message);
+      requireNonNull(link);
+      requireNonNull(project);
+      requireNonNull(date);
+    }
+  }
+}

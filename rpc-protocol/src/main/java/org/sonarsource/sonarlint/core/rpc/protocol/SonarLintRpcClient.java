@@ -23,6 +23,8 @@ import java.util.concurrent.CompletableFuture;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.lsp4j.jsonrpc.services.JsonNotification;
 import org.eclipse.lsp4j.jsonrpc.services.JsonRequest;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.ConnectionRpcService;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.config.DidChangeCredentialsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.ClientConstantInfoDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.OpenUrlInBrowserParams;
@@ -49,7 +51,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.client.connection.SuggestConn
 import org.sonarsource.sonarlint.core.rpc.protocol.client.embeddedserver.EmbeddedServerStartedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.event.DidReceiveServerHotspotEvent;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fix.ShowFixSuggestionParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.flightrecorder.FlightRecorderStartedParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.GetBaseDirResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.fs.ListFilesParams;
@@ -365,12 +366,17 @@ public interface SonarLintRpcClient {
   @JsonRequest
   CompletableFuture<GetFileExclusionsResponse> getFileExclusions(GetFileExclusionsParams params);
 
+  /**
+   * This notification is called when an invalid token is used for a given connection. It can happen in two cases:
+   * <ul>
+   *   <li>An HTTP request is made and the response status code is 401</li>
+   *   <li>The client does not return valid credentials from getCredentials (e.g. unexpected null fields)</li>
+   * </ul>
+   * In both cases, the notification will be called once. No further HTTP requests attempts will be made for this connection,
+   * until credentials are changed via {@link ConnectionRpcService#didChangeCredentials(DidChangeCredentialsParams)}
+   */
   @JsonNotification
   default void invalidToken(InvalidTokenParams params) {
-  }
-
-  @JsonNotification
-  default void flightRecorderStarted(FlightRecorderStartedParams params) {
   }
 
   @JsonNotification
