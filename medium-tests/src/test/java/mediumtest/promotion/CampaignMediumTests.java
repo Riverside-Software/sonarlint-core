@@ -42,6 +42,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Initialize
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageActionItem;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.MessageType;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.message.ShowMessageRequestResponse;
+import org.sonarsource.sonarlint.core.serverconnection.FileUtils;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorage;
 import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorageManager;
 import org.sonarsource.sonarlint.core.test.utils.SonarLintBackendFixture;
@@ -57,6 +58,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -76,6 +78,7 @@ class CampaignMediumTests {
   void setUp(@TempDir Path temp) {
     propertiesStubs.set("sonarlint.internal.promotion.initialDelay", "0");
     userHome = temp.resolve("sonarHome");
+    FileUtils.deleteRecursively(userHome);
   }
 
   @SonarLintTest
@@ -140,6 +143,34 @@ class CampaignMediumTests {
   }
 
   @SonarLintTest
+  void it_should_update_campaign_file_and_telemetry_on_close(SonarLintTestHarness harness) {
+    propertiesStubs.set("sonarlint.internal.promotion.initialDelay", "1");
+    saveTelemetryInstallTime(DEFAULT_KEY, MORE_THAN_TWO_WEEKS_AGO);
+    var client = harness.newFakeClient().build();
+    when(client.showMessageRequest(any(), any(), any()))
+      .thenReturn(new ShowMessageRequestResponse(null, true));
+
+    var backend = baseBackend(harness)
+      .withProductKey(DEFAULT_KEY)
+      .withTelemetryEnabled()
+      .start(client);
+
+    var campaignsFile = getCampaignsPath(DEFAULT_KEY);
+    await().untilAsserted(
+      () -> assertThat(getCampaigns(campaignsFile))
+        .hasSize(1)
+        .contains(Map.entry(
+          CampaignConstants.FEEDBACK_2026_01_CAMPAIGN,
+          new CampaignsLocalStorage.Campaign(CampaignConstants.FEEDBACK_2026_01_CAMPAIGN, LocalDate.now(), "CLOSED")))
+    );
+
+    await().untilAsserted(() -> assertThat(backend.telemetryFileContent())
+      .extracting(TelemetryLocalStorage::getCampaignsResolutions)
+      .extracting(campaigns -> campaigns.get(CampaignConstants.FEEDBACK_2026_01_CAMPAIGN))
+      .isEqualTo("CLOSED"));
+  }
+
+  @SonarLintTest
   void it_should_update_campaigns_file_and_open_idea_url_on_love_it(SonarLintTestHarness harness) throws MalformedURLException {
     verifyOpenUrlOnResponse(harness,
       "LOVE_IT", "idea", "https://plugins.jetbrains.com/plugin/7973-sonarqube-for-ide/reviews");
@@ -192,7 +223,7 @@ class CampaignMediumTests {
     saveTelemetryInstallTime(DEFAULT_KEY, MORE_THAN_TWO_WEEKS_AGO);
     var client = harness.newFakeClient().build();
     when(client.showMessageRequest(any(), any(), any()))
-      .thenReturn(new ShowMessageRequestResponse("MAYBE_LATER"));
+      .thenReturn(new ShowMessageRequestResponse("MAYBE_LATER", false));
 
     baseBackend(harness)
       .start(client);
@@ -212,9 +243,9 @@ class CampaignMediumTests {
     saveTelemetryInstallTime(DEFAULT_KEY, MORE_THAN_TWO_WEEKS_AGO);
     var client = harness.newFakeClient().build();
     when(client.showMessageRequest(any(), eq("Enjoying SonarQube for IDE? We'd love to hear what you think."), any()))
-      .thenReturn(new ShowMessageRequestResponse("LOVE_IT"));
+      .thenReturn(new ShowMessageRequestResponse("LOVE_IT", false));
     when(client.showMessageRequest(any(), eq("Could not find feedback link for mediumTests. Please consider sharing your feedback directly on our community forum"), any()))
-      .thenReturn(new ShowMessageRequestResponse("OPEN_COMMUNITY"));
+      .thenReturn(new ShowMessageRequestResponse("OPEN_COMMUNITY", false));
 
     baseBackend(harness)
       .start(client);
@@ -237,7 +268,8 @@ class CampaignMediumTests {
       actionsArgumentCaptor.capture());
     // showMessageRequest will be called twice - once for the feedback, and second time for the community fallback
     assertThat(messageTypeCaptor.getAllValues().get(1)).isEqualTo(MessageType.INFO);
-    assertThat(messageCaptor.getAllValues().get(1)).isEqualTo("Could not find feedback link for mediumTests. Please consider sharing your feedback directly on our community forum");
+    assertThat(messageCaptor.getAllValues().get(1))
+      .isEqualTo("Could not find feedback link for mediumTests. Please consider sharing your feedback directly on our community forum");
     assertThat(actionsArgumentCaptor.getAllValues().get(1)).hasSize(1);
     assertThat(actionsArgumentCaptor.getAllValues().get(1).get(0)).extracting(MessageActionItem::getKey, MessageActionItem::getDisplayText, MessageActionItem::isPrimaryAction)
       .containsExactly("OPEN_COMMUNITY", "Open Community Forum", true);
@@ -248,19 +280,18 @@ class CampaignMediumTests {
   @SonarLintTest
   void it_should_delay_the_notification_configured_amount_of_time(SonarLintTestHarness harness) {
     saveTelemetryInstallTime(DEFAULT_KEY, MORE_THAN_TWO_WEEKS_AGO);
-    propertiesStubs.set("sonarlint.internal.promotion.initialDelay", "2");
+    propertiesStubs.set("sonarlint.internal.promotion.initialDelay", "1");
     var client = harness.newFakeClient().build();
     when(client.showMessageRequest(any(), any(), any()))
-      .thenReturn(new ShowMessageRequestResponse("LOVE_IT"));
+      .thenReturn(new ShowMessageRequestResponse("LOVE_IT", false));
 
     baseBackend(harness)
       .start(client);
 
-    await().atLeast(2, TimeUnit.SECONDS)
-      .untilAsserted(() -> verify(client).showMessageRequest(
-        eq(MessageType.INFO),
-        eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
-        any()));
+    verify(client, timeout(1500)).showMessageRequest(
+      eq(MessageType.INFO),
+      eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
+      any());
   }
 
   @SonarLintTest
@@ -282,7 +313,7 @@ class CampaignMediumTests {
     baseBackend(harness)
       .start(client);
 
-    verify(client).showMessageRequest(
+    verify(client, timeout(500)).showMessageRequest(
       eq(MessageType.INFO),
       eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
       any());
@@ -307,7 +338,7 @@ class CampaignMediumTests {
     baseBackend(harness)
       .start(client);
 
-    verify(client).showMessageRequest(
+    verify(client, timeout(500)).showMessageRequest(
       eq(MessageType.INFO),
       eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
       any());
@@ -346,7 +377,7 @@ class CampaignMediumTests {
     saveTelemetryInstallTime(DEFAULT_KEY, MORE_THAN_TWO_WEEKS_AGO);
     var client = harness.newFakeClient().build();
     when(client.showMessageRequest(any(), any(), any()))
-      .thenReturn(new ShowMessageRequestResponse("LOVE_IT"));
+      .thenReturn(new ShowMessageRequestResponse("LOVE_IT", false));
 
     var backend = baseBackend(harness)
       .withTelemetryEnabled()
@@ -385,11 +416,10 @@ class CampaignMediumTests {
         assertThat(Files.exists(campaignsFile)).isTrue();
       });
 
-    await().atMost(5, TimeUnit.SECONDS)
-      .untilAsserted(() -> verify(client, times(1)).showMessageRequest(
-        eq(MessageType.INFO),
-        eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
-        any()));
+    verify(client, timeout(5000)).showMessageRequest(
+      eq(MessageType.INFO),
+      eq("Enjoying SonarQube for IDE? We'd love to hear what you think."),
+      any());
 
     var campaignsFile = getCampaignsPath(DEFAULT_KEY);
     assertThat(getCampaigns(campaignsFile))
@@ -402,7 +432,7 @@ class CampaignMediumTests {
     var client = harness.newFakeClient()
       .build();
     when(client.showMessageRequest(any(), any(), any()))
-      .thenReturn(new ShowMessageRequestResponse(response));
+      .thenReturn(new ShowMessageRequestResponse(response, false));
 
     baseBackend(harness)
       .withProductKey(productKey)
@@ -414,9 +444,8 @@ class CampaignMediumTests {
         .hasSize(1)
         .contains(Map.entry(
           CampaignConstants.FEEDBACK_2026_01_CAMPAIGN,
-          new CampaignsLocalStorage.Campaign(CampaignConstants.FEEDBACK_2026_01_CAMPAIGN, LocalDate.now(), response)))
-    );
-    verify(client).openUrlInBrowser(new URL(expectedUrl));
+          new CampaignsLocalStorage.Campaign(CampaignConstants.FEEDBACK_2026_01_CAMPAIGN, LocalDate.now(), response))));
+    verify(client, timeout(500)).openUrlInBrowser(new URL(expectedUrl));
   }
 
   private void saveFeedbackCampaign(LocalDate lastShown, String lastResponse) {
@@ -426,8 +455,7 @@ class CampaignMediumTests {
         new CampaignsLocalStorage.Campaign(
           CampaignConstants.FEEDBACK_2026_01_CAMPAIGN,
           lastShown,
-          lastResponse
-        )));
+          lastResponse)));
   }
 
   private static Map<String, CampaignsLocalStorage.Campaign> getCampaigns(Path campaignsFile) {
@@ -438,8 +466,7 @@ class CampaignMediumTests {
   private void saveTelemetryInstallTime(String productKey, int daysAgo) {
     var telemetryPath = getTelemetryPath(productKey);
     TelemetryLocalStorageManager telemetryStorageManager = new TelemetryLocalStorageManager(telemetryPath, mock(InitializeParams.class));
-    telemetryStorageManager.tryUpdateAtomically(data ->
-      data.setInstallTime(OffsetDateTime.now().minusDays(daysAgo)));
+    telemetryStorageManager.tryUpdateAtomically(data -> data.setInstallTime(OffsetDateTime.now().minusDays(daysAgo)));
   }
 
   private Path getCampaignsPath(String productKey) {
