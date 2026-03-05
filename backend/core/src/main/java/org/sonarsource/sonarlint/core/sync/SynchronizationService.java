@@ -244,7 +244,7 @@ public class SynchronizationService {
     var scopeId = event.getRemovedConfigurationScopeId();
     LOG.debug("Config scope {} removed, managing caches", scopeId);
     scopeSynchronizationTimestampRepository.clearLastSynchronizationTimestamp(scopeId);
-    var previousBinding = event.getRemovedBindingConfiguration();
+    var previousBinding = event.removedBindingConfiguration();
     if (previousBinding.isBound()) {
       var connectionId = requireNonNull(previousBinding.connectionId());
       var projectKey = requireNonNull(previousBinding.sonarProjectKey());
@@ -344,7 +344,7 @@ public class SynchronizationService {
         // XXX we might want to group those 2 events under one
         if (!analyzerConfigUpdateSummary.getUpdatedSettingsValueByKey().isEmpty()) {
           applicationEventPublisher.publishEvent(
-            new SonarServerSettingsChangedEvent(configScopeIds, analyzerConfigUpdateSummary.getUpdatedSettingsValueByKey()));
+            new SonarServerSettingsChangedEvent(connectionId, configScopeIds, analyzerConfigUpdateSummary.getUpdatedSettingsValueByKey()));
         }
         applicationEventPublisher.publishEvent(new AnalyzerConfigurationSynchronized(binding, configScopeIds));
         sonarProjectBranchesSynchronizationService.sync(connectionId, projectKey, cancelMonitor);

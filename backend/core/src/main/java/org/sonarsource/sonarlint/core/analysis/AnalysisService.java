@@ -308,6 +308,7 @@ public class AnalysisService {
   @EventListener
   public void onPluginsSynchronized(PluginsSynchronizedEvent event) {
     var connectionId = event.connectionId();
+    schedulerCache.reloadPlugins(event.connectionId());
     checkIfReadyForAnalysis(configurationRepository.getBoundScopesToConnection(connectionId)
       .stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()));
   }
@@ -323,7 +324,7 @@ public class AnalysisService {
     var removedConfigurationScopeId = event.getRemovedConfigurationScopeId();
     analysisReadinessByConfigScopeId.remove(removedConfigurationScopeId);
     client.didChangeAnalysisReadiness(new DidChangeAnalysisReadinessParams(Set.of(removedConfigurationScopeId), false));
-    schedulerCache.unregisterModule(removedConfigurationScopeId, event.getRemovedBindingConfiguration().connectionId());
+    schedulerCache.unregisterModule(removedConfigurationScopeId, event.removedBindingConfiguration().connectionId());
   }
 
   @EventListener

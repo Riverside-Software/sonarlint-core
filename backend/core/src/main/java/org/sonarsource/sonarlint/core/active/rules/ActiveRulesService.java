@@ -42,7 +42,6 @@ import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
-import org.sonarsource.sonarlint.core.event.ConnectionConfigurationRemovedEvent;
 import org.sonarsource.sonarlint.core.event.SonarServerEventReceivedEvent;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
 import org.sonarsource.sonarlint.core.mode.SeverityModeService;
@@ -65,6 +64,7 @@ import org.sonarsource.sonarlint.core.serverapi.rules.ServerActiveRule;
 import org.sonarsource.sonarlint.core.serverapi.rules.ServerRule;
 import org.sonarsource.sonarlint.core.serverconnection.AnalyzerConfiguration;
 import org.sonarsource.sonarlint.core.serverconnection.RuleSet;
+import org.sonarsource.sonarlint.core.serverconnection.SonarServerSettingsChangedEvent;
 import org.sonarsource.sonarlint.core.serverconnection.storage.StorageException;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 import org.sonarsource.sonarlint.core.sync.AnalyzerConfigurationSynchronized;
@@ -297,16 +297,18 @@ public class ActiveRulesService {
     };
   }
 
+  public void evictFor(String connectionId) {
+    LOG.debug("Evict cached active rules for connection '{}'", connectionId);
+    activeRulesPerBinding.entrySet().removeIf(
+      entry -> entry.getKey().connectionId().equals(connectionId)
+    );
+  }
+
   @EventListener
-  public void onConnectionRemoved(ConnectionConfigurationRemovedEvent event) {
-    var iterator = activeRulesPerBinding.entrySet().iterator();
-    while (iterator.hasNext()) {
-      var binding = iterator.next().getKey();
-      if (binding.connectionId().equals(event.getRemovedConnectionId())) {
-        // evict the cache, active rules will be lazily loaded next time they are needed
-        iterator.remove();
-      }
-    }
+  public void settingsChanged(SonarServerSettingsChangedEvent event) {
+    // settings have an impact on rule definitions
+    rulesRepository.evictFor(event.connectionId());
+    evictFor(event.connectionId());
   }
 
   @EventListener
