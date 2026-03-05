@@ -26,13 +26,17 @@ import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
 import org.sonarsource.sonarlint.core.commons.ConnectionKind;
+import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.commons.Version;
+import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
+import org.sonarsource.sonarlint.core.plugin.commons.LoadedPlugins;
 import org.sonarsource.sonarlint.core.plugin.skipped.SkippedPluginsRepository;
 import org.sonarsource.sonarlint.core.repository.connection.AbstractConnectionConfiguration;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
@@ -48,22 +52,33 @@ import org.sonarsource.sonarlint.core.serverconnection.storage.PluginsStorage;
 import org.sonarsource.sonarlint.core.serverconnection.storage.ServerInfoStorage;
 import org.sonarsource.sonarlint.core.storage.StorageService;
 
+import org.springframework.context.ApplicationEventPublisher;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PluginsServiceTest {
+
+  @RegisterExtension
+  private static final SonarLintLogTester logTester = new SonarLintLogTester();
 
   private static final Path ossPath = Paths.get("folder", "oss");
   private static final Path enterprisePath = Paths.get("folder", "enterprise");
   private PluginsService underTest;
   private PluginsRepository pluginsRepository;
+  private LanguageSupportRepository languageSupportRepository;
   private ConnectionConfigurationRepository connectionConfigurationStorage;
   private StorageService storageService;
   private ConnectionStorage connectionStorage;
   private ServerInfoStorage serverInfoStorage;
   private PluginsStorage pluginStorage;
   private InitializeParams initializeParams;
+  private ApplicationEventPublisher eventPublisher;
 
   @BeforeEach
   void prepare() {
@@ -75,9 +90,11 @@ class PluginsServiceTest {
     pluginStorage = mock(PluginsStorage.class);
     when(connectionStorage.plugins()).thenReturn(pluginStorage);
     initializeParams = mock(InitializeParams.class);
+    languageSupportRepository = mock(LanguageSupportRepository.class);
+    eventPublisher = mock(ApplicationEventPublisher.class);
     mockOmnisharpLanguageRequirements();
-    underTest = new PluginsService(pluginsRepository, mock(SkippedPluginsRepository.class), mock(LanguageSupportRepository.class), storageService,
-      initializeParams, connectionConfigurationStorage, mock(NodeJsService.class));
+    underTest = new PluginsService(pluginsRepository, mock(SkippedPluginsRepository.class), languageSupportRepository, storageService,
+      initializeParams, connectionConfigurationStorage, mock(NodeJsService.class), eventPublisher);
   }
 
   @Test
@@ -299,6 +316,170 @@ class PluginsServiceTest {
     assertThat(result.isShouldUseVbNetEnterprise()).isTrue();
   }
 
+  @Test
+  void should_return_list_size_equal_to_sonar_language_values() {
+    var connectionId = "connection1";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId);
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).hasSize(SonarLanguage.values().length);
+  }
+
+  @Test
+  void should_return_active_embedded_with_empty_versions_when_plugin_in_embedded_analysis() {
+    var expected = new PluginStatus("Java", PluginState.ACTIVE, ArtifactSource.EMBEDDED, null, null);
+    var connectionId = "connection1";
+    mockEmbeddedPlugins(Set.of("java"), Set.of("java"));
+    mockConnectionPlugins(connectionId);
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_failed_embedded_with_empty_versions_when_plugin_in_embedded_all_but_not_in_analysis() {
+    var expected = new PluginStatus("Java", PluginState.FAILED, ArtifactSource.EMBEDDED, null, null);
+    var connectionId = "connection1";
+    mockEmbeddedPlugins(Set.of("java"), Set.of());
+    mockConnectionPlugins(connectionId);
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_synced_sonar_cloud_with_empty_versions_when_plugin_in_connection_analysis_and_is_sonar_cloud() {
+    var expected = new PluginStatus("Python", PluginState.SYNCED, ArtifactSource.SONARQUBE_CLOUD, null, null);
+    var connectionId = "SQC";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId, Set.of("python"), Set.of("python"));
+    mockConnection(connectionId, ConnectionKind.SONARCLOUD, Version.create("1.0"));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_failed_sonar_cloud_with_empty_versions_when_plugin_in_connection_all_but_not_in_analysis_and_is_sonar_cloud() {
+    var expected = new PluginStatus("Python", PluginState.FAILED, ArtifactSource.SONARQUBE_CLOUD, null, null);
+    var connectionId = "SQC";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId, Set.of("python"), Set.of());
+    mockConnection(connectionId, ConnectionKind.SONARCLOUD, Version.create("1.0"));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_synced_sonar_qube_server_with_empty_versions_when_plugin_in_connection_analysis_and_not_sonar_cloud() {
+    var expected = new PluginStatus("Python", PluginState.SYNCED, ArtifactSource.SONARQUBE_SERVER, null, null);
+    var connectionId = "SQS";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId, Set.of("python"), Set.of("python"));
+    mockConnection(connectionId, ConnectionKind.SONARQUBE, Version.create("10.0"));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_failed_sonar_qube_server_with_empty_versions_when_plugin_in_connection_all_but_not_in_analysis_and_not_sonar_cloud() {
+    var expected = new PluginStatus("Python", PluginState.FAILED, ArtifactSource.SONARQUBE_SERVER, null, null);
+    var connectionId = "SQS";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId, Set.of("python"), Set.of());
+    mockConnection(connectionId, ConnectionKind.SONARQUBE, Version.create("10.0"));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_unsupported_with_null_fields_when_plugin_in_sonar_language_but_not_in_any_collection() {
+    var connectionId = "connection1";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId);
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result)
+      .isNotEmpty()
+      .allMatch(status ->
+        status.state() == PluginState.UNSUPPORTED &&
+        status.source() == null &&
+        status.actualVersion() == null &&
+        status.overriddenVersion() == null
+      );
+  }
+
+  @Test
+  void should_use_connection_plugin_values_when_plugin_present_in_both_embedded_and_connection() {
+    var expected = new PluginStatus("Java", PluginState.SYNCED, ArtifactSource.SONARQUBE_SERVER, null, null);
+    var connectionId = "SQS";
+    mockEmbeddedPlugins(Set.of("java"), Set.of("java"));
+    mockConnectionPlugins(connectionId, Set.of("java"), Set.of("java"));
+    mockConnection(connectionId, ConnectionKind.SONARQUBE, Version.create("10.0"));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(expected);
+  }
+
+  @Test
+  void should_return_premium_only_for_languages_exclusively_in_connected_mode_when_connection_id_is_null() {
+    mockEmbeddedPlugins();
+    when(languageSupportRepository.getEnabledLanguagesInStandaloneMode()).thenReturn(Set.of(SonarLanguage.JAVA));
+    when(languageSupportRepository.getEnabledLanguagesInConnectedMode()).thenReturn(Set.of(SonarLanguage.JAVA, SonarLanguage.PYTHON));
+
+    var result = underTest.getPluginStatuses(null);
+
+    assertThat(result).contains(new PluginStatus("Python", PluginState.PREMIUM, null, null, null))
+      .doesNotContain(new PluginStatus("Java", PluginState.PREMIUM, null, null, null));
+  }
+
+  @Test
+  void should_return_premium_for_languages_not_in_connection_plugins_when_connection_id_is_not_null() {
+    var connectionId = "SQS";
+    mockEmbeddedPlugins();
+    mockConnectionPlugins(connectionId);
+    mockConnection(connectionId, ConnectionKind.SONARQUBE, Version.create("10.0"));
+    when(languageSupportRepository.getEnabledLanguagesInStandaloneMode()).thenReturn(Set.of(SonarLanguage.JAVA));
+    when(languageSupportRepository.getEnabledLanguagesInConnectedMode()).thenReturn(Set.of(SonarLanguage.JAVA, SonarLanguage.PYTHON));
+
+    var result = underTest.getPluginStatuses(connectionId);
+
+    assertThat(result).contains(new PluginStatus("Python", PluginState.PREMIUM, null, null, null))
+      .doesNotContain(new PluginStatus("Java", PluginState.PREMIUM, null, null, null));
+  }
+
+  @Test
+  void unloadPlugins_should_publish_event_when_plugins_were_loaded() {
+    var connectionId = "connection1";
+    mockConnectionPlugins(connectionId, Set.of("python"), Set.of("python"));
+
+    underTest.unloadPlugins(connectionId);
+
+    verify(eventPublisher).publishEvent(new PluginStatusesChangedEvent(connectionId));
+  }
+
+  @Test
+  void unloadPlugins_should_not_publish_event_when_no_plugins_were_loaded() {
+    var connectionId = "connection1";
+
+    underTest.unloadPlugins(connectionId);
+
+    verify(eventPublisher, never()).publishEvent(any());
+  }
+
   private void mockNoConnection(String connectionId) {
     when(connectionStorage.serverInfo()).thenReturn(serverInfoStorage);
     when(storageService.connection(connectionId)).thenReturn(connectionStorage);
@@ -347,5 +528,33 @@ class PluginsServiceTest {
     when(omnisharpRequirements.getEnterpriseAnalyzerPath()).thenReturn(enterprisePath);
     when(languageSpecificRequirements.getOmnisharpRequirements()).thenReturn(omnisharpRequirements);
     when(initializeParams.getLanguageSpecificRequirements()).thenReturn(languageSpecificRequirements);
+  }
+
+  private void mockEmbeddedPlugins() {
+    mockEmbeddedPlugins(Set.of(), Set.of());
+  }
+
+  private void mockEmbeddedPlugins(Set<String> allPluginKeys, Set<String> analysisPluginKeys) {
+    var loadedPlugins = mock(LoadedPlugins.class);
+    when(loadedPlugins.hasPlugin(anyString())).thenAnswer(inv -> allPluginKeys.contains(inv.getArgument(0, String.class)));
+    when(loadedPlugins.hasDisabledPlugin(anyString())).thenAnswer(inv -> {
+      var key = inv.getArgument(0, String.class);
+      return allPluginKeys.contains(key) && !analysisPluginKeys.contains(key);
+    });
+    when(pluginsRepository.getLoadedEmbeddedPlugins()).thenReturn(loadedPlugins);
+  }
+
+  private void mockConnectionPlugins(String connectionId) {
+    mockConnectionPlugins(connectionId, Set.of(), Set.of());
+  }
+
+  private void mockConnectionPlugins(String connectionId, Set<String> allPluginKeys, Set<String> analysisPluginKeys) {
+    var loadedPlugins = mock(LoadedPlugins.class);
+    when(loadedPlugins.hasPlugin(anyString())).thenAnswer(inv -> allPluginKeys.contains(inv.getArgument(0, String.class)));
+    when(loadedPlugins.hasDisabledPlugin(anyString())).thenAnswer(inv -> {
+      var key = inv.getArgument(0, String.class);
+      return allPluginKeys.contains(key) && !analysisPluginKeys.contains(key);
+    });
+    when(pluginsRepository.getLoadedPlugins(connectionId)).thenReturn(loadedPlugins);
   }
 }
