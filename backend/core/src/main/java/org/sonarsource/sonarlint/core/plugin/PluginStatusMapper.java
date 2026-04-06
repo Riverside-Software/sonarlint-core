@@ -25,6 +25,8 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.plugin.ArtifactSource
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.plugin.PluginStateDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.plugin.PluginStatusDto;
 
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
+
 public class PluginStatusMapper {
 
   private PluginStatusMapper() {
@@ -36,11 +38,13 @@ public class PluginStatusMapper {
 
   public static PluginStatusDto toDto(PluginStatus status) {
     return new PluginStatusDto(
-      status.pluginName(),
+      Language.valueOf(status.language().name()),
+      status.language().getName(),
       toDto(status.state()),
       toDto(status.source()),
       status.actualVersion() == null ? null : status.actualVersion().toString(),
-      status.overriddenVersion() == null ? null : status.overriddenVersion().toString());
+      status.overriddenVersion() == null ? null : status.overriddenVersion().toString(),
+      status.serverVersion());
   }
 
   public static PluginStateDto toDto(PluginState state) {

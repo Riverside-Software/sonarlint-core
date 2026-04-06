@@ -2,9 +2,9 @@
   <modelVersion>4.0.0</modelVersion>
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
-    <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.47.99001</version>
-    <relativePath>../../pom.xml</relativePath>
+    <artifactId>sonarlint-backend-parent</artifactId>
+    <version>11.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-analysis-engine</artifactId>
   <name>SonarLint Core - Analysis Engine</name>
@@ -81,7 +81,7 @@
                 <artifactItem>
                   <groupId>org.sonarsource.python</groupId>
                   <artifactId>sonar-python-plugin</artifactId>
-                  <version>5.14.2.29072</version>
+                  <version>5.18.0.31561</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>

@@ -20,9 +20,11 @@
 package org.sonarsource.sonarlint.core.rpc.protocol.backend.plugin;
 
 import javax.annotation.Nullable;
+import org.sonarsource.sonarlint.core.rpc.protocol.common.Language;
 
 public class PluginStatusDto {
 
+  private final Language language;
   private final String pluginName;
   private final PluginStateDto state;
   @Nullable
@@ -31,22 +33,33 @@ public class PluginStatusDto {
   private final String actualVersion;
   @Nullable
   private final String overriddenVersion;
+  @Nullable
+  private final String serverVersion;
 
   /**
+   * @param language          language that this plugin provides analysis for
    * @param pluginName        human-readable name of the language/analyzer (e.g. "Java", "C/C++/Objective-C")
    * @param state             current lifecycle state of the plugin in the backend
    * @param source            where the plugin artifact came from; {@code null} when the plugin is not available
    * @param actualVersion     version of the plugin that is currently in use; {@code null} when the plugin is not loaded
    * @param overriddenVersion a local plugin version that was superseded by the one obtained via SQS/SQC sync, if any;
    *                          {@code null} when no override is in effect
+   * @param serverVersion     version of the SonarQube Server that provided this plugin (e.g. "10.8.1");
+   *                          {@code null} for non-server sources (embedded, cloud, unavailable)
    */
-  public PluginStatusDto(String pluginName, PluginStateDto state, @Nullable ArtifactSourceDto source,
-    @Nullable String actualVersion, @Nullable String overriddenVersion) {
+  public PluginStatusDto(Language language, String pluginName, PluginStateDto state, @Nullable ArtifactSourceDto source,
+    @Nullable String actualVersion, @Nullable String overriddenVersion, @Nullable String serverVersion) {
+    this.language = language;
     this.pluginName = pluginName;
     this.state = state;
     this.source = source;
     this.actualVersion = actualVersion;
     this.overriddenVersion = overriddenVersion;
+    this.serverVersion = serverVersion;
+  }
+
+  public Language getLanguage() {
+    return language;
   }
 
   public String getPluginName() {
@@ -70,6 +83,11 @@ public class PluginStatusDto {
   @Nullable
   public String getOverriddenVersion() {
     return overriddenVersion;
+  }
+
+  @Nullable
+  public String getServerVersion() {
+    return serverVersion;
   }
 
 }

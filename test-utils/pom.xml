@@ -4,11 +4,12 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>10.47.99001</version>
+    <version>11.0-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-test-utils</artifactId>
   <name>SonarLint Core - Test Utils</name>
   <description>Test utils for SonarLint</description>
+
   <dependencies>
     <dependency>
       <groupId>com.google.code.findbugs</groupId>
@@ -65,13 +66,13 @@
     <dependency>
       <groupId>org.apache.tomcat.embed</groupId>
       <artifactId>tomcat-embed-websocket</artifactId>
-      <version>11.0.10</version>
+      <version>11.0.18</version>
     </dependency>
     <!-- For Plugins testing -->
     <dependency>
       <groupId>net.bytebuddy</groupId>
       <artifactId>byte-buddy</artifactId>
-      <version>1.17.6</version>
+      <version>1.18.7</version>
     </dependency>
   </dependencies>
 
