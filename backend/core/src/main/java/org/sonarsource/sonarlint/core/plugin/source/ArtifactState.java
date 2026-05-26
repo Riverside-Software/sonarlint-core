@@ -17,9 +17,9 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.plugin;
+package org.sonarsource.sonarlint.core.plugin.source;
 
-public enum PluginState {
+public enum ArtifactState {
 
   ACTIVE("Active"),
   SYNCED("Synced"),
@@ -30,7 +30,7 @@ public enum PluginState {
 
   private final String name;
 
-  PluginState(String name) {
+  ArtifactState(String name) {
     this.name = name;
   }
 

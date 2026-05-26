@@ -25,10 +25,19 @@ import javax.annotation.Nullable;
 public class LanguageSpecificRequirements {
   private final JsTsRequirementsDto jsTsRequirements;
   private final OmnisharpRequirementsDto omnisharpRequirements;
+  private final boolean omnisharpDownloadEnabled;
 
+  @Deprecated(since = "11.2", forRemoval = true)
   public LanguageSpecificRequirements(@Nullable JsTsRequirementsDto jsTsRequirements, @Nullable OmnisharpRequirementsDto omnisharpRequirements) {
     this.jsTsRequirements = jsTsRequirements;
     this.omnisharpRequirements = omnisharpRequirements;
+    this.omnisharpDownloadEnabled = omnisharpRequirements != null;
+  }
+
+  public LanguageSpecificRequirements(@Nullable JsTsRequirementsDto jsTsRequirements, boolean omnisharpDownloadEnabled) {
+    this.jsTsRequirements = jsTsRequirements;
+    this.omnisharpRequirements = null;
+    this.omnisharpDownloadEnabled = omnisharpDownloadEnabled;
   }
 
   @CheckForNull
@@ -37,7 +46,12 @@ public class LanguageSpecificRequirements {
   }
 
   @CheckForNull
+  @Deprecated(since = "11.2")
   public OmnisharpRequirementsDto getOmnisharpRequirements() {
     return omnisharpRequirements;
+  }
+
+  public boolean isOmnisharpDownloadEnabled() {
+    return omnisharpDownloadEnabled;
   }
 }

@@ -102,7 +102,7 @@ class FileTreeMatcherTests {
   }
 
   @Test
-  void more_complex_test_with_multiple_files() throws Exception {
+  void more_complex_test_with_multiple_files() {
     List<Path> idePaths = Arrays.asList(
       Paths.get("local/sub/index.html"),
       Paths.get("local/sub/product1/index.html"),
@@ -130,7 +130,7 @@ class FileTreeMatcherTests {
 
   @Disabled("Only used to investigate performance issues like SLCORE-266")
   @Test
-  void performance_test_worst_case() throws Exception {
+  void performance_test_worst_case() {
     var depthFactor = 10;
     var sqNbPerFolder = 10;
     var sqDepth = 5;
@@ -153,7 +153,7 @@ class FileTreeMatcherTests {
 
   @Disabled("Only used to investigate performance issues like SLCORE-266")
   @Test
-  void performance_test_only_index_files_with_same_filename() throws Exception {
+  void performance_test_only_index_files_with_same_filename() {
     var depthFactor = 10;
     var sqNbPerFolder = 10;
     var sqDepth = 5;

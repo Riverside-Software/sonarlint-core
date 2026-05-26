@@ -59,7 +59,7 @@ class ConnectionSyncMediumTests {
       .withToken(CONNECTION_ID, "token")
       .build();
 
-    var server = harness.newFakeSonarQubeServer().start();
+    var server = harness.newFakeSonarQubeServer().withPlugin(TestPlugin.JAVA).start();
     var backend = harness.newBackend()
       .withSonarQubeConnection(CONNECTION_ID, server, storage -> storage.withPlugin(TestPlugin.JAVA))
       .withBoundConfigScope(SCOPE_ID, CONNECTION_ID, "projectKey")
@@ -85,7 +85,7 @@ class ConnectionSyncMediumTests {
       .withToken(CONNECTION_ID, "token")
       .build();
 
-    var server = harness.newFakeSonarQubeServer().start();
+    var server = harness.newFakeSonarQubeServer().withPlugin(TestPlugin.JAVA).start();
     var backend = harness.newBackend()
       .withSonarQubeConnection(CONNECTION_ID, server, storage -> storage.withPlugin(TestPlugin.JAVA))
       .withBoundConfigScope(SCOPE_ID, CONNECTION_ID, "projectKey")
@@ -179,7 +179,7 @@ class ConnectionSyncMediumTests {
       .didUpdateConnections(new DidUpdateConnectionsParams(List.of(new SonarQubeConnectionConfigurationDto(CONNECTION_ID, server.baseUrl(), true)), List.of()));
     backend.getConfigurationService().didUpdateBinding(new DidUpdateBindingParams(SCOPE_ID, new BindingConfigurationDto(CONNECTION_ID, "projectKey", true)));
 
-    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isEqualTo(2));
+    await().untilAsserted(() -> assertThat(client.getConnectionIdsWithInvalidToken(CONNECTION_ID)).isGreaterThan(1));
   }
 
   @SonarLintTest

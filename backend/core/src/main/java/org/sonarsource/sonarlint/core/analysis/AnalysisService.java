@@ -45,6 +45,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
+import org.apache.commons.lang3.BooleanUtils;
 import org.jetbrains.annotations.NotNull;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRuleDetails;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRulesService;
@@ -62,13 +63,13 @@ import org.sonarsource.sonarlint.core.commons.BoundScope;
 import org.sonarsource.sonarlint.core.commons.RuleType;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
-import org.sonarsource.sonarlint.core.commons.tracing.Trace;
-import org.sonarsource.sonarlint.core.monitoring.MonitoringService;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.commons.progress.TaskManager;
+import org.sonarsource.sonarlint.core.commons.tracing.Trace;
 import org.sonarsource.sonarlint.core.event.BindingConfigChangedEvent;
 import org.sonarsource.sonarlint.core.event.ConfigurationScopeRemovedEvent;
 import org.sonarsource.sonarlint.core.event.ConfigurationScopesAddedWithBindingEvent;
+import org.sonarsource.sonarlint.core.event.PluginStatusUpdateEvent;
 import org.sonarsource.sonarlint.core.fs.ClientFile;
 import org.sonarsource.sonarlint.core.fs.ClientFileSystemService;
 import org.sonarsource.sonarlint.core.fs.FileExclusionService;
@@ -76,7 +77,9 @@ import org.sonarsource.sonarlint.core.fs.FileOpenedEvent;
 import org.sonarsource.sonarlint.core.fs.FileSystemUpdatedEvent;
 import org.sonarsource.sonarlint.core.fs.OpenFilesRepository;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
+import org.sonarsource.sonarlint.core.monitoring.MonitoringService;
 import org.sonarsource.sonarlint.core.nodejs.InstalledNodeJs;
+import org.sonarsource.sonarlint.core.plugin.source.ArtifactState;
 import org.sonarsource.sonarlint.core.plugin.PluginsService;
 import org.sonarsource.sonarlint.core.plugin.commons.MultivalueProperty;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
@@ -308,9 +311,15 @@ public class AnalysisService {
   @EventListener
   public void onPluginsSynchronized(PluginsSynchronizedEvent event) {
     var connectionId = event.connectionId();
-    schedulerCache.reloadPlugins(event.connectionId());
-    checkIfReadyForAnalysis(configurationRepository.getBoundScopesToConnection(connectionId)
-      .stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()));
+    if (connectionId != null) {
+      schedulerCache.reloadPlugins(connectionId);
+      checkIfReadyForAnalysis(configurationRepository.getBoundScopesToConnection(connectionId)
+        .stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet()));
+    } else {
+      // On-demand plugins are application-wide and used as fallback in connected mode
+      schedulerCache.reloadStandalonePlugins();
+      checkIfReadyForAnalysis(new HashSet<>(analysisReadinessByConfigScopeId.keySet()));
+    }
   }
 
   @EventListener
@@ -341,6 +350,22 @@ public class AnalysisService {
   @EventListener
   public void onConfigurationScopesSynchronized(ConfigurationScopesSynchronizedEvent event) {
     checkIfReadyForAnalysis(event.getConfigScopeIds());
+  }
+
+  @EventListener
+  public void onPluginStatusUpdateEvent(PluginStatusUpdateEvent event) {
+    if (event.newStatuses().stream().anyMatch(s -> s.state() == ArtifactState.ACTIVE || s.state() == ArtifactState.SYNCED || s.state() == ArtifactState.FAILED)) {
+      var connectionId = event.connectionId();
+      Set<String> configScopeIds;
+      if (connectionId == null) {
+        // On-demand plugins are application-wide and used as fallback in connected mode, so re-check all scopes
+        configScopeIds = new HashSet<>(analysisReadinessByConfigScopeId.keySet());
+      } else {
+        configScopeIds = configurationRepository.getBoundScopesToConnection(connectionId)
+          .stream().map(BoundScope::getConfigScopeId).collect(Collectors.toSet());
+      }
+      checkIfReadyForAnalysis(configScopeIds);
+    }
   }
 
   @EventListener
@@ -469,16 +494,14 @@ public class AnalysisService {
   }
 
   private boolean isReadyForAnalysis(Binding binding) {
-    var pluginsValid = storageService.connection(binding.connectionId()).plugins().isValid();
     var bindingStorage = storageService.binding(binding);
     var analyzerConfigValid = bindingStorage.analyzerConfiguration().isValid();
     var findingsStorageValid = bindingStorage.findings().wasEverUpdated();
-    var isReady = pluginsValid
-      && analyzerConfigValid
+    var isReady = analyzerConfigValid
       // this is not strictly for analysis but for tracking
       && findingsStorageValid;
     LOG.debug("isReadyForAnalysis(connectionId: {}, sonarProjectKey: {}, plugins: {}, analyzer config: {}, findings: {}) => {}",
-      binding.connectionId(), binding.sonarProjectKey(), pluginsValid, analyzerConfigValid, findingsStorageValid, isReady);
+      binding.connectionId(), binding.sonarProjectKey(), true, analyzerConfigValid, findingsStorageValid, isReady);
     return isReady;
   }
 
@@ -574,6 +597,10 @@ public class AnalysisService {
   private CompletableFuture<AnalysisResult> schedule(String configScopeId, AnalyzeCommand command, UUID analysisId, ArrayList<RawIssue> rawIssues,
     boolean shouldFetchServerIssues, @Nullable Trace trace) {
     var scheduler = startChild(trace, "getOrCreateAnalysisScheduler", "schedule", () -> schedulerCache.getOrCreateAnalysisScheduler(configScopeId, command.getTrace()));
+    // Plugins may have become ready during scheduler creation (e.g. on-demand cache hit); re-check readiness so the scheduler is woken if needed
+    if (BooleanUtils.isNotTrue(analysisReadinessByConfigScopeId.get(configScopeId))) {
+      checkIfReadyForAnalysis(Set.of(configScopeId));
+    }
     startChild(trace, "post", "schedule", () -> scheduler.post(command));
     var result = command.getFutureResult();
     result.exceptionally(exception -> {

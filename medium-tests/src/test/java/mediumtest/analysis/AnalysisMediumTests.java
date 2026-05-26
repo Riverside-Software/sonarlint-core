@@ -46,6 +46,7 @@ import org.mockito.ArgumentCaptor;
 import org.sonar.api.utils.System2;
 import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
+import org.sonarsource.sonarlint.core.commons.plugins.SonarPlugin;
 import org.sonarsource.sonarlint.core.commons.testutils.GitUtils;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.DidChangeAnalysisPropertiesParams;
@@ -151,7 +152,7 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .withDisabledPluginsForAnalysis(SonarLanguage.JAVA.getPluginKey())
+      .withDisabledPluginsForAnalysis(SonarPlugin.JAVA.getKey())
       .start(client);
     var analysisId = UUID.randomUUID();
 
@@ -227,7 +228,7 @@ class AnalysisMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer().start();
+    var server = harness.newFakeSonarQubeServer().withPlugin(TestPlugin.XML).start();
     var backend = harness.newBackend()
       .withSonarQubeConnection("connectionId", server,
         storage -> storage.withPlugin(TestPlugin.XML).withProject("projectKey",
@@ -271,6 +272,7 @@ class AnalysisMediumTests {
       .withInitialFs(OTHER_CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(secondFileUri, baseDir.relativize(secondFilePath), OTHER_CONFIG_SCOPE_ID, false, null, secondFilePath, null, null, true)))
       .build();
     var server = harness.newFakeSonarQubeServer()
+      .withPlugin(TestPlugin.XML)
       .withProject("projectKey")
       .start();
     var backend = harness.newBackend()
@@ -751,31 +753,6 @@ class AnalysisMediumTests {
   }
 
   @SonarLintTest
-  void should_not_pass_eslint_bridge_path_to_sensors_if_not_provided(SonarLintTestHarness harness, @TempDir Path baseDir) {
-    var filePath = createFile(baseDir, "pom.xml", "");
-    var fileUri = filePath.toUri();
-    var client = harness.newFakeClient()
-      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false,
-        null, filePath, null, null, true)))
-      .build();
-    var propertyDumpingPlugin = newSonarPlugin("php")
-      .withSensor(PropertyDumpingSensor.class)
-      .generate(baseDir);
-    var backend = harness.newBackend()
-      .withStandaloneEmbeddedPlugin(propertyDumpingPlugin)
-      .start(client);
-    backend.getAnalysisService().didSetUserAnalysisProperties(
-      new DidChangeAnalysisPropertiesParams(CONFIG_SCOPE_ID, Map.of("key1", "user-value1")));
-
-    backend.getAnalysisService()
-      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri),
-        Map.of(PropertyDumpingSensor.PROPERTY_NAME_TO_DUMP, "key1"), false, System.currentTimeMillis()));
-
-    await().atMost(3, TimeUnit.SECONDS)
-      .untilAsserted(() -> assertThat(baseDir.resolve("property.dump")).doesNotExist());
-  }
-
-  @SonarLintTest
   void should_not_set_js_internal_bundlePath_when_no_language_specific_requirements(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, "pom.xml", "");
     var fileUri = filePath.toUri();
@@ -817,7 +794,7 @@ class AnalysisMediumTests {
     var backend = harness.newBackend()
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
-      .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
+      .withDisabledPluginsForAnalysis(SonarPlugin.XML.getKey())
       .start(client);
     var analysisId = UUID.randomUUID();
 
@@ -861,7 +838,7 @@ class AnalysisMediumTests {
       .withUnboundConfigScope(CONFIG_SCOPE_ID)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.XML)
       .withStandaloneEmbeddedPluginAndEnabledLanguage(TestPlugin.JAVA)
-      .withDisabledPluginsForAnalysis(SonarLanguage.XML.getPluginKey())
+      .withDisabledPluginsForAnalysis(SonarPlugin.XML.getKey())
       .start(client);
     var analysisId = UUID.randomUUID();
 

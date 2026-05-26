@@ -17,9 +17,11 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.event;
+package org.sonarsource.sonarlint.core.plugin;
 
-import org.sonarsource.sonarlint.core.plugin.PluginStatus;
+import java.util.Map;
+import org.sonarsource.sonarlint.core.plugin.commons.LoadedPlugins;
+import org.sonarsource.sonarlint.core.plugin.loading.strategy.ArtifactsLoadingResult;
 
-public record PluginStatusChangedEvent(PluginStatus newStatus) {
+public record PluginsConfiguration(ArtifactsLoadingResult artifactsResult, LoadedPlugins plugins, Map<String, String> extraProperties) {
 }

@@ -161,7 +161,6 @@ class PluginSynchronizationMediumTests {
       File[] files = getPluginsStorageFolder(backend).toFile().listFiles();
       assertThat(files).hasSize(1);
       assertThat(files[0]).hasName(PluginsStorage.PLUGIN_REFERENCES_PB);
-      assertThat(client.getLogMessages()).contains("[SYNC] Code analyzer 'pluginKey' does not support SonarLint. Skip downloading it.");
     });
   }
 
@@ -183,7 +182,6 @@ class PluginSynchronizationMediumTests {
       File[] files = getPluginsStorageFolder(backend).toFile().listFiles();
       assertThat(files).hasSize(1);
       assertThat(files[0]).hasName(PluginsStorage.PLUGIN_REFERENCES_PB);
-      assertThat(client.getLogMessages()).contains("[SYNC] Code analyzer 'java' is embedded in SonarLint. Skip downloading it.");
     });
   }
 
@@ -204,7 +202,6 @@ class PluginSynchronizationMediumTests {
       File[] files = getPluginsStorageFolder(backend).toFile().listFiles();
       assertThat(files).hasSize(1);
       assertThat(files[0]).hasName(PluginsStorage.PLUGIN_REFERENCES_PB);
-      assertThat(client.getLogMessages()).contains("[SYNC] Code analyzer 'java' is disabled in SonarLint (language not enabled). Skip downloading it.");
     });
   }
 
@@ -229,52 +226,6 @@ class PluginSynchronizationMediumTests {
         .containsOnly(
           entry("java-custom",
             PluginReference.newBuilder().setFilename("java-custom-plugin-4.3.0.1456.jar").setKey("java-custom").setHash("de5308f43260d357acc97712ce4c5475").build()));
-    });
-  }
-
-  @SonarLintTest
-  void it_should_pull_the_old_typescript_plugin_if_language_enabled(SonarLintTestHarness harness) {
-    var server = harness.newFakeSonarQubeServer("10.3")
-      .withPlugin("typescript", plugin -> plugin.withJarPath(Path.of("sonar-typescript-plugin-1.9.0.3766.jar")).withHash("de5308f43260d357acc97712ce4c5475"))
-      .withProject("projectKey", project -> project.withBranch("main"))
-      .start();
-    var client = harness.newFakeClient().build();
-    var backend = harness.newBackend()
-      .withExtraEnabledLanguagesInConnectedMode(Language.TS)
-      .withSonarQubeConnection("connectionId", server)
-      .withBoundConfigScope("configScopeId", "connectionId", "projectKey")
-      .withBackendCapability(FULL_SYNCHRONIZATION)
-      .start(client);
-
-    waitAtMost(3, SECONDS).untilAsserted(() -> {
-      assertThat(getPluginsStorageFolder(backend)).isDirectoryContaining(path -> path.getFileName().toString().equals("sonar-typescript-plugin-1.9.0.3766.jar"));
-      assertThat(getPluginReferencesFilePath(backend))
-        .exists()
-        .extracting(this::readPluginReferences, as(MAP))
-        .containsOnly(
-          entry("typescript",
-            PluginReference.newBuilder().setFilename("sonar-typescript-plugin-1.9.0.3766.jar").setKey("typescript").setHash("de5308f43260d357acc97712ce4c5475").build()));
-    });
-  }
-
-  @SonarLintTest
-  void it_should_not_pull_the_old_typescript_plugin_if_language_not_enabled(SonarLintTestHarness harness) {
-    var server = harness.newFakeSonarQubeServer("10.3")
-      .withPlugin("typescript", plugin -> plugin.withJarPath(Path.of("sonar-typescript-plugin-1.9.0.3766.jar")).withHash("de5308f43260d357acc97712ce4c5475"))
-      .withProject("projectKey", project -> project.withBranch("main"))
-      .start();
-    var client = harness.newFakeClient().build();
-    var backend = harness.newBackend()
-      .withSonarQubeConnection("connectionId", server)
-      .withBoundConfigScope("configScopeId", "connectionId", "projectKey")
-      .withBackendCapability(FULL_SYNCHRONIZATION)
-      .start(client);
-
-    waitAtMost(3, SECONDS).untilAsserted(() -> {
-      File[] files = getPluginsStorageFolder(backend).toFile().listFiles();
-      assertThat(files).hasSize(1);
-      assertThat(files[0]).hasName(PluginsStorage.PLUGIN_REFERENCES_PB);
-      assertThat(client.getLogMessages()).contains("[SYNC] Code analyzer 'typescript' is disabled in SonarLint (language not enabled). Skip downloading it.");
     });
   }
 

@@ -22,6 +22,7 @@ package org.sonarsource.sonarlint.core.spring;
 import java.net.ProxySelector;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.hc.client5.http.auth.CredentialsProvider;
@@ -53,6 +54,7 @@ import org.sonarsource.sonarlint.core.analysis.UserAnalysisPropertiesRepository;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.dogfood.DogfoodEnvironmentDetectionService;
 import org.sonarsource.sonarlint.core.commons.storage.SonarLintDatabase;
+import org.sonarsource.sonarlint.core.commons.util.FailSafeExecutors;
 import org.sonarsource.sonarlint.core.embedded.server.AnalyzeFileListRequestHandler;
 import org.sonarsource.sonarlint.core.embedded.server.AwaitingUserTokenFutureRepository;
 import org.sonarsource.sonarlint.core.embedded.server.EmbeddedServer;
@@ -74,6 +76,7 @@ import org.sonarsource.sonarlint.core.http.ClientProxyCredentialsProvider;
 import org.sonarsource.sonarlint.core.http.ClientProxySelector;
 import org.sonarsource.sonarlint.core.http.HttpClientProvider;
 import org.sonarsource.sonarlint.core.http.HttpConfig;
+import org.sonarsource.sonarlint.core.http.ThreadFactories;
 import org.sonarsource.sonarlint.core.http.ssl.CertificateStore;
 import org.sonarsource.sonarlint.core.http.ssl.SslConfig;
 import org.sonarsource.sonarlint.core.issue.IssueService;
@@ -89,8 +92,15 @@ import org.sonarsource.sonarlint.core.plugin.PluginLifecycleService;
 import org.sonarsource.sonarlint.core.plugin.PluginStatusNotifierService;
 import org.sonarsource.sonarlint.core.plugin.PluginsRepository;
 import org.sonarsource.sonarlint.core.plugin.PluginsService;
+import org.sonarsource.sonarlint.core.plugin.loading.strategy.ConnectedArtifactsLoadingStrategyFactory;
+import org.sonarsource.sonarlint.core.plugin.loading.strategy.StandaloneArtifactsLoadingStrategy;
 import org.sonarsource.sonarlint.core.plugin.skipped.SkippedPluginsNotifierService;
 import org.sonarsource.sonarlint.core.plugin.skipped.SkippedPluginsRepository;
+import org.sonarsource.sonarlint.core.plugin.source.binaries.BinariesArtifactSource;
+import org.sonarsource.sonarlint.core.plugin.source.binaries.BinariesLocalCacheManager;
+import org.sonarsource.sonarlint.core.plugin.source.binaries.BinariesSignatureVerifier;
+import org.sonarsource.sonarlint.core.plugin.source.server.ServerPluginDownloader;
+import org.sonarsource.sonarlint.core.plugin.source.server.ServerPluginsCache;
 import org.sonarsource.sonarlint.core.progress.ClientAwareTaskManager;
 import org.sonarsource.sonarlint.core.remediation.aicodefix.AiCodeFixService;
 import org.sonarsource.sonarlint.core.reporting.FindingReportingService;
@@ -224,7 +234,14 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   AiCodeFixRepository.class,
   SonarLintDatabaseService.class,
   LocalOnlyIssuesRepository.class,
-  KnownFindingsRepository.class
+  ServerPluginsCache.class,
+  KnownFindingsRepository.class,
+  StandaloneArtifactsLoadingStrategy.class,
+  ConnectedArtifactsLoadingStrategyFactory.class,
+  BinariesArtifactSource.class,
+  BinariesLocalCacheManager.class,
+  BinariesSignatureVerifier.class,
+  ServerPluginDownloader.class
 })
 public class SonarLintSpringAppConfig {
 
@@ -306,4 +323,10 @@ public class SonarLintSpringAppConfig {
   private static Timeout toTimeout(@Nullable Duration duration) {
     return duration == null ? null : Timeout.of(duration);
   }
+
+  @Bean(name = "pluginDownloadExecutor", destroyMethod = "shutdown")
+  public ExecutorService pluginDownloadExecutor() {
+    return FailSafeExecutors.newCachedThreadPool(ThreadFactories.threadWithNamePrefix("sonarlint-plugin-download-"));
+  }
+
 }

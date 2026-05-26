@@ -29,6 +29,7 @@ import javax.annotation.Nullable;
 import org.sonarsource.sonarlint.core.commons.Version;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogger;
+import org.sonarsource.sonarlint.core.commons.plugins.SonarPlugin;
 import org.sonarsource.sonarlint.core.plugin.commons.ApiVersions;
 import org.sonarsource.sonarlint.core.plugin.commons.DataflowBugDetection;
 import org.sonarsource.sonarlint.core.plugin.commons.api.SkipReason;
@@ -38,7 +39,6 @@ import org.sonarsource.sonarlint.core.plugin.commons.loading.SonarPluginManifest
 public class SonarPluginRequirementsChecker {
 
   private static final SonarLintLogger LOG = SonarLintLogger.get();
-  private static final String OLD_SONARTS_PLUGIN_KEY = "typescript";
 
   private final Version implementedPluginApiVersion;
 
@@ -84,7 +84,7 @@ public class SonarPluginRequirementsChecker {
   private PluginRequirementsCheckResult checkIfSkippedAndPopulateReason(PluginInfo plugin, Set<SonarLanguage> enabledLanguages, Version jreCurrentVersion,
     Optional<Version> nodeCurrentVersion) {
     var pluginKey = plugin.getKey();
-    var languages = SonarLanguage.getLanguagesByPluginKey(pluginKey);
+    var languages = SonarPlugin.findByKey(pluginKey).map(SonarPlugin::getLanguages).orElseGet(Set::of);
     if (!languages.isEmpty() && enabledLanguages.stream().noneMatch(languages::contains)) {
       if (languages.size() > 1) {
         LOG.debug("Plugin '{}' is excluded because none of languages '{}' are enabled. Skip loading it.", plugin.getName(),
@@ -143,11 +143,7 @@ public class SonarPluginRequirementsChecker {
     Map<String, PluginRequirementsCheckResult> currentResultsByKey, boolean enableDataflowBugDetection) {
     var plugin = currentResult.getPlugin();
     for (RequiredPlugin required : plugin.getRequiredPlugins()) {
-      if ("license".equals(required.getKey()) || (SonarLanguage.JS.getPluginKey().equals(plugin.getKey()) && OLD_SONARTS_PLUGIN_KEY.equals(required.getKey()))) {
-        // Workaround for SLCORE-259
-        // This dependency was added to ease migration on SonarQube, but can be ignored on SonarLint
-        // Note: The dependency was removed in SonarJS 6.3 but we should still keep the workaround as long as we want to support older
-        // versions
+      if ("license".equals(required.getKey())) {
         continue;
       }
       var depInfo = currentResultsByKey.get(required.getKey());
@@ -171,9 +167,9 @@ public class SonarPluginRequirementsChecker {
         LOG.debug("DBD feature disabled. Skip loading plugin '{}'.", plugin.getName());
         return new PluginRequirementsCheckResult(plugin, SkipReason.UnsupportedFeature.INSTANCE);
       }
-      var pythonPluginResult = currentResultsByKey.get(SonarLanguage.PYTHON.getPluginKey());
+      var pythonPluginResult = currentResultsByKey.get(SonarPlugin.PYTHON.getKey());
       if (checkForPluginSkipped(pythonPluginResult)) {
-        return processUnsatisfiedDependency(currentResult.getPlugin(), SonarLanguage.PYTHON.getPluginKey());
+        return processUnsatisfiedDependency(currentResult.getPlugin(), SonarPlugin.PYTHON.getKey());
       }
     }
     return currentResult;

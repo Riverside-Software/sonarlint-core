@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>11.1.99001</version>
+    <version>11.2.2-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-medium-tests</artifactId>
   <name>SonarLint Core - Medium Tests</name>
@@ -168,6 +168,24 @@
                   <destFileName>guava,with,comma.jar</destFileName>
                 </artifactItem>
               </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>com.googlecode.maven-download-plugin</groupId>
+        <artifactId>download-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>download-cfamily-plugin-jar</id>
+            <phase>generate-test-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/CommercialDistribution/sonar-cfamily-plugin/sonar-cfamily-plugin-${cfamily.version}.jar</url>
+              <outputDirectory>${project.build.testOutputDirectory}/ondemand</outputDirectory>
+              <outputFileName>sonar-cpp-plugin-test.jar</outputFileName>
             </configuration>
           </execution>
         </executions>

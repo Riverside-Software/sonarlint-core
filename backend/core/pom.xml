@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-backend-parent</artifactId>
-    <version>11.1.99001</version>
+    <version>11.2.2-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-core</artifactId>
@@ -83,6 +83,10 @@
       <artifactId>commons-lang3</artifactId>
     </dependency>
     <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+    </dependency>
+    <dependency>
         <groupId>org.apache.commons</groupId>
         <artifactId>commons-text</artifactId>
     </dependency>
@@ -93,6 +97,14 @@
     <dependency>
       <groupId>com.google.guava</groupId>
       <artifactId>guava</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpg-jdk18on</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
     </dependency>
     <dependency>
       <groupId>org.apache.httpcomponents.client5</groupId>
@@ -149,6 +161,11 @@
       <artifactId>awaitility</artifactId>
       <scope>test</scope>
     </dependency>
+    <dependency>
+      <groupId>uk.org.webcompere</groupId>
+      <artifactId>system-stubs-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- For Xodus -->
     <dependency>
       <groupId>ch.qos.logback</groupId>
@@ -157,7 +174,98 @@
     </dependency>
   </dependencies>
 
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>true</filtering>
+        <includes>
+          <include>ondemand/plugins.properties</include>
+        </includes>
+      </resource>
+      <resource>
+        <directory>src/main/resources</directory>
+        <filtering>false</filtering>
+        <excludes>
+          <exclude>ondemand/plugins.properties</exclude>
+        </excludes>
+      </resource>
+    </resources>
 
+    <plugins>
+      <plugin>
+        <groupId>com.googlecode.maven-download-plugin</groupId>
+        <artifactId>download-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>download-cfamily-signature</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/CommercialDistribution/sonar-cfamily-plugin/sonar-cfamily-plugin-${cfamily.version}.jar.asc</url>
+              <outputDirectory>${project.build.outputDirectory}/ondemand</outputDirectory>
+              <outputFileName>sonar-cpp-plugin.jar.asc</outputFileName>
+              <skipCache>false</skipCache>
+            </configuration>
+          </execution>
+          <execution>
+            <id>download-csharp-signature</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/Distribution/sonar-csharp-plugin/sonar-csharp-plugin-${csharp.version}.jar.asc</url>
+              <outputDirectory>${project.build.outputDirectory}/ondemand</outputDirectory>
+              <outputFileName>sonar-cs-plugin.jar.asc</outputFileName>
+              <skipCache>false</skipCache>
+            </configuration>
+          </execution>
+          <execution>
+            <id>download-omnisharp-mono-signature</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/OmniSharp-Roslyn/${omnisharp.version}/omnisharp-mono.tar.gz.asc</url>
+              <outputDirectory>${project.build.outputDirectory}/ondemand</outputDirectory>
+              <outputFileName>omnisharp-mono.tar.gz.asc</outputFileName>
+              <skipCache>false</skipCache>
+            </configuration>
+          </execution>
+          <execution>
+            <id>download-omnisharp-net472-signature</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/OmniSharp-Roslyn/${omnisharp.version}/omnisharp-net472.tar.gz.asc</url>
+              <outputDirectory>${project.build.outputDirectory}/ondemand</outputDirectory>
+              <outputFileName>omnisharp-net472.tar.gz.asc</outputFileName>
+              <skipCache>false</skipCache>
+            </configuration>
+          </execution>
+          <execution>
+            <id>download-omnisharp-net6-signature</id>
+            <phase>generate-resources</phase>
+            <goals>
+              <goal>wget</goal>
+            </goals>
+            <configuration>
+              <url>https://binaries.sonarsource.com/OmniSharp-Roslyn/${omnisharp.version}/omnisharp-net6.0.tar.gz.asc</url>
+              <outputDirectory>${project.build.outputDirectory}/ondemand</outputDirectory>
+              <outputFileName>omnisharp-net6.0.tar.gz.asc</outputFileName>
+              <skipCache>false</skipCache>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 
   <profiles>
     <!-- Workaround for https://issues.apache.org/jira/projects/MJAR/issues/MJAR-138 -->
