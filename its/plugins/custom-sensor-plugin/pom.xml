@@ -5,14 +5,14 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-its</artifactId>
-    <version>11.2.99001</version>
+    <version>11.3-SNAPSHOT</version>
     <relativePath>../../pom.xml</relativePath>
   </parent>
 
   <groupId>org.sonarsource.plugins.example</groupId>
   <artifactId>custom-sensor-plugin</artifactId>
   <packaging>sonar-plugin</packaging>
-  <version>11.2.99001</version>
+  <version>11.3-SNAPSHOT</version>
 
   <name>Example Plugin for SonarQube</name>
   <description>Example of plugin for SonarQube</description>
@@ -72,11 +72,11 @@
         <!-- UTF-8 bundles are not supported by Java, so they must be converted during build -->
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>native2ascii-maven-plugin</artifactId>
-        <version>2.1.1</version>
+        <version>1.0-beta-1</version>
         <executions>
           <execution>
             <goals>
-              <goal>resources</goal>
+              <goal>native2ascii</goal>
             </goals>
           </execution>
         </executions>

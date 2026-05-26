@@ -62,32 +62,52 @@ public record ArtifactsLoadingResult(Set<SonarLanguage> enabledLanguages, Map<St
   private boolean areRequiredDependenciesPresent(String key) {
     return SonarPlugin.findByKey(key)
       .map(plugin -> plugin.getDependencies().stream()
-        .filter(dep -> !dep.optional())
-        .allMatch(dep -> {
-          var depArtifact = resolvedArtifactsByKey.get(dep.artifact().getKey());
-          return depArtifact != null && depArtifact.path() != null;
-        }))
+        .allMatch(dep -> dep.anyRequiredArtifacts().stream()
+          .anyMatch(artifact -> {
+            var depArtifact = resolvedArtifactsByKey.get(artifact.getKey());
+            return depArtifact != null && depArtifact.path() != null;
+          })))
       .orElse(true);
   }
 
+  /**
+   * Returns a future that completes when all pending downloads finish, whether they succeed or fail.
+   * The future itself always completes normally — individual download failures are reported via
+   * {@link org.sonarsource.sonarlint.core.event.PluginStatusUpdateEvent}.
+   */
   public Optional<CompletableFuture<Void>> getAllDownloadsFuture() {
-    var pendingDownloads = resolvedArtifactsByKey.values().stream().map(ResolvedArtifact::downloadFuture)
-      .filter(Objects::nonNull)
-      .toList();
-    if (pendingDownloads.isEmpty()) {
+    var pendingFutures = collectPendingDownloadFutures();
+    if (pendingFutures.isEmpty()) {
       return Optional.empty();
     }
-    return Optional.of(CompletableFuture.allOf(pendingDownloads.toArray(new CompletableFuture[0])));
+    return Optional.of(normalizedAllOf(pendingFutures));
   }
 
   public void whenAllArtifactsDownloaded(Runnable runnable) {
-    getAllDownloadsFuture()
-      .ifPresent(future -> {
-        var logOutput = SonarLintLogger.get().getTargetForCopy();
-        future.thenRun(() -> {
-          SonarLintLogger.get().setTarget(logOutput);
-          runnable.run();
-        });
-      });
+    var pendingFutures = collectPendingDownloadFutures();
+    if (pendingFutures.isEmpty()) {
+      return;
+    }
+    var logOutput = SonarLintLogger.get().getTargetForCopy();
+    normalizedAllOf(pendingFutures).thenRun(() -> {
+      if (pendingFutures.stream().anyMatch(f -> !f.isCompletedExceptionally())) {
+        SonarLintLogger.get().setTarget(logOutput);
+        runnable.run();
+      }
+    });
+  }
+
+  private List<CompletableFuture<?>> collectPendingDownloadFutures() {
+    return resolvedArtifactsByKey.values().stream()
+      .map(ResolvedArtifact::downloadFuture)
+      .filter(Objects::nonNull)
+      .toList();
+  }
+
+  private static CompletableFuture<Void> normalizedAllOf(List<CompletableFuture<?>> futures) {
+    var normalized = futures.stream()
+      .map(f -> f.exceptionally(e -> null))
+      .toArray(CompletableFuture[]::new);
+    return CompletableFuture.allOf(normalized);
   }
 }
