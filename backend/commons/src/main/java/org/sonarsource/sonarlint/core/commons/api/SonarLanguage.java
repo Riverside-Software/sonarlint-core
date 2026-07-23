@@ -52,6 +52,7 @@ public enum SonarLanguage {
   PYTHON("py", SonarPlugin.PYTHON, "Python", new String[]{".py"}, "sonar.python.file.suffixes"),
   RPG("rpg", SonarPlugin.RPG, "RPG", new String[]{".rpg", ".rpgle"}, "sonar.rpg.file.suffixes"),
   RUBY("ruby", SonarPlugin.RUBY, "Ruby", new String[]{".rb"}, "sonar.ruby.file.suffixes"),
+  RUST("rust", SonarPlugin.RUST, "Rust", new String[]{".rs"}, "sonar.rust.file.suffixes"),
   SCALA("scala", SonarPlugin.SCALA, "Scala", new String[]{".scala"}, "sonar.scala.file.suffixes"),
   SECRETS("secrets", SonarPlugin.TEXT, "Secrets", new String[0], "sonar.secrets.file.suffixes"),
   TEXT("text", SonarPlugin.TEXT, "Text", new String[0], "sonar.text.file.suffixes"),
@@ -71,7 +72,9 @@ public enum SonarLanguage {
   TERRAFORM("terraform", SonarPlugin.IAC, "Terraform", new String[]{".tf"}, "sonar.terraform.file.suffixes"),
   AZURERESOURCEMANAGER("azureresourcemanager", SonarPlugin.IAC, "Azure Resource Manager", new String[]{".bicep"}, Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE),
   ANSIBLE("ansible", SonarPlugin.IAC, "Ansible", new String[0], Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE),
-  GITHUBACTIONS("githubactions", SonarPlugin.IAC, "GitHub Actions", new String[0], Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE);
+  GITHUBACTIONS("githubactions", SonarPlugin.IAC, "GitHub Actions", new String[0], Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE),
+  SHELL("shell", SonarPlugin.IAC, "Shell", new String[]{".sh", ".bash"}, "sonar.shell.file.suffixes"),
+  AZUREPIPELINES("azurepipelines", SonarPlugin.IAC, "Azure Pipelines", new String[0], Constants.NO_PUBLIC_PROPERTY_PROVIDED_FOR_THIS_LANGUAGE);
 
   private final String sonarLanguageKey;
 

@@ -48,6 +48,7 @@ public enum SonarPlugin implements SonarArtifact {
   PYTHON("python"),
   RPG("rpg"),
   RUBY("ruby"),
+  RUST("rustenterprise"),
   SCALA("sonarscala"),
   SONARLINT_OMNISHARP("omnisharp", Set.of(
     Dependency.onOneOf(CS_OSS, CSHARP_ENTERPRISE),

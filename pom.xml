@@ -9,7 +9,7 @@
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>11.5.99001</version>
+  <version>11.6-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -82,8 +82,8 @@
     <flyway.version>11.20.3</flyway.version>
     <bouncycastle.version>1.84</bouncycastle.version>
     <!-- On-demand plugin versions -->
-    <cfamily.version>6.82.0.99990</cfamily.version>
-    <csharp.version>10.25.0.139117</csharp.version>
+    <cfamily.version>6.82.1.100194</cfamily.version>
+    <csharp.version>10.28.0.143324</csharp.version>
     <omnisharp.version>1.39.15</omnisharp.version>
   </properties>
 

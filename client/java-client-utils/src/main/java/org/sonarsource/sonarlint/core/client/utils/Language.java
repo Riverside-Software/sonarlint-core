@@ -43,6 +43,7 @@ public enum Language {
   PYTHON("Python"),
   RPG("RPG"),
   RUBY("Ruby"),
+  RUST("Rust"),
   SCALA("Scala"),
   SECRETS("Secrets"),
   TEXT("Text"),
@@ -61,7 +62,9 @@ public enum Language {
   TERRAFORM("Terraform"),
   AZURERESOURCEMANAGER("AzureResourceManager"),
   ANSIBLE("Ansible"),
-  GITHUBACTIONS("GitHub Actions");
+  GITHUBACTIONS("GitHub Actions"),
+  SHELL("Shell"),
+  AZUREPIPELINES("Azure Pipelines");
   private final String label;
 
   Language(String label) {
@@ -120,6 +123,8 @@ public enum Language {
         return RPG;
       case RUBY:
         return RUBY;
+      case RUST:
+        return RUST;
       case SCALA:
         return SCALA;
       case SECRETS:
@@ -156,6 +161,10 @@ public enum Language {
         return AZURERESOURCEMANAGER;
       case ANSIBLE:
         return ANSIBLE;
+      case SHELL:
+        return SHELL;
+      case AZUREPIPELINES:
+        return AZUREPIPELINES;
       default:
         throw new IllegalArgumentException("Unknown language: " + rpcEnum);
     }

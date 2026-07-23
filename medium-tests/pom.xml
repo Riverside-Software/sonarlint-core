@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>11.5.99001</version>
+    <version>11.6-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-medium-tests</artifactId>
   <name>SonarLint Core - Medium Tests</name>
@@ -250,6 +250,12 @@
                       <groupId>com.sonarsource.dbd</groupId>
                       <artifactId>sonar-dbd-java-frontend-plugin</artifactId>
                       <version>2.7.0.20531</version>
+                      <type>jar</type>
+                    </artifactItem>
+                    <artifactItem>
+                      <groupId>com.sonarsource.iac</groupId>
+                      <artifactId>sonar-iac-enterprise-plugin</artifactId>
+                      <version>2.11.0.21159</version>
                       <type>jar</type>
                     </artifactItem>
                   </artifactItems>
