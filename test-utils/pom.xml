@@ -4,11 +4,16 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>11.4.99001</version>
+    <version>11.5-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-test-utils</artifactId>
   <name>SonarLint Core - Test Utils</name>
   <description>Test utils for SonarLint</description>
+
+  <properties>
+    <!-- Keep the module analyzed, but do not enforce coverage on shared test utilities. -->
+    <sonar.coverage.exclusions>**/*</sonar.coverage.exclusions>
+  </properties>
 
   <dependencies>
     <dependency>
@@ -64,15 +69,15 @@
     </dependency>
     <!-- For WebSockets testing -->
     <dependency>
-      <groupId>org.apache.tomcat.embed</groupId>
-      <artifactId>tomcat-embed-websocket</artifactId>
-      <version>11.0.21</version>
+      <groupId>org.java-websocket</groupId>
+      <artifactId>Java-WebSocket</artifactId>
+      <version>1.6.0</version>
     </dependency>
     <!-- For Plugins testing -->
     <dependency>
       <groupId>net.bytebuddy</groupId>
       <artifactId>byte-buddy</artifactId>
-      <version>1.18.7</version>
+      <version>1.18.10-jdk5</version>
     </dependency>
   </dependencies>
 

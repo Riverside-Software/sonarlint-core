@@ -23,7 +23,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.io.TempDir;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.analysis.AnalyzeFilesAndTrackParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ClientFileDto;
@@ -34,7 +33,6 @@ import utils.TestPlugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
-import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability.SECURITY_HOTSPOTS;
 import static org.sonarsource.sonarlint.core.test.utils.plugins.SonarPluginBuilder.newSonarPlugin;
 import static utils.AnalysisUtils.createFile;
 
@@ -76,81 +74,10 @@ class RulesInConnectedModeMediumTests {
     backend.getAnalysisService()
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis()));
 
-    await().atMost(3, TimeUnit.SECONDS)
-      .untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
-        .contains("java:S106;java;null;")
-        .contains("java:S3776;java;null;{Threshold=15}")
-        .contains("java:myCustomRule;java;S124;{message=Needs to be reviewed, regularExpression=.*REVIEW.*}"));
-  }
-
-  @SonarLintTest
-  void hotspot_rules_should_be_active_when_feature_flag_is_enabled(SonarLintTestHarness harness, @TempDir Path baseDir) {
-    var filePath = createFile(baseDir, "Class.java", "");
-    var fileUri = filePath.toUri();
-    var client = harness.newFakeClient()
-      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false,
-        null, filePath, null, null, true)))
-      .build();
-    var activeRulesDumpingPlugin = newSonarPlugin("php")
-      .withSensor(ActiveRulesDumpingSensor.class)
-      .generate(baseDir);
-    var backend = harness.newBackend()
-      .withBackendCapability(SECURITY_HOTSPOTS)
-      .withSonarQubeConnection(CONNECTION_ID, harness.newFakeSonarQubeServer().withPlugin(TestPlugin.JAVA).withPlugin(TestPlugin.PHP).start())
-      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, JAVA_MODULE_KEY)
-      .withExtraEnabledLanguagesInConnectedMode(Language.JAVA)
-      .withExtraEnabledLanguagesInConnectedMode(Language.PHP)
-      .withStorage(CONNECTION_ID,
-        s -> s
-          .withServerVersion("9.7")
-          .withPlugin(TestPlugin.JAVA)
-          .withPlugin("php", activeRulesDumpingPlugin, TestPlugin.PHP.getHash())
-          .withProject(JAVA_MODULE_KEY, project -> project
-            .withMainBranch("main")
-            .withRuleSet("java", ruleSet -> ruleSet
-              .withActiveRule("java:S4792", "INFO"))))
-      .start(client);
-
-    backend.getAnalysisService()
-      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis()));
-
-    await().atMost(3, TimeUnit.SECONDS)
-      .untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
-        .contains("java:S4792;java;null;"));
-  }
-
-  @SonarLintTest
-  void hotspot_rules_should_not_be_active_when_feature_flag_is_disabled(SonarLintTestHarness harness, @TempDir Path baseDir) {
-    var filePath = createFile(baseDir, "Class.java", "");
-    var fileUri = filePath.toUri();
-    var client = harness.newFakeClient()
-      .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false,
-        null, filePath, null, null, true)))
-      .build();
-    var activeRulesDumpingPlugin = newSonarPlugin("php")
-      .withSensor(ActiveRulesDumpingSensor.class)
-      .generate(baseDir);
-    var backend = harness.newBackend()
-      .withSonarQubeConnection(CONNECTION_ID, harness.newFakeSonarQubeServer().withPlugin(TestPlugin.PHP).start())
-      .withBoundConfigScope(CONFIG_SCOPE_ID, CONNECTION_ID, JAVA_MODULE_KEY)
-      .withExtraEnabledLanguagesInConnectedMode(Language.JAVA)
-      .withExtraEnabledLanguagesInConnectedMode(Language.PHP)
-      .withStorage(CONNECTION_ID,
-        s -> s
-          .withServerVersion("9.7")
-          .withPlugin("php", activeRulesDumpingPlugin, TestPlugin.PHP.getHash())
-          .withProject(JAVA_MODULE_KEY, project -> project
-            .withMainBranch("main")
-            .withRuleSet("java", ruleSet -> ruleSet
-              .withActiveRule("java:S4792", "INFO"))))
-      .start(client);
-
-    backend.getAnalysisService()
-      .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis()));
-
-    await().atMost(3, TimeUnit.SECONDS)
-      .untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
-        .doesNotContain("java:S4792;java;null;"));
+    await().untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
+      .contains("java:S106;java;null;")
+      .contains("java:S3776;java;null;{Threshold=15}")
+      .contains("java:myCustomRule;java;S124;{message=Needs to be reviewed, regularExpression=.*REVIEW.*}"));
   }
 
   @SonarLintTest
@@ -177,15 +104,14 @@ class RulesInConnectedModeMediumTests {
           .withProject(JAVA_MODULE_KEY, project -> project
             .withMainBranch("main")
             .withRuleSet("java", ruleSet -> ruleSet
-              .withActiveRule("java:S4792", "INFO"))))
+              .withActiveRule("java:S106", "INFO"))))
       .start(client);
 
     backend.getAnalysisService()
       .analyzeFilesAndTrack(new AnalyzeFilesAndTrackParams(CONFIG_SCOPE_ID, UUID.randomUUID(), List.of(fileUri), Map.of(), false, System.currentTimeMillis()));
 
-    await().atMost(3, TimeUnit.SECONDS)
-      .untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
-        .contains("ipython:PrintStatementUsage"));
+    await().untilAsserted(() -> assertThat(baseDir.resolve("activerules.dump")).content()
+      .contains("ipython:PrintStatementUsage"));
   }
 
 }

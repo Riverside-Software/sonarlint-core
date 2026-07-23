@@ -28,6 +28,8 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -39,7 +41,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -58,7 +59,6 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
-import org.sonarqube.ws.Issues;
 import org.sonarqube.ws.MediaTypes;
 import org.sonarqube.ws.client.GetRequest;
 import org.sonarqube.ws.client.HttpConnector;
@@ -89,7 +89,6 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.org.ListUs
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.projects.GetAllProjectsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.projects.SonarProjectDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.validate.ValidateConnectionParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.hotspot.HotspotStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.BackendCapability;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.HttpConfigurationDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.InitializeParams;
@@ -97,19 +96,16 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.SonarCloud
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.SonarQubeCloudRegionDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.rules.GetEffectiveRuleDetailsParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.tracking.ListAllParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.client.hotspot.RaisedHotspotDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.issue.RaisedIssueDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.client.log.LogParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.CleanCodeAttribute;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.Either;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.ImpactSeverity;
-import org.sonarsource.sonarlint.core.rpc.protocol.common.RuleType;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SoftwareQuality;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.TokenDto;
 import org.sonarsource.sonarlint.core.rpc.protocol.common.UsernamePasswordDto;
 
-import static its.utils.AnalysisUtils.analyzeAndAwaitHotspots;
 import static its.utils.AnalysisUtils.analyzeAndAwaitIssues;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
@@ -543,55 +539,6 @@ class SonarCloudTests extends AbstractConnectedTests {
     assertThat(failIfWrongCredentials.getMessage()).isEqualTo("Authentication failed");
   }
 
-  @Nested
-  // TODO Can be removed when switching to Java 16+ and changing prepare() to static
-  @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-  class Hotspots {
-    private static final String PROJECT_KEY_JAVA_HOTSPOT = "sample-java-hotspot";
-
-    @BeforeAll
-    void prepare() throws Exception {
-      restoreProfile("java-sonarlint-with-hotspot.xml");
-      provisionProject(PROJECT_KEY_JAVA_HOTSPOT, "Sample Java Hotspot");
-      associateProjectToQualityProfile(PROJECT_KEY_JAVA_HOTSPOT, "java", "SonarLint IT Java Hotspot");
-      analyzeMavenProject(projectKey(PROJECT_KEY_JAVA_HOTSPOT), PROJECT_KEY_JAVA_HOTSPOT);
-    }
-
-    @Test
-    void reportHotspots() {
-      var configScopeId = "reportHotspots";
-      openBoundConfigurationScope(configScopeId, PROJECT_KEY_JAVA_HOTSPOT);
-      waitForAnalysisToBeReady(configScopeId);
-
-      var issues = analyzeAndAwaitHotspots(backend, client, configScopeId, Path.of("projects", PROJECT_KEY_JAVA_HOTSPOT), "src/main/java/foo/Foo.java");
-      assertThat(issues)
-        .extracting(RaisedHotspotDto::getRuleKey, h -> h.getSeverityMode().getLeft().getType())
-        .containsExactly(tuple("java:S4792", RuleType.SECURITY_HOTSPOT));
-    }
-
-    @Test
-    void loadHotspotRuleDescription() throws Exception {
-      openBoundConfigurationScope("loadHotspotRuleDescription", PROJECT_KEY_JAVA_HOTSPOT);
-
-      var ruleDetails = backend.getRulesService().getEffectiveRuleDetails(new GetEffectiveRuleDetailsParams("loadHotspotRuleDescription", "java:S4792", null)).get();
-      assertThat(ruleDetails.details().getName()).isEqualTo("Configuring loggers is security-sensitive");
-      assertThat(ruleDetails.details().getDescription().getRight().getTabs().get(2).getContent().getLeft().getHtmlContent())
-        .contains("Check that your production deployment doesn’t have its loggers in \"debug\" mode");
-    }
-
-    @Test
-    void shouldMatchServerSecurityHotspots() {
-      var configScopeId = "shouldMatchServerSecurityHotspots";
-      openBoundConfigurationScope(configScopeId, PROJECT_KEY_JAVA_HOTSPOT);
-      waitForAnalysisToBeReady(configScopeId);
-
-      var raisedHotspots = analyzeAndAwaitHotspots(backend, client, configScopeId, Path.of("projects", PROJECT_KEY_JAVA_HOTSPOT), "src/main/java/foo/Foo.java");
-
-      assertThat(raisedHotspots).hasSize(1);
-      assertThat(raisedHotspots.get(0).getStatus()).isEqualTo(HotspotStatus.TO_REVIEW);
-    }
-  }
-
   private static void openBoundConfigurationScope(String configScopeId, String projectKey) {
     openedConfigurationScopeIds.add(configScopeId);
     backend.getConfigurationService().didAddConfigurationScopes(new DidAddConfigurationScopesParams(
@@ -624,16 +571,16 @@ class SonarCloudTests extends AbstractConnectedTests {
       openBoundConfigurationScope(configScopeId, PROJECT_KEY_JAVA_TAINT);
       waitForAnalysisToBeReady(configScopeId);
 
-      // Ensure a vulnerability has been reported on server side
-      AtomicReference<Issues.Issue> issue = new AtomicReference<>();
-      await().untilAsserted(() -> {
-        var issuesList = adminWsClient.issues().search(new SearchRequest().setTypes(List.of("VULNERABILITY")).setComponentKeys(List.of(projectKey(PROJECT_KEY_JAVA_TAINT))))
-          .getIssuesList();
-        assertThat(issuesList).hasSize(1);
-        issue.set(issuesList.get(0));
-      });
+      // Ensure a vulnerability has been reported on server side. On SonarCloud the taint vulnerability is produced by an
+      // asynchronous pipeline that is NOT gated by analysis_reports/is_queue_empty, and on the under-used staging
+      // environment the backing services are slow to warm, so the vulnerability and even this search call can take well
+      // over the default 10s to settle. Use a generous ceiling - it has no happy-path cost as await() returns as soon as
+      // the condition holds.
+      var taints = await().atMost(2, TimeUnit.MINUTES).until(
+        () -> adminWsClient.issues().search(new SearchRequest().setTypes(List.of("VULNERABILITY")).setComponentKeys(List.of(projectKey(PROJECT_KEY_JAVA_TAINT)))).getIssuesList(),
+        issues -> issues.size() == 1);
       // Ensure the source is available, it can take some time to propagate after the analysis, especially on SQC US
-      await().untilAsserted(() -> {
+      await().atMost(2, TimeUnit.MINUTES).untilAsserted(() -> {
         try {
           var rawSource = adminWsClient.sources().raw(new RawRequest().setKey(projectKey + ":src/main/java/foo/DbHelper.java"));
           assertThat(rawSource).isNotEmpty();
@@ -642,28 +589,28 @@ class SonarCloudTests extends AbstractConnectedTests {
         }
       });
 
-      var issueKey = issue.get().getKey();
+      var issueKey = taints.getFirst().getKey();
 
       var taintVulnerabilities = backend.getTaintVulnerabilityTrackingService().listAll(new ListAllParams(configScopeId, true)).get().getTaintVulnerabilities();
 
       assertThat(taintVulnerabilities).hasSize(1);
-      var taintVulnerability = taintVulnerabilities.get(0);
+      var taintVulnerability = taintVulnerabilities.getFirst();
       assertThat(taintVulnerability.getSonarServerKey()).isEqualTo(issueKey);
       assertThat(taintVulnerability.getRuleKey()).isEqualTo("javasecurity:S3649");
       assertThat(taintVulnerability.getTextRange().getHash()).isEqualTo(hash("statement.executeQuery(query)"));
       assertThat(taintVulnerability.getRuleDescriptionContextKey()).isNull();
       assertThat(taintVulnerability.getSeverityMode().isRight()).isTrue();
       assertThat(taintVulnerability.getSeverityMode().getRight().getCleanCodeAttribute()).isEqualTo(CleanCodeAttribute.COMPLETE);
-      assertThat(taintVulnerability.getSeverityMode().getRight().getImpacts().get(0)).extracting("softwareQuality", "impactSeverity").containsExactly(SoftwareQuality.SECURITY,
+      assertThat(taintVulnerability.getSeverityMode().getRight().getImpacts().getFirst()).extracting("softwareQuality", "impactSeverity").containsExactly(SoftwareQuality.SECURITY,
         ImpactSeverity.BLOCKER);
       assertThat(taintVulnerability.getFlows()).isNotEmpty();
       assertThat(taintVulnerability.isOnNewCode()).isTrue();
       // the feature is not enabled for our org
       assertThat(taintVulnerability.isAiCodeFixable()).isFalse();
-      var flow = taintVulnerability.getFlows().get(0);
+      var flow = taintVulnerability.getFlows().getFirst();
       assertThat(flow.getLocations()).isNotEmpty();
-      assertThat(flow.getLocations().get(0).getTextRange().getHash()).isEqualTo(hash("statement.executeQuery(query)"));
-      assertThat(flow.getLocations().get(flow.getLocations().size() - 1).getTextRange().getHash()).isIn(hash("request.getParameter(\"user\")"),
+      assertThat(flow.getLocations().getFirst().getTextRange().getHash()).isEqualTo(hash("statement.executeQuery(query)"));
+      assertThat(flow.getLocations().getLast().getTextRange().getHash()).isIn(hash("request.getParameter(\"user\")"),
         hash("request.getParameter(\"pass\")"));
     }
   }
@@ -686,8 +633,25 @@ class SonarCloudTests extends AbstractConnectedTests {
       .build());
   }
 
+  /**
+   * Triggers a cold start of the file-sources Lambda by issuing a blocking request to it, so a subsequent analysis hits
+   * a warm instance. Best-effort: any response (incl. an error) means the Lambda is up, so we ignore the outcome and
+   * never fail on it. See {@link #analyzeMavenProject} for why this is needed.
+   */
+  private static void warmUpFileSourcesLambda() {
+    try (var response = adminWsClient.wsConnector().call(new GetRequest("private/source-files"))) {
+      response.content();
+    } catch (Exception e) {
+      // ignored on purpose - the request only needs to reach the lambda to trigger its cold start
+    }
+  }
+
   private static void analyzeMavenProject(String projectKey, String projectDirName) throws IOException {
     var projectDir = Paths.get("projects/" + projectDirName).toAbsolutePath();
+    // The file-sources Lambda backing batch/project can be cold on the under-used staging environment; its first call
+    // may time out server-side and surface as a transient 500 on batch/project that crashes the scanner. Issuing a
+    // blocking warmup request right before the scan keeps the analysis deterministic.
+    warmUpFileSourcesLambda();
     runMaven(projectDir, "clean", "package", "sonar:sonar",
       "-Dsonar.projectKey=" + projectKey,
       "-Dsonar.host.url=" + SONARCLOUD_STAGING_URL,

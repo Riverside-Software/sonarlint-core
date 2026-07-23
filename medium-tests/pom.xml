@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>11.4.99001</version>
+    <version>11.5-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-medium-tests</artifactId>
   <name>SonarLint Core - Medium Tests</name>
@@ -78,7 +78,7 @@
     <dependency>
       <groupId>org.codehaus.plexus</groupId>
       <artifactId>plexus-archiver</artifactId>
-      <version>4.11.0</version>
+      <version>4.12.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -91,6 +91,14 @@
 
   <build>
     <plugins>
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-surefire-plugin</artifactId>
+          <configuration>
+            <forkCount>0.25C</forkCount>
+            <reuseForks>true</reuseForks>
+          </configuration>
+        </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-dependency-plugin</artifactId>
