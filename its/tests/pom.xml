@@ -4,13 +4,18 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-its</artifactId>
-    <version>11.10.99001</version>
+    <version>12.0.2-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-its-tests</artifactId>
   <name>SonarLint Core - ITs - Tests</name>
   <description>Integration tests</description>
 
   <dependencies>
+    <dependency>
+      <groupId>com.google.code.findbugs</groupId>
+      <artifactId>jsr305</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>org.sonarsource.sonarlint.core</groupId>
       <artifactId>sonarlint-analysis-engine</artifactId>
@@ -100,7 +105,8 @@
     <dependency>
       <groupId>org.sonarsource.orchestrator</groupId>
       <artifactId>sonar-orchestrator-junit5</artifactId>
-      <version>6.0.3.3907</version>
+      <!-- 6.4+ searches version aliases with remote=1 so Edge Smart Remotes are included. -->
+      <version>6.4.3.4676</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -188,7 +194,7 @@
                 <artifactItem>
                   <groupId>org.sonarsource.javascript</groupId>
                   <artifactId>sonar-javascript-plugin</artifactId>
-                  <version>11.7.1.36988</version>
+                  <version>13.9.0.44793</version>
                   <type>jar</type>
                 </artifactItem>
               </artifactItems>

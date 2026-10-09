@@ -31,7 +31,7 @@ public interface IssueRpcService {
    * <ul>
    *   <li>Changes the status of an issue (identified by {@link ChangeIssueStatusParams#getIssueKey()} )}</li>
    *   <li>Updates the issue status in the local storage</li>
-   *   <li>In case of a local-only issue, it stores the issue in the xodus database for local-only issues</li>
+   *   <li>In case of a local-only issue, it stores the issue in the local storage for local-only issues</li>
    *   <li>Increments the 'issue.status_changed_count' counter for telemetry when issue exists in the server</li>
    * </ul>
    *</p>
@@ -75,7 +75,7 @@ public interface IssueRpcService {
   /**
    * Checks if the anticipated transitions are supported. They are allowed in one case:
    * <ul>
-   *   <li>If the configScopeId is bound, its connection should link to a SonarQube 10.2+ instance</li>
+   *   <li>If the configScopeId is bound, its connection should link to a SonarQube Server instance</li>
    * <p>
    * This method will fail if:
    * <ul>
@@ -93,7 +93,7 @@ public interface IssueRpcService {
    * Checks if the user can change the issue status. They are allowed in two cases:
    * <ul>
    *   <li>If it is a server-matched issue, users need the 'Administer Issues' permission</li>
-   *   <li>If it is a local-only issue, the provided connection should link to a SonarQube 10.2+ instance</li>
+   *   <li>If it is a local-only issue, the provided connection should link to a SonarQube Server instance</li>
    * </ul>Also returns the list of allowed statuses.
    * <p>
    * This method will fail if:

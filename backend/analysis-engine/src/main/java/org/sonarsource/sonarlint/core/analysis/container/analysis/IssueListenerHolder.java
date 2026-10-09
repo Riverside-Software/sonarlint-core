@@ -28,12 +28,23 @@ import org.sonarsource.sonarlint.core.analysis.api.Issue;
  */
 public class IssueListenerHolder {
   private final Consumer<Issue> wrapped;
+  private final Consumer<Issue> retractListener;
 
   public IssueListenerHolder(Consumer<Issue> issueListener) {
+    this(issueListener, issue -> {
+    });
+  }
+
+  public IssueListenerHolder(Consumer<Issue> issueListener, Consumer<Issue> retractListener) {
     this.wrapped = issueListener;
+    this.retractListener = retractListener;
   }
 
   public void handle(Issue issue) {
     wrapped.accept(issue);
+  }
+
+  public void retract(Issue issue) {
+    retractListener.accept(issue);
   }
 }

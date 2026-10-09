@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
@@ -46,7 +47,6 @@ import java.util.stream.Collectors;
 import javax.annotation.CheckForNull;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.BooleanUtils;
-import org.jetbrains.annotations.NotNull;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRuleDetails;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRulesService;
 import org.sonarsource.sonarlint.core.active.rules.ServerActiveRulesChanged;
@@ -160,7 +160,6 @@ public class AnalysisService {
       : null;
   }
 
-  @NotNull
   private static List<String> getPatterns(Set<SonarLanguage> enabledLanguages, Map<String, String> analysisSettings) {
     List<String> patterns = new ArrayList<>();
 
@@ -450,6 +449,18 @@ public class AnalysisService {
     eventPublisher.publishEvent(new RawIssueDetectedEvent(configScopeId, analysisId, rawIssue));
   }
 
+  private void retractIssue(String configScopeId, UUID analysisId, List<RawIssue> rawIssues, Issue issue) {
+    var retractedIssue = new RawIssue(issue);
+    rawIssues.removeIf(existing -> sameRawIssue(existing, retractedIssue));
+    eventPublisher.publishEvent(new RawIssueRetractedEvent(configScopeId, analysisId, retractedIssue));
+  }
+
+  private static boolean sameRawIssue(RawIssue left, RawIssue right) {
+    return left.getRuleKey().equals(right.getRuleKey())
+      && Objects.equals(left.getFileUri(), right.getFileUri())
+      && left.getLine().equals(right.getLine());
+  }
+
   private void checkIfReadyForAnalysis(Set<String> configurationScopeIds) {
     var readyConfigScopeIds = new HashSet<String>();
     var scopeThatBecameReady = new HashSet<String>();
@@ -563,7 +574,7 @@ public class AnalysisService {
       () -> getAnalysisConfigForEngine(configurationScopeId, filesSnapshot, extraProperties, false, triggerType, trace),
       issue -> streamIssue(configurationScopeId, analysisId, rawIssues, issue), trace, cancelChecker,
       taskManager, inputFiles -> analysisStarted(configurationScopeId, analysisId, inputFiles), () -> analysisReadinessByConfigScopeId.getOrDefault(configurationScopeId, false),
-      filesSnapshot, extraProperties);
+      filesSnapshot, extraProperties, issue -> retractIssue(configurationScopeId, analysisId, rawIssues, issue));
     return schedule(configurationScopeId, analysisTask, analysisId, rawIssues, shouldFetchServerIssues, trace);
   }
 
@@ -634,7 +645,8 @@ public class AnalysisService {
       () -> getAnalysisConfigForEngine(configurationScopeId, filesSnapshot, Map.of(), hotspotsOnly, triggerType, trace),
       issue -> streamIssue(configurationScopeId, analysisId, rawIssues, issue), trace,
       new SonarLintCancelMonitor(), taskManager, inputFiles -> analysisStarted(configurationScopeId, analysisId, inputFiles),
-      () -> analysisReadinessByConfigScopeId.getOrDefault(configurationScopeId, false), filesSnapshot, Map.of());
+      () -> analysisReadinessByConfigScopeId.getOrDefault(configurationScopeId, false), filesSnapshot, Map.of(),
+      issue -> retractIssue(configurationScopeId, analysisId, rawIssues, issue));
   }
 
   private void reanalyseOpenFiles(Predicate<String> configScopeFilter) {

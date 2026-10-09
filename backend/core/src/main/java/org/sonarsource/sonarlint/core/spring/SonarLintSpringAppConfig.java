@@ -46,6 +46,8 @@ import org.sonarsource.sonarlint.core.VersionSoonUnsupportedHelper;
 import org.sonarsource.sonarlint.core.active.rules.ActiveRulesService;
 import org.sonarsource.sonarlint.core.ai.ide.AiAgentService;
 import org.sonarsource.sonarlint.core.ai.ide.AiHookService;
+import org.sonarsource.sonarlint.core.ai.ide.AiIntegrationService;
+import org.sonarsource.sonarlint.core.ai.ide.McpConfigurationService;
 import org.sonarsource.sonarlint.core.analysis.AnalysisSchedulerCache;
 import org.sonarsource.sonarlint.core.analysis.AnalysisService;
 import org.sonarsource.sonarlint.core.analysis.NodeJsService;
@@ -80,7 +82,6 @@ import org.sonarsource.sonarlint.core.http.ssl.CertificateStore;
 import org.sonarsource.sonarlint.core.http.ssl.SslConfig;
 import org.sonarsource.sonarlint.core.issue.IssueService;
 import org.sonarsource.sonarlint.core.languages.LanguageSupportRepository;
-import org.sonarsource.sonarlint.core.local.only.XodusLocalOnlyIssueStorageService;
 import org.sonarsource.sonarlint.core.log.LogService;
 import org.sonarsource.sonarlint.core.mode.SeverityModeService;
 import org.sonarsource.sonarlint.core.monitoring.MonitoringInitializationParams;
@@ -131,7 +132,6 @@ import org.sonarsource.sonarlint.core.telemetry.TelemetryLocalStorageManager;
 import org.sonarsource.sonarlint.core.tracking.LocalOnlyIssueRepository;
 import org.sonarsource.sonarlint.core.tracking.TaintVulnerabilityTrackingService;
 import org.sonarsource.sonarlint.core.tracking.TrackingService;
-import org.sonarsource.sonarlint.core.tracking.XodusKnownFindingsStorageService;
 import org.sonarsource.sonarlint.core.websocket.WebSocketService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -189,7 +189,6 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   WebSocketService.class,
   ServerEventsService.class,
   VersionSoonUnsupportedHelper.class,
-  XodusLocalOnlyIssueStorageService.class,
   StorageService.class,
   SeverityModeService.class,
   NewCodeService.class,
@@ -209,7 +208,6 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   SharedConnectedModeSettingsProvider.class,
   MCPServerConfigurationProvider.class,
   AnalysisSchedulerCache.class,
-  XodusKnownFindingsStorageService.class,
   TrackingService.class,
   FindingsSynchronizationService.class,
   FindingReportingService.class,
@@ -227,6 +225,8 @@ import static org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize.Bac
   AnalyzeFileListRequestHandler.class,
   AiAgentService.class,
   AiHookService.class,
+  AiIntegrationService.class,
+  McpConfigurationService.class,
   LogService.class,
   ActiveRulesService.class,
   AiCodeFixRepository.class,

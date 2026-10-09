@@ -49,7 +49,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
 import org.apache.commons.lang3.StringUtils;
-import org.jetbrains.annotations.NotNull;
 import org.sonar.scanner.protocol.Constants;
 import org.sonar.scanner.protocol.input.ScannerInput;
 import org.sonarsource.sonarlint.core.commons.HotspotReviewStatus;
@@ -95,12 +94,14 @@ import static org.sonarsource.sonarlint.core.test.utils.ProtobufUtils.protobufBo
 import static org.sonarsource.sonarlint.core.test.utils.ProtobufUtils.protobufBodyDelimited;
 
 public class ServerFixture {
+
+  private static final String MQR_MODE_SETTING = "sonar.multi-quality-mode.enabled";
   public static SonarQubeServerBuilder newSonarQubeServer() {
     return newSonarQubeServer((Consumer<Server>) null);
   }
 
   public static SonarQubeServerBuilder newSonarQubeServer(@Nullable Consumer<Server> onStart) {
-    return newSonarQubeServer(onStart, "99.9");
+    return newSonarQubeServer(onStart, "2025.1");
   }
 
   public static SonarQubeServerBuilder newSonarQubeServer(String version) {
@@ -698,7 +699,7 @@ public class ServerFixture {
 
   public static class SonarQubeServerBuilder extends AbstractServerBuilder<SonarQubeServerBuilder> {
 
-    public SonarQubeServerBuilder(@org.jetbrains.annotations.Nullable Consumer<Server> onStart, ServerKind serverKind, @Nullable String version) {
+    public SonarQubeServerBuilder(@Nullable Consumer<Server> onStart, ServerKind serverKind, @Nullable String version) {
       super(onStart, serverKind, version);
     }
 
@@ -735,7 +736,7 @@ public class ServerFixture {
 
   public static class SonarQubeCloudBuilder extends AbstractServerBuilder<SonarQubeCloudBuilder> {
 
-    public SonarQubeCloudBuilder(@org.jetbrains.annotations.Nullable Consumer<Server> onStart, ServerKind serverKind, @Nullable String version) {
+    public SonarQubeCloudBuilder(@Nullable Consumer<Server> onStart, ServerKind serverKind, @Nullable String version) {
       super(onStart, serverKind, version);
     }
 
@@ -1040,7 +1041,7 @@ public class ServerFixture {
     }
 
     private void registerHotspotsApiResponses() {
-      if (version != null && version.satisfiesMinRequirement(HotspotApi.MIN_SQ_VERSION_SUPPORTING_PULL)) {
+      if (version != null) {
         registerApiHotspotsPullResponses();
       } else {
         registerApiHotspotSearchResponses();
@@ -1168,7 +1169,6 @@ public class ServerFixture {
       });
     }
 
-    @NotNull
     private static Map<String, List<Issues.Issue>> getIssuesPerFilePath(String projectKey,
       AbstractServerBuilder.ServerProjectBuilder.ServerProjectBranchBuilder pullRequestOrBranch) {
       return Stream.concat(pullRequestOrBranch.issues.stream(), pullRequestOrBranch.taintIssues.stream())
@@ -1266,7 +1266,7 @@ public class ServerFixture {
       registerIssuesStatusChangeApiResponses();
       registerAddIssueCommentApiResponses();
       registerSearchIssueApiResponses();
-      if (version != null && version.satisfiesMinRequirement(Version.create("10.2"))) {
+      if (version != null) {
         registerIssueAnticipateTransitionResponses();
       }
     }
@@ -1523,11 +1523,12 @@ public class ServerFixture {
         .addSettings(Settings.Setting.newBuilder()
           .setKey("sonar.earlyAccess.misra.enabled")
           .setValue("false"));
-      var mqrModeAvailable = this.version != null && this.version.compareToIgnoreQualifier(Version.create("10.8")) >= 0;
+      var mqrModeAvailable = version != null && version.compareToIgnoreQualifier(Version.create("10.8")) >= 0
+        && !globalSettings.containsKey(MQR_MODE_SETTING);
       if (mqrModeAvailable) {
         settingsBuilder
           .addSettings(Settings.Setting.newBuilder()
-            .setKey("sonar.multi-quality-mode.enabled")
+            .setKey(MQR_MODE_SETTING)
             .setValue("true"));
       }
       settingsBuilder.addAllSettings(globalSettings.entrySet().stream().map(entry -> Settings.Setting.newBuilder()

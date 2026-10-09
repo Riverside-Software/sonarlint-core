@@ -40,4 +40,59 @@ public interface AiAgentRpcService {
   @JsonRequest
   CompletableFuture<GetHookScriptContentResponse> getHookScriptContent(GetHookScriptContentParams params);
 
+  /**
+   * Returns host- and scope-aware capabilities of the agents detected by the client together with
+   * the current SonarQube CLI installation, authentication state, and connection choices for login.
+   * Clients may opt in to local AI agent CLI discovery via {@link GetAiIntegrationStateParams}.
+   */
+  @JsonRequest
+  CompletableFuture<GetAiIntegrationStateResponse> getIntegrationState(GetAiIntegrationStateParams params);
+
+  /**
+   * Prepares the OS-specific SonarQube CLI installation command for the client's native interactive terminal.
+   * Credentials are never included in the response.
+   */
+  @JsonRequest
+  CompletableFuture<PrepareCliCommandResponse> prepareInstallCommand();
+
+  /**
+   * Prepares {@code sonar auth login} for the client's native interactive terminal.
+   * Credentials are never included in the response.
+   * An optional {@code connectionId} from {@link GetAiIntegrationStateResponse#getConnectionChoices()}
+   * takes precedence over {@code serverUrl}/{@code organization} and the request fails if the
+   * connection is unknown. The request also fails if no usable SonarQube CLI installation is found;
+   * clients should check {@link #getIntegrationState(GetAiIntegrationStateParams)} first.
+   */
+  @JsonRequest
+  CompletableFuture<PrepareCliCommandResponse> prepareAuthenticateCommand(PrepareAuthenticateCliCommandParams params);
+
+  /**
+   * Prepares {@code sonar integrate <agent> --global} for the client's native interactive terminal.
+   * Credentials are never included in the response.
+   * The request fails if no usable CLI installation is found, or if the agent is missing or not
+   * supported by the CLI (see {@link AiIntegrationAgentCapability#isCliIntegrationSupported()}).
+   */
+  @JsonRequest
+  CompletableFuture<PrepareCliCommandResponse> prepareIntegrateCommand(PrepareIntegrateCliCommandParams params);
+
+  /**
+   * Inspects the client-provided MCP configuration and reports its SonarQube entry state.
+   * The client provides {@code null} content when the configuration file is absent.
+   * The request fails if the agent is not supported (see
+   * {@link AiIntegrationAgentCapability#isStandaloneMcpSupported()}).
+   */
+  @JsonRequest
+  CompletableFuture<McpConfigurationInspectionResponse> inspectMcpConfiguration(McpConfigurationInspectionParams params);
+
+  /**
+   * Builds a complete replacement for the client-provided MCP configuration.
+   * The client must write {@code updatedContent} only after validating the returned state and diagnostics.
+   * CLI-managed configurations are reported without replacement content so the client can continue through the CLI flow.
+   * JSONC input is accepted, but comments and formatting are not retained in the replacement.
+   * The request fails if the agent is not supported (see
+   * {@link AiIntegrationAgentCapability#isStandaloneMcpSupported()}).
+   */
+  @JsonRequest
+  CompletableFuture<McpConfigurationUpdatePlanResponse> planMcpConfigurationUpdate(McpConfigurationUpdateParams params);
+
 }

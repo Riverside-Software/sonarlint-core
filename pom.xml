@@ -9,7 +9,7 @@
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>11.10.99001</version>
+  <version>12.0.2-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -44,7 +44,7 @@
     -->
     <maven.compiler.release>21</maven.compiler.release>
 
-    <sonar-plugin-api.version>13.4.2.4284</sonar-plugin-api.version>
+    <sonar-plugin-api.version>14.0.0.4498</sonar-plugin-api.version>
     <sonar-markdown.version>25.3.0.104237</sonar-markdown.version>
     <sonar-scanner-protocol.version>9.9.0.65466</sonar-scanner-protocol.version>
     <protobuf.version>4.34.1</protobuf.version>
@@ -55,7 +55,6 @@
     <jdk.min.version>11</jdk.min.version>
     <gson.version>2.13.2</gson.version>
     <mockito.version>5.23.0</mockito.version>
-    <kotlin.version>1.9.25</kotlin.version>
     <lsp4j.version>0.24.0</lsp4j.version>
     <slf4j.version>2.0.17</slf4j.version>
     <logback.version>1.5.35</logback.version>
@@ -86,7 +85,7 @@
     <flyway.version>11.20.3</flyway.version>
     <!-- Override the Jackson transitively pulled by flyway-core (2.19.1): 11.20.3 is the last Flyway release
          on Jackson 2.x, later versions move flyway-core itself to Jackson 3.x (tools.jackson.core) -->
-    <jackson.version>2.22.2</jackson.version>
+    <jackson.version>2.22.3</jackson.version>
     <bouncycastle.version>1.85</bouncycastle.version>
     <!-- Override the Jetty transitively pulled by wiremock-jetty12:3.13.2 (test scope, 12.0.30):
          fixes CVE-2026-10050 (jetty-security/jetty-client Digest auth bypass), wiremock-jetty12 has no newer release yet -->
@@ -102,13 +101,6 @@
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>org.jetbrains.kotlin</groupId>
-        <artifactId>kotlin-bom</artifactId>
-        <version>${kotlin.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
       <dependency>
         <groupId>org.springframework</groupId>
          <artifactId>spring-framework-bom</artifactId>
@@ -200,7 +192,7 @@
       <dependency>
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>
-        <version>1.18.13-jdk5</version>
+        <version>1.18.14-jdk5</version>
       </dependency>
       <dependency>
         <groupId>org.mockito</groupId>
@@ -343,7 +335,7 @@
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>build-helper-maven-plugin</artifactId>
-          <version>3.6.1</version>
+          <version>3.6.2</version>
         </plugin>
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>

@@ -3,16 +3,12 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-backend-parent</artifactId>
-    <version>11.10.99001</version>
+    <version>12.0.2-SNAPSHOT</version>
     <relativePath>../pom.xml</relativePath>
   </parent>
   <artifactId>sonarlint-server-connection</artifactId>
   <name>SonarLint Core - Server Connection</name>
   <description>Manage connections with SonarQube or SonarCloud</description>
-
-  <properties>
-    <xodus.version>2.0.1</xodus.version>
-  </properties>
 
   <dependencies>
     <dependency>
@@ -50,33 +46,6 @@
       <groupId>com.google.protobuf</groupId>
       <artifactId>protobuf-java</artifactId>
       <version>${protobuf.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>org.jetbrains.xodus</groupId>
-      <artifactId>xodus-entity-store</artifactId>
-      <version>${xodus.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.jetbrains.xodus</groupId>
-      <artifactId>xodus-environment</artifactId>
-      <version>${xodus.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.slf4j</groupId>
-          <artifactId>slf4j-api</artifactId>
-        </exclusion>
-      </exclusions>
-    </dependency>
-    <dependency>
-      <groupId>org.jetbrains.xodus</groupId>
-      <artifactId>xodus-vfs</artifactId>
-      <version>${xodus.version}</version>
     </dependency>
     <!-- unit tests -->
     <dependency>

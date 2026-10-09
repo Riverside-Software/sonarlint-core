@@ -29,7 +29,6 @@ import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
 import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
-import org.jetbrains.annotations.NotNull;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.HelpGenerateUserTokenParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.auth.HelpGenerateUserTokenResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.connection.common.TransientSonarQubeConnectionDto;
@@ -123,7 +122,6 @@ class ConnectionSetupMediumTests {
       .containsOnly(EXPECTED_MESSAGE, ResponseErrorCode.InvalidParams.getValue(), utmArray());
   }
 
-  @NotNull
   private static JsonArray utmArray() {
     JsonArray arrayOfInvalidParameters = new JsonArray();
     arrayOfInvalidParameters.add("utm_term");
@@ -133,7 +131,7 @@ class ConnectionSetupMediumTests {
   @SonarLintTest
   void it_should_open_the_sonarlint_auth_url_for_sonarqube_9_7_plus(SonarLintTestHarness harness) throws IOException, InterruptedException {
     var fakeClient = harness.newFakeClient().build();
-    var server = harness.newFakeSonarQubeServer("9.9").start();
+    var server = harness.newFakeSonarQubeServer("2025.1").start();
     var backend = harness.newBackend().withBackendCapability(EMBEDDED_SERVER).withClientName("ClientName").withSonarQubeConnection("connectionId", server).start(fakeClient);
 
     var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), null));
@@ -157,7 +155,7 @@ class ConnectionSetupMediumTests {
   @SonarLintTest
   void it_should_reject_tokens_from_missing_origin(SonarLintTestHarness harness) throws IOException, InterruptedException {
     var fakeClient = harness.newFakeClient().build();
-    var server = harness.newFakeSonarQubeServer("9.9").start();
+    var server = harness.newFakeSonarQubeServer("2025.1").start();
     var backend = harness.newBackend().withBackendCapability(EMBEDDED_SERVER).withClientName("ClientName").withSonarQubeConnection("connectionId", server).start(fakeClient);
 
     backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), null));
@@ -175,7 +173,7 @@ class ConnectionSetupMediumTests {
   @SonarLintTest
   void it_should_reject_tokens_from_unexpected_origin(SonarLintTestHarness harness) throws IOException, InterruptedException {
     var fakeClient = harness.newFakeClient().build();
-    var server = harness.newFakeSonarQubeServer("9.9").start();
+    var server = harness.newFakeSonarQubeServer("2025.1").start();
     var backend = harness.newBackend().withBackendCapability(EMBEDDED_SERVER).withClientName("ClientName").withSonarQubeConnection("connectionId", server).start(fakeClient);
 
     backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), null));
@@ -195,7 +193,7 @@ class ConnectionSetupMediumTests {
   void it_should_open_the_sonarlint_auth_url_without_port_for_sonarqube_9_7_plus_when_server_is_not_started(SonarLintTestHarness harness) throws MalformedURLException {
     var fakeClient = harness.newFakeClient().build();
     var backend = harness.newBackend().withClientName("ClientName").start(fakeClient);
-    var server = harness.newFakeSonarQubeServer("9.9").start();
+    var server = harness.newFakeSonarQubeServer("2025.1").start();
 
     var futureResponse = backend.getConnectionService().helpGenerateUserToken(new HelpGenerateUserTokenParams(server.baseUrl(), null));
 

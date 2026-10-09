@@ -19,7 +19,6 @@
  */
 package org.sonarsource.sonarlint.core.tracking;
 
-import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -37,6 +36,7 @@ import org.sonarsource.sonarlint.core.analysis.AnalysisFailedEvent;
 import org.sonarsource.sonarlint.core.analysis.AnalysisFinishedEvent;
 import org.sonarsource.sonarlint.core.analysis.AnalysisStartedEvent;
 import org.sonarsource.sonarlint.core.analysis.RawIssueDetectedEvent;
+import org.sonarsource.sonarlint.core.analysis.RawIssueRetractedEvent;
 import org.sonarsource.sonarlint.core.branch.SonarProjectBranchTrackingService;
 import org.sonarsource.sonarlint.core.commons.KnownFinding;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
@@ -82,7 +82,6 @@ public class TrackingService {
   private final PathTranslationService pathTranslationService;
   private final FindingReportingService reportingService;
   private final Map<UUID, MatchingSession> matchingSessionByAnalysisId = new HashMap<>();
-  private final XodusKnownFindingsStorageService knownFindingsStorageService;
   private final StorageService storageService;
   private final LocalOnlyIssueRepository localOnlyIssueRepository;
   private final FindingsSynchronizationService findingsSynchronizationService;
@@ -93,7 +92,7 @@ public class TrackingService {
   private final GitService gitService;
 
   public TrackingService(SonarLintRpcClient client, ConfigurationRepository configurationRepository, SonarProjectBranchTrackingService branchTrackingService,
-    PathTranslationService pathTranslationService, FindingReportingService reportingService, XodusKnownFindingsStorageService knownFindingsStorageService,
+    PathTranslationService pathTranslationService, FindingReportingService reportingService,
     StorageService storageService, LocalOnlyIssueRepository localOnlyIssueRepository, FindingsSynchronizationService findingsSynchronizationService, NewCodeService newCodeService,
     ApplicationEventPublisher eventPublisher, KnownFindingsRepository knownFindingsRepository, LocalOnlyIssuesRepository localOnlyIssuesRepository) {
     this.client = client;
@@ -101,7 +100,6 @@ public class TrackingService {
     this.branchTrackingService = branchTrackingService;
     this.pathTranslationService = pathTranslationService;
     this.reportingService = reportingService;
-    this.knownFindingsStorageService = knownFindingsStorageService;
     this.storageService = storageService;
     this.localOnlyIssueRepository = localOnlyIssueRepository;
     this.findingsSynchronizationService = findingsSynchronizationService;
@@ -110,24 +108,6 @@ public class TrackingService {
     this.knownFindingsRepository = knownFindingsRepository;
     this.localOnlyIssuesRepository = localOnlyIssuesRepository;
     this.gitService = GitService.create();
-  }
-
-  @PostConstruct
-  public void migrateData() {
-    if (knownFindingsStorageService.exists()) {
-      try {
-        LOG.info("Migrating the Xodus known findings to H2");
-        var migrationStart = System.currentTimeMillis();
-        var xodusKnownFindingsStore = knownFindingsStorageService.get();
-        var findingsPerConfigScope = xodusKnownFindingsStore.loadAll();
-        knownFindingsRepository.storeFindings(findingsPerConfigScope);
-        LOG.info("Migrated Xodus known findings to H2, took {}ms", System.currentTimeMillis() - migrationStart);
-      } catch (Exception e) {
-        LOG.error("Unable to migrate known findings, will use fresh DB", e);
-      }
-    }
-    // always call to remove lingering temporary files
-    knownFindingsStorageService.delete();
   }
 
   @EventListener
@@ -154,6 +134,20 @@ public class TrackingService {
       var trackedIssue = matchingSession.matchWithKnownFinding(requireNonNull(detectedIssue.getIdeRelativePath()), detectedIssue);
       reportingService.streamIssue(event.configurationScopeId(), analysisId, trackedIssue);
     }
+  }
+
+  @EventListener
+  public void onIssueRetracted(RawIssueRetractedEvent event) {
+    var matchingSession = matchingSessionByAnalysisId.get(event.analysisId());
+    if (matchingSession == null) {
+      return;
+    }
+    var retractedIssue = event.retractedIssue();
+    if (!retractedIssue.isInFile()) {
+      return;
+    }
+    matchingSession.removeMatching(retractedIssue)
+      .forEach(trackedIssue -> reportingService.retractIssue(event.configurationScopeId(), event.analysisId(), trackedIssue));
   }
 
   @EventListener

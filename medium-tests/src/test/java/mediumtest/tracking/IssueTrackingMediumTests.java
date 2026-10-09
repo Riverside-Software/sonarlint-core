@@ -33,9 +33,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.eclipse.jgit.api.errors.GitAPIException;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.ArgumentCaptor;
 import org.sonar.scanner.protocol.Constants;
@@ -67,9 +65,6 @@ import org.sonarsource.sonarlint.core.test.utils.SonarLintTestRpcServer;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
 import org.sonarsource.sonarlint.core.test.utils.storage.ServerIssueFixtures;
-import uk.org.webcompere.systemstubs.environment.EnvironmentVariables;
-import uk.org.webcompere.systemstubs.jupiter.SystemStub;
-import uk.org.webcompere.systemstubs.jupiter.SystemStubsExtension;
 import utils.TestPlugin;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
@@ -87,7 +82,6 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.sonarsource.sonarlint.core.commons.dogfood.DogfoodEnvironmentDetectionService.SONARSOURCE_DOGFOODING_ENV_VAR_KEY;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.commit;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.commitAtDate;
 import static org.sonarsource.sonarlint.core.commons.testutils.GitUtils.createRepository;
@@ -96,16 +90,7 @@ import static org.sonarsource.sonarlint.core.test.utils.ProtobufUtils.protobufBo
 import static org.sonarsource.sonarlint.core.test.utils.plugins.SonarPluginBuilder.newSonarPlugin;
 import static org.sonarsource.sonarlint.core.test.utils.storage.ServerIssueFixtures.aServerIssue;
 
-@ExtendWith(SystemStubsExtension.class)
 class IssueTrackingMediumTests {
-
-  @SystemStub
-  EnvironmentVariables environmentVariables;
-
-  @BeforeEach
-  void prepare() {
-    environmentVariables.remove(SONARSOURCE_DOGFOODING_ENV_VAR_KEY);
-  }
 
   private static final String CONFIG_SCOPE_ID = "CONFIG_SCOPE_ID";
 
@@ -170,7 +155,7 @@ class IssueTrackingMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer("9.9")
+    var server = harness.newFakeSonarQubeServer("2025.1")
       .withProject("projectKey", project -> project.withBranch("main", branch -> branch
         .withIssue("uuid", "java:S1134", message, "author", ideFilePath, "395d7a96efa8afd1b66ab6b680d0e637", Constants.Severity.BLOCKER,
           org.sonarsource.sonarlint.core.commons.RuleType.BUG,
@@ -225,7 +210,7 @@ class IssueTrackingMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer("9.9")
+    var server = harness.newFakeSonarQubeServer("2025.1")
       .withProject("projectKey", project -> project.withBranch("main", branch -> branch
         .withIssue("uuid1", "java:S1134", message, "author", ideFilePath, "395d7a96efa8afd1b66ab6b680d0e637", Constants.Severity.BLOCKER,
           org.sonarsource.sonarlint.core.commons.RuleType.BUG,
@@ -357,7 +342,7 @@ class IssueTrackingMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer("9.9")
+    var server = harness.newFakeSonarQubeServer("2025.1")
       .withProject("projectKey", project -> project.withBranch("main", branch -> branch
         .withIssue("uuid", "java:S1192", message, "author", ideFilePath, "395d7a96efa8afd1b66ab6b680d0e637", Constants.Severity.BLOCKER,
           org.sonarsource.sonarlint.core.commons.RuleType.BUG,
@@ -431,7 +416,7 @@ class IssueTrackingMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer("9.9")
+    var server = harness.newFakeSonarQubeServer("2025.1")
       .withProject("projectKey", project -> project.withBranch("main", branch -> branch
         .withIssue("uuid", "java:S1134", message, "author", ideFilePath, "395d7a96efa8afd1b66ab6b680d0e637", Constants.Severity.BLOCKER,
           org.sonarsource.sonarlint.core.commons.RuleType.BUG,
@@ -479,7 +464,7 @@ class IssueTrackingMediumTests {
     var client = harness.newFakeClient()
       .withInitialFs(CONFIG_SCOPE_ID, baseDir, List.of(new ClientFileDto(fileUri, baseDir.relativize(filePath), CONFIG_SCOPE_ID, false, null, filePath, null, null, true)))
       .build();
-    var server = harness.newFakeSonarQubeServer("9.9")
+    var server = harness.newFakeSonarQubeServer("2025.1")
       .withProject("projectKey", project -> project.withBranch("main", branch -> branch
         .withIssue("uuid", "java:S1134", message, "author", ideFilePath, "395d7a96efa8afd1b66ab6b680d0e637", Constants.Severity.BLOCKER,
           org.sonarsource.sonarlint.core.commons.RuleType.BUG,
@@ -1014,7 +999,7 @@ class IssueTrackingMediumTests {
   }
 
   @SonarLintTest
-  void it_should_migrate_the_known_issues_from_xodus_to_the_new_h2_database(SonarLintTestHarness harness, @TempDir Path baseDir) {
+  void it_should_persist_known_issues_across_backend_restarts(SonarLintTestHarness harness, @TempDir Path baseDir) {
     var filePath = createFile(baseDir, baseDir.resolve("file.py").toString(),
       """
         # TODO try this
@@ -1032,7 +1017,6 @@ class IssueTrackingMediumTests {
     assertThat(raisedIssueDtos).hasSize(1);
     var raisedIssue = raisedIssueDtos.get(0);
     harness.shutdown(backend);
-    environmentVariables.set(SONARSOURCE_DOGFOODING_ENV_VAR_KEY, "1");
 
     backend = harness.newBackend()
       .withStorageRoot(backend.getStorageRoot())

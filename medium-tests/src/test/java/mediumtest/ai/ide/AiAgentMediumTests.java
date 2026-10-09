@@ -19,8 +19,16 @@
  */
 package mediumtest.ai.ide;
 
+import java.util.List;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAgent;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationAgentCapability;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationHost;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationScope;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetAiIntegrationStateParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetRuleFileContentParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationInspectionParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationState;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationUpdateParams;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTest;
 import org.sonarsource.sonarlint.core.test.utils.junit5.SonarLintTestHarness;
 
@@ -79,6 +87,50 @@ class AiAgentMediumTests {
     assertThat(response.getContent()).contains("IMPORTANT");
     assertThat(response.getContent()).contains("analyze_file_list");
     assertThat(response.getContent()).contains("Important Tool Guidelines");
+  }
+
+  @SonarLintTest
+  void it_should_expose_cli_integration_state_through_rpc(SonarLintTestHarness harness) {
+    var backend = harness.newBackend()
+      .start();
+
+    var state = backend.getAiAgentService().getIntegrationState(
+      new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(AiAgent.CLAUDE_CODE, AiAgent.GITHUB_COPILOT),
+        AiIntegrationScope.GLOBAL, null)).join();
+
+    assertThat(state.getCli()).isNotNull();
+    assertThat(state.getCli().getInstallationStatus()).isNotNull();
+    assertThat(state.getAgents()).extracting(AiIntegrationAgentCapability::getAgent)
+      .containsExactly(AiAgent.CLAUDE_CODE, AiAgent.GITHUB_COPILOT);
+  }
+
+  @SonarLintTest
+  void it_should_prepare_cli_install_command_through_rpc(SonarLintTestHarness harness) {
+    var backend = harness.newBackend()
+      .start();
+
+    var installCommand = backend.getAiAgentService().prepareInstallCommand().join();
+
+    assertThat(installCommand.getExecutable()).isIn("/bin/bash", "powershell.exe");
+    assertThat(installCommand.isInteractive()).isTrue();
+  }
+
+  @SonarLintTest
+  void it_should_inspect_and_plan_an_mcp_configuration_update(SonarLintTestHarness harness) {
+    var backend = harness.newBackend()
+      .start();
+
+    var inspection = backend.getAiAgentService()
+      .inspectMcpConfiguration(new McpConfigurationInspectionParams(AiAgent.CURSOR, null))
+      .join();
+    var update = backend.getAiAgentService()
+      .planMcpConfigurationUpdate(new McpConfigurationUpdateParams(AiAgent.CURSOR, null,
+        "{\"command\":\"docker\",\"args\":[\"sonarsource/sonarqube-mcp\"]}"))
+      .join();
+
+    assertThat(inspection.getState()).isEqualTo(McpConfigurationState.NOT_CONFIGURED);
+    assertThat(update.getState()).isEqualTo(McpConfigurationState.NOT_CONFIGURED);
+    assertThat(update.getUpdatedContent()).contains("mcpServers", "sonarqube");
   }
 
 }
