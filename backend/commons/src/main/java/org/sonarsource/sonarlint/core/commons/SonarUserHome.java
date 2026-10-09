@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - RPC Protocol
+ * SonarLint Core - Commons
  * Copyright (C) SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,22 +17,27 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.rpc.protocol.backend.initialize;
+package org.sonarsource.sonarlint.core.commons;
 
-public enum BackendCapability {
-  SMART_NOTIFICATIONS,
-  PROJECT_SYNCHRONIZATION,
-  EMBEDDED_SERVER,
-  SECURITY_HOTSPOTS,
-  SERVER_SENT_EVENTS,
-  DATAFLOW_BUG_DETECTION,
-  FULL_SYNCHRONIZATION,
-  TELEMETRY,
-  GESSIE_TELEMETRY,
-  MONITORING,
-  ISSUE_STREAMING,
-  SCA_SYNCHRONIZATION,
-  @Deprecated(since = "11.9", forRemoval = true)
-  CONTEXT_GENERATION,
-  PROMOTIONAL_CAMPAIGNS
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import javax.annotation.Nullable;
+
+public class SonarUserHome {
+
+  public static final String SONAR_USER_HOME_ENV = "SONAR_USER_HOME";
+
+  private SonarUserHome() {
+  }
+
+  public static Path get() {
+    return home(System.getenv(SONAR_USER_HOME_ENV));
+  }
+
+  static Path home(@Nullable String sonarHome) {
+    if (sonarHome != null) {
+      return Paths.get(sonarHome);
+    }
+    return Paths.get(System.getProperty("user.home")).resolve(".sonar");
+  }
 }

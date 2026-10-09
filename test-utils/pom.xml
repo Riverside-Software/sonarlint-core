@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-parent</artifactId>
-    <version>11.8.99001</version>
+    <version>11.9-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-test-utils</artifactId>
   <name>SonarLint Core - Test Utils</name>
@@ -62,6 +62,24 @@
     <dependency>
       <groupId>org.wiremock</groupId>
       <artifactId>wiremock-jetty12</artifactId>
+    </dependency>
+    <!-- Force the Jetty artifacts affected by CVE-2026-10050 and pinned in the root pom's dependencyManagement
+         (jetty-bom import) to be direct dependencies here, otherwise the pin never propagates to consumers of
+         sonarlint-core-test-utils: wiremock-jetty12 is a direct dependency here and transitively pulls its own
+         older jetty-security/jetty-client versions. -->
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-client</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.eclipse.jetty</groupId>
+      <artifactId>jetty-security</artifactId>
+    </dependency>
+    <!-- Force the Handlebars version pinned in the root pom to be a direct dependency here, otherwise the
+         pin never propagates to consumers of sonarlint-core-test-utils. -->
+    <dependency>
+      <groupId>com.github.jknack</groupId>
+      <artifactId>handlebars</artifactId>
     </dependency>
     <dependency>
       <groupId>com.squareup.okhttp3</groupId>
