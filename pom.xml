@@ -9,7 +9,7 @@
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>11.7.99001</version>
+  <version>11.8-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -75,6 +75,10 @@
     <sonar.coverage.exclusions>buildSrc/maven-shade-ext-bnd-transformer/**,backend/commons/src/main/java/org/sonarsource/sonarlint/core/commons/util/git/WinGitUtils.java</sonar.coverage.exclusions>
     <!-- Exclude from the duplication detection deprecated DTOs that were replaced by new types. They should be removed in 10.3 -->
     <sonar.cpd.exclusions>rpc-protocol/src/main/java/org/sonarsource/sonarlint/core/rpc/protocol/client/analysis/*Dto.java</sonar.cpd.exclusions>
+    <!-- Exclude non-shipped scaffolding (ITs and test-fixture projects) from SCA dependency analysis -->
+    <sonar.sca.exclusions>its/**,backend/plugin-commons/src/test/projects/**</sonar.sca.exclusions>
+    <!-- CI provides mvn on PATH; skip the mvnw wrapper whose distribution download is not authenticated -->
+    <sonar.sca.mavenIgnoreWrapper>true</sonar.sca.mavenIgnoreWrapper>
     <sonar.organization>sonarsource</sonar.organization>
     <h2.version>2.4.240</h2.version>
     <!-- More recent versions require Java 21 -->
@@ -83,7 +87,7 @@
     <bouncycastle.version>1.84</bouncycastle.version>
     <!-- On-demand plugin versions -->
     <cfamily.version>6.83.0.100813</cfamily.version>
-    <csharp.version>10.29.0.143774</csharp.version>
+    <csharp.version>10.31.0.145097</csharp.version>
     <omnisharp.version>1.39.15</omnisharp.version>
   </properties>
 
@@ -229,7 +233,7 @@
       <dependency>
         <groupId>org.apache.httpcomponents.client5</groupId>
         <artifactId>httpclient5</artifactId>
-        <version>5.6.1</version>
+        <version>5.6.2</version>
       </dependency>
       <dependency>
         <groupId>io.github.hakky54</groupId>
