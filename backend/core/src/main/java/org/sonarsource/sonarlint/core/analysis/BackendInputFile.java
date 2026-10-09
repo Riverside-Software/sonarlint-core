@@ -25,7 +25,6 @@ import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import org.jetbrains.annotations.Nullable;
 import org.sonarsource.sonarlint.core.analysis.api.ClientInputFile;
 import org.sonarsource.sonarlint.core.commons.api.SonarLanguage;
 import org.sonarsource.sonarlint.core.commons.util.FileUtils;
@@ -54,7 +53,6 @@ public class BackendInputFile implements ClientInputFile {
     return clientFile.isTest();
   }
 
-  @Nullable
   @Override
   public Charset getCharset() {
     return charset;
