@@ -4,7 +4,7 @@
   <parent>
     <groupId>org.sonarsource.sonarlint.core</groupId>
     <artifactId>sonarlint-core-its</artifactId>
-    <version>12.1.99001</version>
+    <version>12.2-SNAPSHOT</version>
   </parent>
   <artifactId>sonarlint-core-its-tests</artifactId>
   <name>SonarLint Core - ITs - Tests</name>
@@ -106,7 +106,7 @@
       <groupId>org.sonarsource.orchestrator</groupId>
       <artifactId>sonar-orchestrator-junit5</artifactId>
       <!-- 6.4+ searches version aliases with remote=1 so Edge Smart Remotes are included. -->
-      <version>6.4.3.4676</version>
+      <version>6.4.4.4797</version>
       <scope>test</scope>
     </dependency>
     <dependency>

@@ -9,7 +9,7 @@
   </parent>
   <groupId>org.sonarsource.sonarlint.core</groupId>
   <artifactId>sonarlint-core-parent</artifactId>
-  <version>12.1.99001</version>
+  <version>12.2-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>SonarLint Core</name>
   <description>Library used by SonarLint flavors (Eclipse, IntelliJ, VSCode...)</description>
@@ -45,7 +45,7 @@
     <maven.compiler.release>21</maven.compiler.release>
 
     <sonar-plugin-api.version>14.1.0.5543</sonar-plugin-api.version>
-    <sonar-markdown.version>26.10.0.132816</sonar-markdown.version>
+    <sonar-markdown.version>26.10.0.133078</sonar-markdown.version>
     <protobuf.version>4.36.2</protobuf.version>
     <gitRepositoryName>sonarlint-core</gitRepositoryName>
     <okhttp.version>5.5.0</okhttp.version>
@@ -86,7 +86,7 @@
     <flyway.version>11.20.3</flyway.version>
     <!-- Override the Jackson transitively pulled by flyway-core (2.19.1): 11.20.3 is the last Flyway release
          on Jackson 2.x, later versions move flyway-core itself to Jackson 3.x (tools.jackson.core) -->
-    <jackson.version>2.22.3</jackson.version>
+    <jackson.version>2.22.4</jackson.version>
     <bouncycastle.version>1.86</bouncycastle.version>
     <!-- Override the Jetty transitively pulled by wiremock-jetty12:3.13.2 (test scope, 12.0.30):
          fixes CVE-2026-10050 (jetty-security/jetty-client Digest auth bypass), wiremock-jetty12 has no newer release yet -->
@@ -193,7 +193,7 @@
       <dependency>
         <groupId>net.bytebuddy</groupId>
         <artifactId>byte-buddy</artifactId>
-        <version>1.18.14-jdk5</version>
+        <version>1.18.15-jdk5</version>
       </dependency>
       <dependency>
         <groupId>org.mockito</groupId>
