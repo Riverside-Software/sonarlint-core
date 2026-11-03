@@ -32,12 +32,16 @@ import org.junit.jupiter.api.condition.DisabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.sonar.api.utils.System2;
 import org.sonar.api.utils.command.Command;
 import org.sonar.api.utils.command.CommandExecutor;
 import org.sonar.api.utils.command.StreamConsumer;
 import org.sonarsource.sonarlint.core.SonarCloudRegion;
 import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
+import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.os.OsSearchPath;
 import org.sonarsource.sonarlint.core.repository.config.BindingConfiguration;
 import org.sonarsource.sonarlint.core.repository.config.ConfigurationRepository;
@@ -45,22 +49,29 @@ import org.sonarsource.sonarlint.core.repository.config.ConfigurationScope;
 import org.sonarsource.sonarlint.core.repository.connection.ConnectionConfigurationRepository;
 import org.sonarsource.sonarlint.core.repository.connection.SonarCloudConnectionConfiguration;
 import org.sonarsource.sonarlint.core.repository.connection.SonarQubeConnectionConfiguration;
+import org.sonarsource.sonarlint.core.rpc.protocol.SonarLintRpcClient;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAgent;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAgentDetectionSource;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationAgentCapability;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.CliAuthenticationStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.CliInstallationStatus;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.CliIntegrationRecordingStatus;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationHost;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiIntegrationScope;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetAiIntegrationStateParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.PrepareAuthenticateCliCommandParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.PrepareIntegrateCliCommandParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.UninstallCliResponse;
+import org.sonarsource.sonarlint.core.serverconnection.FileUtils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AiIntegrationServiceTests {
@@ -84,6 +95,10 @@ class AiIntegrationServiceTests {
 
     assertThat(response.getCli().getInstallationStatus()).isEqualTo(CliInstallationStatus.NOT_INSTALLED);
     assertThat(response.getCli().getAuthenticationStatus()).isEqualTo(CliAuthenticationStatus.UNKNOWN);
+    assertThat(response.getCliIntegrations()).hasSize(5).allSatisfy(state -> {
+      assertThat(state.getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.UNKNOWN);
+      assertThat(state.getConfigurations()).isEmpty();
+    });
     assertThat(response.getAgents()).hasSize(2);
     assertThat(response.getAgents().get(0).getAgent()).isEqualTo(AiAgent.CLAUDE_CODE);
     assertThat(response.getAgents().get(0).isCliIntegrationSupported()).isTrue();
@@ -218,6 +233,83 @@ class AiIntegrationServiceTests {
     assertThat(cli.getOrganization()).isEqualTo("acme");
   }
 
+  @ParameterizedTest
+  @CsvSource({
+    "1.4.2, false",
+    "1.8.9, false",
+    "1.9.0-rc, false",
+    "999999999999.9.0, false",
+    "1.9.0, true",
+    "1.9.0+build, true",
+    "1.10.0, true"
+  })
+  void should_return_integrations_and_authentication_using_the_supported_json_option(String version, boolean supportsJsonFormat) throws IOException {
+    var executable = createExecutable("bin/sonar");
+    var statusInvocations = new ArrayList<String>();
+    var executor = commandReturning((command, stdout) -> {
+      if (command.toCommandLine().endsWith("--version")) {
+        stdout.consumeLine(version);
+      } else {
+        assertThat(command.getArguments()).containsExactlyElementsOf(
+          supportsJsonFormat ? List.of("system", "status", "--format", "json") : List.of("system", "status", "--json"));
+        statusInvocations.add(command.toCommandLine());
+        stdout.consumeLine("{\"auth\":{\"status\":\"unauthenticated\"},\"integrations\":[{\"id\":\"codex\"}]}");
+      }
+      return 0;
+    });
+    var service = newServiceForCurrentOs(Map.of("PATH", executable.getParent().toString()), executor);
+
+    var response = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(), AiIntegrationScope.GLOBAL, null));
+
+    assertThat(statusInvocations).hasSize(1);
+    assertThat(response.getAgents()).isEmpty();
+    assertThat(response.getCli().getAuthenticationStatus()).isEqualTo(CliAuthenticationStatus.UNAUTHENTICATED);
+    assertThat(response.getCliIntegrations()).hasSize(5);
+    assertThat(response.getCliIntegrations().get(2).getAgent()).isEqualTo(AiAgent.CODEX);
+    assertThat(response.getCliIntegrations().get(2).getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.RECORDED);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"1.8.9", "1.9.0"})
+  void should_report_unknown_integrations_when_status_command_fails(String version) throws IOException {
+    var executable = createExecutable("bin/sonar");
+    var executor = commandReturning((command, stdout) -> {
+      if (command.toCommandLine().endsWith("--version")) {
+        stdout.consumeLine(version);
+        return 0;
+      }
+      return 1;
+    });
+    var service = newServiceForCurrentOs(Map.of("PATH", executable.getParent().toString()), executor);
+
+    var response = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(), AiIntegrationScope.GLOBAL, null));
+
+    assertThat(response.getCli().getInstallationStatus()).isEqualTo(CliInstallationStatus.INSTALLED);
+    assertThat(response.getCli().getAuthenticationStatus()).isEqualTo(CliAuthenticationStatus.UNAVAILABLE);
+    assertThat(response.getCliIntegrations()).hasSize(5).allSatisfy(state -> {
+      assertThat(state.getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.UNKNOWN);
+      assertThat(state.getConfigurations()).isEmpty();
+    });
+  }
+
+  @Test
+  void should_report_unknown_integrations_when_status_json_is_malformed() throws IOException {
+    var executable = createExecutable("bin/sonar");
+    var executor = commandReturning((command, stdout) -> {
+      stdout.consumeLine(command.toCommandLine().endsWith("--version") ? "1.9.0" : "{");
+      return 0;
+    });
+    var service = newServiceForCurrentOs(Map.of("PATH", executable.getParent().toString()), executor);
+
+    var response = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(), AiIntegrationScope.GLOBAL, null));
+
+    assertThat(response.getCli().getAuthenticationStatus()).isEqualTo(CliAuthenticationStatus.UNAVAILABLE);
+    assertThat(response.getCliIntegrations()).hasSize(5).allSatisfy(state -> {
+      assertThat(state.getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.UNKNOWN);
+      assertThat(state.getConfigurations()).isEmpty();
+    });
+  }
+
   @Test
   void should_return_host_and_scope_specific_capabilities() {
     var service = newService(false, Map.of(), commandReturning(1));
@@ -229,25 +321,19 @@ class AiIntegrationServiceTests {
       cursor -> {
         assertThat(cursor.isCliIntegrationSupported()).isFalse();
         assertThat(cursor.isStandaloneMcpSupported()).isFalse();
-        assertThat(cursor.isSkillSupported()).isFalse();
       },
       copilot -> {
         assertThat(copilot.isCliIntegrationSupported()).isFalse();
         assertThat(copilot.isStandaloneMcpSupported()).isTrue();
-        assertThat(copilot.isHookSupported()).isFalse();
       },
-      claude -> {
-        assertThat(claude.isCliIntegrationSupported()).isTrue();
-        assertThat(claude.isSkillSupported()).isTrue();
-      },
-      windsurf -> assertThat(windsurf.isHookSupported()).isFalse());
+      claude -> assertThat(claude.isCliIntegrationSupported()).isTrue(),
+      windsurf -> assertThat(windsurf.isStandaloneMcpSupported()).isFalse());
 
     var projectResponse = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.CURSOR,
       List.of(AiAgent.CURSOR), AiIntegrationScope.PROJECT, "workspace"));
     var cursorProjectCapability = projectResponse.getAgents().get(0);
     assertThat(cursorProjectCapability.isCliIntegrationSupported()).isFalse();
     assertThat(cursorProjectCapability.isStandaloneMcpSupported()).isTrue();
-    assertThat(cursorProjectCapability.isSkillSupported()).isFalse();
   }
 
   @Test
@@ -267,6 +353,29 @@ class AiIntegrationServiceTests {
     assertThat(visualStudioCopilot.getAgents().get(0).isStandaloneMcpSupported()).isTrue();
     assertThat(claude.getAgents().get(0).isStandaloneMcpSupported()).isTrue();
     assertThat(codex.getAgents().get(0).isStandaloneMcpSupported()).isFalse();
+  }
+
+  @Test
+  void should_report_junie_and_ai_assistant_mcp_only_on_intellij() {
+    var service = newService(false, Map.of(), commandReturning(1));
+
+    var intellij = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.INTELLIJ,
+      List.of(AiAgent.JUNIE, AiAgent.JETBRAINS_AI_ASSISTANT), AiIntegrationScope.GLOBAL, null));
+    var vscode = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.VSCODE,
+      List.of(AiAgent.JUNIE, AiAgent.JETBRAINS_AI_ASSISTANT), AiIntegrationScope.GLOBAL, null));
+
+    assertThat(intellij.getAgents()).extracting(capability -> capability.getAgent())
+      .containsExactly(AiAgent.JUNIE, AiAgent.JETBRAINS_AI_ASSISTANT);
+    assertThat(intellij.getAgents()).allSatisfy(capability -> {
+      assertThat(capability.isStandaloneMcpSupported()).isTrue();
+      assertThat(capability.isCliIntegrationSupported()).isFalse();
+    });
+    assertThat(vscode.getAgents()).extracting(capability -> capability.getAgent())
+      .containsExactly(AiAgent.JUNIE, AiAgent.JETBRAINS_AI_ASSISTANT);
+    assertThat(vscode.getAgents()).allSatisfy(capability -> {
+      assertThat(capability.isStandaloneMcpSupported()).isFalse();
+      assertThat(capability.isCliIntegrationSupported()).isFalse();
+    });
   }
 
   @Test
@@ -339,6 +448,10 @@ class AiIntegrationServiceTests {
       AiIntegrationScope.GLOBAL, null));
 
     assertThat(response.getCli().getAuthenticationStatus()).isEqualTo(CliAuthenticationStatus.UNAVAILABLE);
+    assertThat(response.getCliIntegrations()).hasSize(5).allSatisfy(state -> {
+      assertThat(state.getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.UNKNOWN);
+      assertThat(state.getConfigurations()).isEmpty();
+    });
     assertThat(response.getConnectionChoices()).isEmpty();
     assertThat(response.getRecommendedConnectionId()).isNull();
   }
@@ -429,10 +542,14 @@ class AiIntegrationServiceTests {
     var executable = createExecutable("bin/sonar");
     var service = newServiceForCurrentOs(Map.of("PATH", executable.getParent().toString()), commandReturning(1));
 
-    var cli = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(), AiIntegrationScope.GLOBAL, null)).getCli();
+    var response = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.OTHER, List.of(), AiIntegrationScope.GLOBAL, null));
 
-    assertThat(cli.getInstallationStatus()).isEqualTo(CliInstallationStatus.UNUSABLE);
-    assertThat(cli.getExecutablePath()).isEqualTo(executable.toString());
+    assertThat(response.getCli().getInstallationStatus()).isEqualTo(CliInstallationStatus.UNUSABLE);
+    assertThat(response.getCli().getExecutablePath()).isEqualTo(executable.toString());
+    assertThat(response.getCliIntegrations()).hasSize(5).allSatisfy(state -> {
+      assertThat(state.getRecordingStatus()).isEqualTo(CliIntegrationRecordingStatus.UNKNOWN);
+      assertThat(state.getConfigurations()).isEmpty();
+    });
   }
 
   @Test
@@ -588,6 +705,7 @@ class AiIntegrationServiceTests {
 
     assertThat(cli.getInstallationStatus()).isEqualTo(CliInstallationStatus.INSTALLED);
     assertThat(cli.getExecutablePath()).isEqualTo(executable.toString());
+    assertThat(cli.isUninstallAvailable()).isTrue();
   }
 
   @Test
@@ -599,6 +717,7 @@ class AiIntegrationServiceTests {
 
     assertThat(cli.getInstallationStatus()).isEqualTo(CliInstallationStatus.INSTALLED);
     assertThat(cli.getExecutablePath()).isEqualTo(executable.toString());
+    assertThat(cli.isUninstallAvailable()).isTrue();
   }
 
   @Test
@@ -612,6 +731,9 @@ class AiIntegrationServiceTests {
 
     assertThat(cli.getInstallationStatus()).isEqualTo(CliInstallationStatus.INSTALLED);
     assertThat(cli.getExecutablePath()).isEqualTo(pathExecutable.toString());
+    assertThat(cli.isUninstallAvailable()).isFalse();
+    assertThat(service.uninstallCli(new SonarLintCancelMonitor()).getStatus()).isEqualTo(UninstallCliResponse.Status.NOT_AVAILABLE);
+    assertThat(tempDir.resolve(".local/share/sonarqube-cli/bin/sonar")).exists();
   }
 
   @Test
@@ -646,6 +768,122 @@ class AiIntegrationServiceTests {
     assertThat(cli.getExecutablePath()).isEqualTo(executable.toString());
   }
 
+  @Test
+  void should_safely_reject_uninstall_for_missing_cli() {
+    var service = newService(false, Map.of(), commandReturning(1));
+
+    var response = service.uninstallCli(new SonarLintCancelMonitor());
+
+    assertThat(response.getStatus()).isEqualTo(UninstallCliResponse.Status.NOT_AVAILABLE);
+    assertThat(response.getStdout()).isEmpty();
+    assertThat(response.getStderr()).isEmpty();
+  }
+
+  @Test
+  void should_reset_then_delete_the_documented_folder_including_nested_files_and_preserve_warnings() throws IOException {
+    var executable = createExecutable(".local/share/sonarqube-cli/bin/sonar");
+    var directory = executable.getParent().getParent();
+    Files.createDirectories(directory.resolve("nested/config"));
+    Files.writeString(directory.resolve("nested/config/settings"), "settings");
+    var executor = commandReturningWithStreams((command, stdout, stderr) -> {
+      if (command.toCommandLine().contains("system reset")) {
+        assertThat(command.toCommandLine()).isEqualTo(Command.create(executable.toString())
+          .addArgument("system").addArgument("reset").addArgument("--force").toCommandLine());
+        stdout.consumeLine("reset warning");
+        stderr.consumeLine("cleanup warning");
+      } else {
+        stdout.consumeLine("SonarQube CLI 1.9.0");
+      }
+      return 0;
+    });
+
+    var response = newService(false, Map.of(), executor).uninstallCli(new SonarLintCancelMonitor());
+
+    assertThat(response.getStatus()).isEqualTo(UninstallCliResponse.Status.UNINSTALLED);
+    assertThat(response.getStdout()).isEqualTo("reset warning");
+    assertThat(response.getStderr()).isEqualTo("cleanup warning");
+    assertThat(directory).doesNotExist();
+    verify(executor).execute(any(Command.class), any(), any(), eq(120_000L));
+  }
+
+  @Test
+  void should_complete_uninstall_when_canceled_during_reset() throws IOException {
+    var executable = createExecutable(".local/share/sonarqube-cli/bin/sonar");
+    var cancelMonitor = new SonarLintCancelMonitor();
+    var executor = commandReturningWithStreams((command, stdout, stderr) -> {
+      if (command.toCommandLine().contains("system reset")) {
+        cancelMonitor.cancel();
+        stdout.consumeLine("reset completed");
+        stderr.consumeLine("cleanup warning");
+      } else {
+        stdout.consumeLine("SonarQube CLI 1.9.0");
+      }
+      return 0;
+    });
+
+    var response = newService(false, Map.of(), executor).uninstallCli(cancelMonitor);
+
+    assertThat(response.getStatus()).isEqualTo(UninstallCliResponse.Status.UNINSTALLED);
+    assertThat(response.getStdout()).isEqualTo("reset completed");
+    assertThat(response.getStderr()).isEqualTo("cleanup warning");
+    assertThat(executable.getParent().getParent()).doesNotExist();
+  }
+
+  @Test
+  void should_delete_the_documented_windows_folder() throws IOException {
+    var executable = createExecutable("sonarqube-cli/bin/sonar.exe");
+    var service = newService(true, Map.of("LOCALAPPDATA", tempDir.toString()), versionCommandExecutor());
+
+    assertThat(service.uninstallCli(new SonarLintCancelMonitor()).getStatus()).isEqualTo(UninstallCliResponse.Status.UNINSTALLED);
+    assertThat(executable.getParent().getParent()).doesNotExist();
+  }
+
+  @Test
+  void should_retain_the_folder_when_reset_fails() throws IOException {
+    var executable = createExecutable(".local/share/sonarqube-cli/bin/sonar");
+    var executor = commandReturningWithStreams((command, stdout, stderr) -> {
+      if (command.toCommandLine().contains("system reset")) {
+        stderr.consumeLine("reset failed");
+        return 1;
+      }
+      stdout.consumeLine("SonarQube CLI 1.9.0");
+      return 0;
+    });
+
+    var response = newService(false, Map.of(), executor).uninstallCli(new SonarLintCancelMonitor());
+
+    assertThat(response.getStatus()).isEqualTo(UninstallCliResponse.Status.FAILED);
+    assertThat(response.getStderr()).isEqualTo("reset failed");
+    assertThat(executable).exists();
+  }
+
+  @Test
+  void should_report_an_ordinary_folder_deletion_failure() throws IOException {
+    var executable = createExecutable(".local/share/sonarqube-cli/bin/sonar");
+    try (var files = mockStatic(FileUtils.class)) {
+      files.when(() -> FileUtils.deleteRecursively(executable.getParent().getParent())).thenThrow(new IllegalStateException("deletion failed"));
+
+      var response = newService(false, Map.of(), versionCommandExecutor()).uninstallCli(new SonarLintCancelMonitor());
+
+      assertThat(response.getStatus()).isEqualTo(UninstallCliResponse.Status.FAILED);
+      assertThat(response.getMessage()).contains("delete");
+      assertThat(executable).exists();
+    }
+  }
+
+  @Test
+  void should_preserve_the_public_constructor_and_discovery_behaviour() throws IOException {
+    var executable = createExecutable(".local/share/sonarqube-cli/bin/sonar");
+    var system = mock(System2.class);
+    var service = new AiIntegrationService(system, versionCommandExecutor(), tempDir, Map.of(),
+      connectionRepository, configurationRepository, mock(SonarLintRpcClient.class));
+
+    var state = service.getIntegrationState(new GetAiIntegrationStateParams(AiIntegrationHost.VSCODE, List.of(), AiIntegrationScope.GLOBAL, null)).getCli();
+
+    assertThat(state.getExecutablePath()).isEqualTo(executable.toString());
+    assertThat(state.isUninstallAvailable()).isTrue();
+  }
+
   private AiIntegrationService newServiceForCurrentOs(Map<String, String> environment, CommandExecutor executor) {
     return newService(System2.INSTANCE.isOsWindows(), environment, executor);
   }
@@ -665,8 +903,10 @@ class AiIntegrationServiceTests {
   private AiIntegrationService newService(System2 system2, Map<String, String> environment, CommandExecutor executor,
     Path pathHelper) {
     var search = new OsExecutableSearch(system2, executor, environment, pathHelper);
-    return new AiIntegrationService(new SonarQubeCliLocator(search, tempDir),
-      new AgentCliLocator(search, tempDir), connectionRepository, configurationRepository);
+    var locator = new SonarQubeCliLocator(search, tempDir);
+    return new AiIntegrationService(locator,
+      new AgentCliLocator(search, tempDir), connectionRepository, configurationRepository,
+      mock(SonarLintRpcClient.class), new CliTokenAuthenticationRunner());
   }
 
   private Path createPathHelper() throws IOException {

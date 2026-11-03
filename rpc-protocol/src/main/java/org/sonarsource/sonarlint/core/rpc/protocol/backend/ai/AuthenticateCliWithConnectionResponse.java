@@ -19,14 +19,32 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
 
-public class GetRuleFileContentResponse {
-  private final String content;
+import javax.annotation.Nullable;
 
-  public GetRuleFileContentResponse(String content) {
-    this.content = content;
+public class AuthenticateCliWithConnectionResponse {
+
+  public enum Status {
+    AUTHENTICATED,
+    INTERACTIVE_LOGIN_REQUIRED,
+    UPGRADE_REQUIRED,
+    FAILED
   }
 
-  public String getContent() {
-    return content;
+  private final Status status;
+  @Nullable
+  private final String message;
+
+  public AuthenticateCliWithConnectionResponse(Status status, @Nullable String message) {
+    this.status = status;
+    this.message = message;
+  }
+
+  public Status getStatus() {
+    return status;
+  }
+
+  @Nullable
+  public String getMessage() {
+    return message;
   }
 }

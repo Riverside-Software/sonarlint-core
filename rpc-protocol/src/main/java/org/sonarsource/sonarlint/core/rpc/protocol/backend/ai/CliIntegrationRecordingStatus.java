@@ -19,15 +19,8 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
 
-public class GetHookScriptContentParams {
-  private final AiAgent agent;
-
-  public GetHookScriptContentParams(AiAgent agent) {
-    this.agent = agent;
-  }
-
-  public AiAgent getAiAgent() {
-    return agent;
-  }
+public enum CliIntegrationRecordingStatus {
+  RECORDED,
+  NOT_RECORDED,
+  UNKNOWN
 }
-

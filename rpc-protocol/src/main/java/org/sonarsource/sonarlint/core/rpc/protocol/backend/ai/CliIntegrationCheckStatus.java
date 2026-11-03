@@ -19,33 +19,9 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
 
-public class GetHookScriptContentResponse {
-  private final String scriptContent;
-  private final String scriptFileName;
-  private final String configContent;
-  private final String configFileName;
-
-  public GetHookScriptContentResponse(String scriptContent, String scriptFileName, String configContent, String configFileName) {
-    this.scriptContent = scriptContent;
-    this.scriptFileName = scriptFileName;
-    this.configContent = configContent;
-    this.configFileName = configFileName;
-  }
-
-  public String getScriptContent() {
-    return scriptContent;
-  }
-
-  public String getScriptFileName() {
-    return scriptFileName;
-  }
-
-  public String getConfigContent() {
-    return configContent;
-  }
-
-  public String getConfigFileName() {
-    return configFileName;
-  }
+public enum CliIntegrationCheckStatus {
+  CONFIGURED,
+  NOT_CONFIGURED,
+  INVALID,
+  UNKNOWN
 }
-

@@ -27,26 +27,20 @@ import org.eclipse.lsp4j.jsonrpc.services.JsonSegment;
 public interface AiAgentRpcService {
 
   /**
-   * Returns the content of rule file to be written to each IDE's rule folder, based on the agent.
-   * The rule file provides good practices to the agent.
-   */
-  @JsonRequest
-  CompletableFuture<GetRuleFileContentResponse> getRuleFileContent(GetRuleFileContentParams params);
-
-  /**
-   * Returns hook script content with auto-detected executable type.
-   * The hook script will analyze code after write events using the sonarqube_analysis_hook hook.
-   */
-  @JsonRequest
-  CompletableFuture<GetHookScriptContentResponse> getHookScriptContent(GetHookScriptContentParams params);
-
-  /**
    * Returns host- and scope-aware capabilities of the agents detected by the client together with
    * the current SonarQube CLI installation, authentication state, and connection choices for login.
    * Clients may opt in to local AI agent CLI discovery via {@link GetAiIntegrationStateParams}.
    */
   @JsonRequest
   CompletableFuture<GetAiIntegrationStateResponse> getIntegrationState(GetAiIntegrationStateParams params);
+
+  /**
+   * Runs {@code system reset --force} and deletes the selected official per-user installation folder.
+   * Clients must confirm this shared CLI removal and display reset output, including warnings.
+   * Custom installations are unavailable; PATH configuration is not modified.
+   */
+  @JsonRequest
+  CompletableFuture<UninstallCliResponse> uninstallCli();
 
   /**
    * Prepares the OS-specific SonarQube CLI installation command for the client's native interactive terminal.
@@ -65,6 +59,14 @@ public interface AiAgentRpcService {
    */
   @JsonRequest
   CompletableFuture<PrepareCliCommandResponse> prepareAuthenticateCommand(PrepareAuthenticateCliCommandParams params);
+
+  /**
+   * Authenticates the CLI with the selected IDE connection's existing token. Credentials never
+   * appear in the request or response. Clients can use the interactive command preparation when
+   * the response is {@code INTERACTIVE_LOGIN_REQUIRED}.
+   */
+  @JsonRequest
+  CompletableFuture<AuthenticateCliWithConnectionResponse> authenticateCliWithConnection(AuthenticateCliWithConnectionParams params);
 
   /**
    * Prepares {@code sonar integrate <agent> --global} for the client's native interactive terminal.

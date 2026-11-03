@@ -28,7 +28,6 @@ import mockwebserver3.MockResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
-import org.sonar.scanner.protocol.input.ScannerInput;
 import org.sonarsource.sonarlint.core.commons.IssueStatus;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssue;
 import org.sonarsource.sonarlint.core.commons.LocalOnlyIssueResolution;
@@ -36,6 +35,7 @@ import org.sonarsource.sonarlint.core.commons.log.SonarLintLogTester;
 import org.sonarsource.sonarlint.core.commons.progress.SonarLintCancelMonitor;
 import org.sonarsource.sonarlint.core.serverapi.MockWebServerExtensionWithProtobuf;
 import org.sonarsource.sonarlint.core.serverapi.exception.ServerErrorException;
+import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Batch;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Common;
 import org.sonarsource.sonarlint.core.serverapi.proto.sonarqube.ws.Issues;
 
@@ -59,7 +59,7 @@ class IssueApiTests {
 
   @Test
   void should_download_all_issues_as_batch() {
-    mockServer.addProtobufResponseDelimited("/batch/issues?key=keyyy", ScannerInput.ServerIssue.newBuilder().setRuleKey("ruleKey").build());
+    mockServer.addProtobufResponseDelimited("/batch/issues?key=keyyy", Batch.ServerIssue.newBuilder().setRuleKey("ruleKey").build());
 
     var issues = underTest.downloadAllFromBatchIssues("keyyy", null, new SonarLintCancelMonitor());
 
@@ -70,7 +70,7 @@ class IssueApiTests {
 
   @Test
   void should_download_all_issues_as_batch_from_branch() {
-    mockServer.addProtobufResponseDelimited("/batch/issues?key=keyyy&branch=branchName", ScannerInput.ServerIssue.newBuilder().setRuleKey("ruleKey").build());
+    mockServer.addProtobufResponseDelimited("/batch/issues?key=keyyy&branch=branchName", Batch.ServerIssue.newBuilder().setRuleKey("ruleKey").build());
 
     var issues = underTest.downloadAllFromBatchIssues("keyyy", "branchName", new SonarLintCancelMonitor());
 
@@ -117,9 +117,9 @@ class IssueApiTests {
 
   @Test
   void should_download_all_vulnerabilities() {
-    mockServer.addProtobufResponse("/api/issues/search.protobuf?statuses=OPEN,CONFIRMED,REOPENED,RESOLVED&types=VULNERABILITY&componentKeys=keyyy&components=keyyy&rules=ruleKey&ps=500&p=1",
+    mockServer.addProtobufResponse("/api/issues/search.protobuf?issueStatuses=OPEN,CONFIRMED,FALSE_POSITIVE,ACCEPTED&types=VULNERABILITY&componentKeys=keyyy&components=keyyy&rules=ruleKey&ps=500&p=1",
       Issues.SearchWsResponse.newBuilder().addIssues(Issues.Issue.newBuilder().setKey("issueKey").build()).build());
-    mockServer.addProtobufResponse("/api/issues/search.protobuf?statuses=OPEN,CONFIRMED,REOPENED,RESOLVED&types=VULNERABILITY&componentKeys=keyyy&components=keyyy&rules=ruleKey&ps=500&p=2",
+    mockServer.addProtobufResponse("/api/issues/search.protobuf?issueStatuses=OPEN,CONFIRMED,FALSE_POSITIVE,ACCEPTED&types=VULNERABILITY&componentKeys=keyyy&components=keyyy&rules=ruleKey&ps=500&p=2",
       Issues.SearchWsResponse.newBuilder().addComponents(Issues.Component.newBuilder().setKey("componentKey").setPath("componentPath").build()).build());
 
     var result = underTest.downloadVulnerabilitiesForRules("keyyy", Set.of("ruleKey"), null, new SonarLintCancelMonitor());

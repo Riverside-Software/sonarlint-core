@@ -60,9 +60,11 @@ record AgentProfile(
   Optional<String> cliTarget,
   Optional<String> mcpJsonSection,
   NativeHosts nativeHosts,
-  boolean cliIntegrationSupported,
-  boolean ruleFileSupported,
-  AiAgentCapabilities.HookSupport hookSupport) {
+  Optional<String> cliIntegrationId) {
+
+  boolean cliIntegrationSupported() {
+    return cliTarget.isPresent();
+  }
 
   boolean onNativeHost(AiIntegrationHost host) {
     return nativeHosts.matches(host);

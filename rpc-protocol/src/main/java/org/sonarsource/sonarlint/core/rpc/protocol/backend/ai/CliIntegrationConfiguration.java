@@ -19,14 +19,35 @@
  */
 package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
 
-public class GetRuleFileContentParams {
-  private final AiAgent agent;
+import javax.annotation.Nullable;
 
-  public GetRuleFileContentParams(AiAgent agent) {
-    this.agent = agent;
+public class CliIntegrationConfiguration {
+  @Nullable
+  private final String path;
+  @Nullable
+  private final CliIntegrationCheckStatus mcp;
+  @Nullable
+  private final CliIntegrationCheckStatus hooks;
+
+  public CliIntegrationConfiguration(@Nullable String path, @Nullable CliIntegrationCheckStatus mcp,
+    @Nullable CliIntegrationCheckStatus hooks) {
+    this.path = path;
+    this.mcp = mcp;
+    this.hooks = hooks;
   }
 
-  public AiAgent getAiAgent() {
-    return agent;
+  @Nullable
+  public String getPath() {
+    return path;
+  }
+
+  @Nullable
+  public CliIntegrationCheckStatus getMcp() {
+    return mcp;
+  }
+
+  @Nullable
+  public CliIntegrationCheckStatus getHooks() {
+    return hooks;
   }
 }

@@ -1,5 +1,5 @@
 /*
- * SonarLint Core - Implementation
+ * SonarLint Core - RPC Protocol
  * Copyright (C) SonarSource Sàrl
  * mailto:info AT sonarsource DOT com
  *
@@ -17,21 +17,30 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-package org.sonarsource.sonarlint.core.ai.ide;
+package org.sonarsource.sonarlint.core.rpc.protocol.backend.ai;
 
-public enum HookScriptType {
-  NODEJS("sonarqube_analysis_hook.js"),
-  PYTHON("sonarqube_analysis_hook.py"),
-  BASH("sonarqube_analysis_hook.sh");
+import java.util.List;
 
-  private final String fileName;
+public class CliIntegrationState {
+  private final AiAgent agent;
+  private final CliIntegrationRecordingStatus recordingStatus;
+  private final List<CliIntegrationConfiguration> configurations;
 
-  HookScriptType(String fileName) {
-    this.fileName = fileName;
+  public CliIntegrationState(AiAgent agent, CliIntegrationRecordingStatus recordingStatus, List<CliIntegrationConfiguration> configurations) {
+    this.agent = agent;
+    this.recordingStatus = recordingStatus;
+    this.configurations = List.copyOf(configurations);
   }
 
-  public String getFileName() {
-    return fileName;
+  public AiAgent getAgent() {
+    return agent;
+  }
+
+  public CliIntegrationRecordingStatus getRecordingStatus() {
+    return recordingStatus;
+  }
+
+  public List<CliIntegrationConfiguration> getConfigurations() {
+    return configurations;
   }
 }
-

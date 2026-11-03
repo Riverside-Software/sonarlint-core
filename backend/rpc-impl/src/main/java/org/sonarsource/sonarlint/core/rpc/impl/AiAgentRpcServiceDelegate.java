@@ -20,17 +20,13 @@
 package org.sonarsource.sonarlint.core.rpc.impl;
 
 import java.util.concurrent.CompletableFuture;
-import org.sonarsource.sonarlint.core.ai.ide.AiAgentService;
 import org.sonarsource.sonarlint.core.ai.ide.AiIntegrationService;
-import org.sonarsource.sonarlint.core.ai.ide.AiHookService;
 import org.sonarsource.sonarlint.core.ai.ide.McpConfigurationService;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AiAgentRpcService;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetHookScriptContentParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetHookScriptContentResponse;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AuthenticateCliWithConnectionParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.AuthenticateCliWithConnectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetAiIntegrationStateParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetAiIntegrationStateResponse;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetRuleFileContentParams;
-import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.GetRuleFileContentResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationInspectionParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationInspectionResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationUpdateParams;
@@ -38,6 +34,7 @@ import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.McpConfigurationUp
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.PrepareAuthenticateCliCommandParams;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.PrepareCliCommandResponse;
 import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.PrepareIntegrateCliCommandParams;
+import org.sonarsource.sonarlint.core.rpc.protocol.backend.ai.UninstallCliResponse;
 
 public class AiAgentRpcServiceDelegate extends AbstractRpcServiceDelegate implements AiAgentRpcService {
   public AiAgentRpcServiceDelegate(SonarLintRpcServerImpl sonarLintRpcServer) {
@@ -45,18 +42,13 @@ public class AiAgentRpcServiceDelegate extends AbstractRpcServiceDelegate implem
   }
 
   @Override
-  public CompletableFuture<GetRuleFileContentResponse> getRuleFileContent(GetRuleFileContentParams params) {
-    return requestAsync(cancelMonitor -> getBean(AiAgentService.class).getRuleFileContent(params.getAiAgent()));
-  }
-
-  @Override
-  public CompletableFuture<GetHookScriptContentResponse> getHookScriptContent(GetHookScriptContentParams params) {
-    return requestAsync(cancelMonitor -> getBean(AiHookService.class).getHookScriptContent(params.getAiAgent()));
-  }
-
-  @Override
   public CompletableFuture<GetAiIntegrationStateResponse> getIntegrationState(GetAiIntegrationStateParams params) {
     return requestAsync(cancelMonitor -> getBean(AiIntegrationService.class).getIntegrationState(params));
+  }
+
+  @Override
+  public CompletableFuture<UninstallCliResponse> uninstallCli() {
+    return requestAsync(cancelMonitor -> getBean(AiIntegrationService.class).uninstallCli(cancelMonitor));
   }
 
   @Override
@@ -67,6 +59,11 @@ public class AiAgentRpcServiceDelegate extends AbstractRpcServiceDelegate implem
   @Override
   public CompletableFuture<PrepareCliCommandResponse> prepareAuthenticateCommand(PrepareAuthenticateCliCommandParams params) {
     return requestAsync(cancelMonitor -> getBean(AiIntegrationService.class).prepareAuthenticateCommand(params));
+  }
+
+  @Override
+  public CompletableFuture<AuthenticateCliWithConnectionResponse> authenticateCliWithConnection(AuthenticateCliWithConnectionParams params) {
+    return requestAsync(cancelMonitor -> getBean(AiIntegrationService.class).authenticateCliWithConnection(params, cancelMonitor));
   }
 
   @Override
